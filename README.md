@@ -351,6 +351,14 @@ its persistence model is deliberately not used here.
 - **One period, one company.** There is no multi-tenancy, no authentication and
   no billing here. Those exist in commercial products and would be noise in a
   submission about whether an agent can finish a chore.
+- **`POST /events` is unauthenticated in `scripts/deploy.sh`**, which deploys
+  with `--allow-unauthenticated` so a judge can open the page with no account.
+  A forged Pub/Sub envelope can therefore trigger a close. The blast radius is
+  one idempotent re-close of a period over the same bundled documents, which
+  overwrites itself and sends nothing, so it is a denial-of-wallet question
+  rather than a data one. A real deployment puts an OIDC token on the push
+  subscription and verifies it on the route. It is named here because it is the
+  first question worth asking about this architecture.
 - **The live demo is not deployed yet.** The readiness gate in
   `scripts/readiness.py` refuses to score until it is, and will stay red until
   the URL in this README is real.

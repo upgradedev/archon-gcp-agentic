@@ -28,7 +28,16 @@ target-version = "py311"
 # and standard library only so it can run in any repo with no install step.
 # Reformatting its percent-formatting to this repo's target would fork it from
 # the copy every other entry uses, which costs more than the lint is worth.
-extend-exclude = ["scripts/readiness.py"]
+# The video pipeline and readiness.py are shared submission-kit components,
+# copied rather than rebuilt and kept byte-identical to the copy every other
+# entry uses. Reformatting them to this repo's lint target forks them, which
+# costs more than the lint is worth.
+extend-exclude = [
+    "scripts/readiness.py",
+    "scripts/verify_video_sync.py",
+    "video/",
+    "tests/video/",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
