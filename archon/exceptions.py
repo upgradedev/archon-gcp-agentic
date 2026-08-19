@@ -20,6 +20,7 @@ exception list becomes noise, and a noisy list is one the owner stops reading.
 from __future__ import annotations
 
 import statistics
+from dataclasses import dataclass
 from datetime import date, datetime
 
 from .allocation import unsettled_loads
@@ -231,29 +232,54 @@ def find_unpaid_loads(documents: list[Document],
     return findings
 
 
-def _charge_events(documents: list[Document]) -> list[tuple[str, float, date | None, Document]]:
-    """Flatten every outgoing charge to (counterparty, amount, date, document).
+@dataclass
+class _Charge:
+    """One outgoing charge, flattened out of whatever document carried it.
 
-    Fuel fills are flattened individually. A fuel card statement is one
-    document but forty charges, and a toll billed twice on the same statement
-    is exactly the kind of thing that is invisible at document level.
+    `reference` points at the individual charge, not at the document that
+    carried it. A fuel card statement is one document but forty charges, and
+    two detectors firing on two different fills would otherwise both report the
+    statement number: the owner would see one reference listed as handled and
+    as outstanding at the same time, with no way to tell which fill either
+    meant. That is the kind of thing that makes an exception list untrustworthy.
     """
-    events: list[tuple[str, float, date | None, Document]] = []
+
+    counterparty: str          # who was paid, which is what a norm is grouped by
+    place: str                 # where, so a duplicate is same place, same amount
+    amount: float
+    when: date | None
+    reference: str             # what goes in front of the owner
+    document: Document
+
+
+def _charge_events(documents: list[Document]) -> list[_Charge]:
+    """Flatten every outgoing charge, one entry per charge, not per document."""
+    events: list[_Charge] = []
     for doc in documents:
         if doc.doc_type == DocType.FUEL_CARD_STATEMENT:
             supplier = doc.counterparty or "fuel card"
+            statement = doc.document_number or doc.source_file or "statement"
             for line in doc.fuel_lines:
-                events.append(
-                    (f"{supplier}:{line.location or ''}", round(line.gross, 2),
-                     parse_date(line.date), doc)
-                )
+                where = line.location or ""
+                stamp = line.date or "undated"
+                events.append(_Charge(
+                    counterparty=supplier,
+                    place=where,
+                    amount=round(line.gross, 2),
+                    when=parse_date(line.date),
+                    reference=f"{statement} / {stamp} {where}".strip(),
+                    document=doc,
+                ))
         elif doc.doc_type in (DocType.TOLL_INVOICE, DocType.MAINTENANCE_INVOICE,
                               DocType.INSURANCE_INVOICE):
-            events.append(
-                (doc.counterparty or doc.doc_type.value,
-                 round(doc.gross_amount or doc.net_amount or 0.0, 2),
-                 parse_date(doc.date), doc)
-            )
+            events.append(_Charge(
+                counterparty=doc.counterparty or doc.doc_type.value,
+                place="",
+                amount=round(doc.gross_amount or doc.net_amount or 0.0, 2),
+                when=parse_date(doc.date),
+                reference=doc.document_number or doc.source_file or "invoice",
+                document=doc,
+            ))
     return events
 
 
@@ -264,34 +290,36 @@ def find_duplicate_charges(documents: list[Document]) -> list[Finding]:
     doubles the list and tells the owner nothing extra.
     """
     findings: list[Finding] = []
-    seen: dict[tuple[str, float], list[date | None]] = {}
-    for counterparty, amount, when, doc in _charge_events(documents):
-        if amount <= 0:
+    seen: dict[tuple[str, str, float], list[date | None]] = {}
+    for charge in _charge_events(documents):
+        if charge.amount <= 0:
             continue
-        key = (counterparty, amount)
+        key = (charge.counterparty, charge.place, charge.amount)
         priors = seen.setdefault(key, [])
         for prior in priors:
             close_in_time = (
-                when is None or prior is None or abs((when - prior).days) <= DUPLICATE_WINDOW_DAYS
+                charge.when is None or prior is None
+                or abs((charge.when - prior).days) <= DUPLICATE_WINDOW_DAYS
             )
             if close_in_time:
                 findings.append(
                     Finding(
                         kind=ExceptionKind.DUPLICATE_CHARGE,
                         severity="error",
-                        reference=doc.document_number or doc.source_file or counterparty,
-                        amount=amount,
+                        reference=charge.reference,
+                        amount=charge.amount,
                         message=(
-                            f"{counterparty.split(':')[0]} charged {amount:,.2f} twice "
-                            f"within {DUPLICATE_WINDOW_DAYS} days; the second charge is "
-                            f"probably a duplicate."
+                            f"{charge.counterparty} charged {charge.amount:,.2f} twice "
+                            f"within {DUPLICATE_WINDOW_DAYS} days"
+                            + (f" at {charge.place}" if charge.place else "")
+                            + "; the second charge is probably a duplicate."
                         ),
-                        counterparty=doc.counterparty,
-                        source_file=doc.source_file,
+                        counterparty=charge.document.counterparty,
+                        source_file=charge.document.source_file,
                     )
                 )
                 break
-        priors.append(when)
+        priors.append(charge.when)
     return findings
 
 
@@ -303,34 +331,35 @@ def find_amount_outliers(documents: list[Document]) -> list[Finding]:
     Below `OUTLIER_MIN_HISTORY` prior charges there is no norm and nothing is
     reported, which is the honest answer rather than a guess with a threshold.
     """
-    grouped: dict[str, list[tuple[float, Document]]] = {}
-    for counterparty, amount, _when, doc in _charge_events(documents):
-        if amount > 0:
-            grouped.setdefault(counterparty.split(":")[0], []).append((amount, doc))
+    grouped: dict[str, list[_Charge]] = {}
+    for charge in _charge_events(documents):
+        if charge.amount > 0:
+            grouped.setdefault(charge.counterparty, []).append(charge)
 
     findings: list[Finding] = []
     for counterparty, charges in grouped.items():
         if len(charges) <= OUTLIER_MIN_HISTORY:
             continue
-        amounts = [a for a, _ in charges]
-        for amount, doc in charges:
+        amounts = [c.amount for c in charges]
+        for charge in charges:
             others = list(amounts)
-            others.remove(amount)
+            others.remove(charge.amount)
             median = statistics.median(others)
-            if median <= 0 or amount < median * OUTLIER_MULTIPLE:
+            if median <= 0 or charge.amount < median * OUTLIER_MULTIPLE:
                 continue
             findings.append(
                 Finding(
                     kind=ExceptionKind.AMOUNT_OUTLIER,
                     severity="warning",
-                    reference=doc.document_number or doc.source_file or counterparty,
-                    amount=amount,
+                    reference=charge.reference,
+                    amount=charge.amount,
                     message=(
-                        f"A {amount:,.2f} charge from {counterparty} is "
-                        f"{amount / median:.1f}x this firm's own median of "
+                        f"A {charge.amount:,.2f} charge from {counterparty} is "
+                        f"{charge.amount / median:.1f}x this firm's own median of "
                         f"{median:,.2f} for that counterparty."
                     ),
-                    source_file=doc.source_file,
+                    counterparty=charge.document.counterparty,
+                    source_file=charge.document.source_file,
                 )
             )
     return findings
