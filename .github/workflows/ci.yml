@@ -99,7 +99,7 @@ jobs:
           # API route; without this, the one page a visitor opens is the only
           # route the shipped container never proved it serves.
           curl -sf http://localhost:8080/ | grep -q 'closes the month while nobody is watching'
-          curl -sf -X POST http://localhost:8080/api/close/2026-07             | python -c "import json,sys; d=json.load(sys.stdin);                 assert d['outcome']=='closed', d['outcome'];                 assert len(d['journal']['steps'])==9, d['journal']['steps'];                 print('image closed 2026-07 in', len(d['journal']['steps']), 'steps')"
+          curl -sf -X POST http://localhost:8080/api/close/2026-07             | python -c "import json,sys; d=json.load(sys.stdin);                 assert d['outcome']=='closed', d['outcome'];                 assert len(d['journal']['steps'])==10, d['journal']['steps'];                 print('image closed 2026-07 in', len(d['journal']['steps']), 'steps')"
           docker rm -f archon
 
       - name: Dependency CVEs

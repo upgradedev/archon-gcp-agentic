@@ -3,7 +3,7 @@
 [![CI](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so a haulier's month closes itself overnight instead of sitting in a shoebox until April.**
+> **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner wakes up to a closed month in their inbox instead of a shoebox they will get to in April.**
 
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
@@ -44,9 +44,16 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
 7. checks its own work against five gates
 8. writes the month-end summary from a fact sheet it is not allowed to add to
 9. marks the period closed with a trail you can walk back through
+10. **emails the owner their month-end letter**, because a haulier does not open a
+    bookkeeping console on the first of the month, they are driving
 
 Nobody is asked anything at any point. The one thing a person does is press send
 on the letters that leave for a third party.
+
+**The trigger**: an object landing in the Cloud Storage bucket, via Eventarc.
+Nobody presses anything.
+**The surface**: the owner's own inbox, which they already open.
+**What it replaces**: the shoebox, and the bookkeeper who reconciles it in April.
 
 ## Why a haulier's month is hard
 
@@ -133,6 +140,10 @@ Over the bundled month, `python -m archon.cli`:
      summary written from a 60-line fact sheet; no figure was phrased by a model
  + 9. File the close and mark the period
      period 2026-07 marked closed
+ + 10. Write the owner their month-end letter
+     "2026-07 closed. 5,512.85 is recoverable, 5 letters ready" -> composed for
+     owner@bellridgehaulage.example and filed; no channel is configured, so
+     nothing left this machine
  = closed
 ```
 
@@ -202,20 +213,31 @@ checkout and why the whole test suite runs offline.
 
 ## Where the autonomy stops, and why there
 
-The close acts freely on everything Archon owns: its ledger, its findings, its
-drafts, its own record of the period. It asks for no approvals along the way.
+There are two outward edges and they have different rules. That asymmetry is the
+architecture, not a compromise in it.
 
-It does not act on anything outside that boundary. The letters it writes are
-filed with `status="filed"`, and there is no send path in this repository. A
-test asserts that, and a second test asserts that no function in the drafts
-module has "send" in its name, so adding one is a decision somebody has to make
-on purpose.
+**Towards a third party, the close stops.** The letters it writes to brokers and
+suppliers are filed with `status="filed"`, and there is no send path to a
+counterparty in this repository. A test asserts that, and a second test asserts
+that no function in the drafts module has "send" in its name, so adding one is a
+decision somebody has to make on purpose.
 
 That line is not squeamishness about autonomy. It is where reversibility runs
 out. Every step of the close can be re-run and produces the same books, because
 the engine is deterministic and the run is keyed by the period and its
-documents. An email to a broker cannot be un-sent, so an email to a broker is
-not something an unattended run gets to do.
+documents. An email to a broker cannot be un-sent.
+
+**Towards the owner, the close does not stop.** Step 10 writes them a letter and
+delivers it. That is their own books arriving at them, and holding it back until
+they remember to open a console we built is how an unattended agent becomes a tab
+nobody clicks. `archon/delivery.py` carries both a real SMTP deliverer on the
+standard library and a filing one that composes and sends nothing; the filing one
+is the default, which is why the demo and CI need no credential and why a judge
+sees the exact bytes that would arrive without anything leaving the machine.
+
+A test closes the month with a live SMTP transport injected and asserts, in the
+same run, that the owner received their letter and that every counterparty draft
+is still unsent. If either half of that ever drifts, it goes red.
 
 ## What Google is doing here
 
@@ -237,6 +259,7 @@ filed letters, and the owner who looks on Monday has nothing to look at.
 | Memory | **Firestore** | `archon/store.py` | in-memory, for the demo and tests |
 | Serving | **Cloud Run** | `Dockerfile`, `scripts/deploy.sh` | local uvicorn |
 | Trigger | **Pub/Sub + Eventarc** | `POST /events` | the button on the page |
+| Reaching the owner | SMTP, standard library | `archon/delivery.py` | compose and file, sending nothing |
 
 Firestore rather than a managed SQL instance, on purpose: what Archon persists
 is a document with a nested trail, written from a stateless container that is
@@ -294,9 +317,9 @@ paid call.
 - **e2e** runs the CLI and drives the FastAPI service, including a Pub/Sub push
   envelope closing the month with nobody present.
 
-Two properties are asserted rather than assumed, because they are the product:
-that no draft is ever sent, and that the agent path and the deterministic path
-agree exactly.
+Three properties are asserted rather than assumed, because they are the product:
+that no counterparty draft is ever sent, that the owner's letter is delivered in
+the same run, and that the agent path and the deterministic path agree exactly.
 
 Each of the five gates is broken on purpose, once, and asserted red. A gate
 nobody has watched fail is a gate nobody should believe.
@@ -348,6 +371,11 @@ its persistence model is deliberately not used here.
   and CI use. It parses the label blocks OCR leaves behind. The Gemini vision
   path in `archon/agents.py` is what handles a photograph of a fax, and it is
   not exercised in CI, because CI has no key.
+- **The digest is composed but not delivered in the demo**, because no mail
+  server is configured and configuring one would put a credential in a public
+  repository. `SmtpDelivery` is real, runs on the standard library, and is
+  exercised in tests against an injected transport. Set `ARCHON_SMTP_HOST` and
+  it sends.
 - **One period, one company.** There is no multi-tenancy, no authentication and
   no billing here. Those exist in commercial products and would be noise in a
   submission about whether an agent can finish a chore.

@@ -27,13 +27,13 @@ def test_the_month_closes_end_to_end(documents):
     assert result.closed
 
 
-def test_the_run_is_nine_steps_and_every_one_completed(documents):
+def test_the_run_is_ten_steps_and_every_one_completed(documents):
     result = close(documents)
 
-    assert len(result.journal.steps) == 9
+    assert len(result.journal.steps) == 10
     assert [s.name for s in result.journal.steps] == [
         "intake", "post", "allocate", "reconcile", "triage",
-        "draft", "verify", "report", "file",
+        "draft", "verify", "report", "file", "notify",
     ]
     assert {s.status for s in result.journal.steps} == {"ok"}
 
@@ -272,6 +272,7 @@ def test_the_serialised_close_carries_everything_the_page_renders(documents):
     assert set(payload) >= {
         "run_id", "period", "outcome", "summary", "statements", "allocations",
         "findings", "gates", "drafts", "journal", "recoverable", "facts",
+        "digest", "receipt",
     }
     assert payload["allocations"][0]["lines"][0]["load_ref"] == "L-7101"
     assert payload["journal"]["steps"][0]["title"]

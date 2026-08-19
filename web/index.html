@@ -203,13 +203,26 @@
   </section>
 
   <section>
-    <h2>The letters it wrote</h2>
+    <h2>What lands in the owner's inbox</h2>
+    <p class="sub">
+      A haulier does not open a bookkeeping console on the first of the month, because a
+      haulier is driving. So the last thing the close does is write the owner a letter and
+      put it where they already read their mail. This is the exact text that arrives.
+      Nothing here is phrased by a model: every figure came out of the close above.
+    </p>
+    <div class="draft" id="digest"></div>
+  </section>
+
+  <section>
+    <h2>The letters it wrote to everyone else</h2>
     <div class="gate-note">
       <b>Filed, not sent. This is the one human gate in the product.</b>
-      The close acts freely on state Archon owns: its ledger, its findings, its drafts, its
-      record of the period. All of that is reversible and re-runnable. An email to a broker
-      is not, so an unattended run does not get to send one. Every draft below is written,
-      costed and filed; a person presses send.
+      There are two outward edges and they have different rules. The letter above goes to the
+      owner: their own books arriving at them, delivered without being asked for, because
+      that is the point of doing the work overnight. The letters below go to brokers and
+      suppliers, and they stop here. An email to a broker cannot be un-sent, so an unattended
+      run does not get to send one. Every draft below is written, costed and filed; a person
+      presses send.
     </div>
     <div class="grid" id="drafts"></div>
   </section>
@@ -284,6 +297,7 @@ function render(d) {
   $("summary").textContent = d.summary;
   renderAlloc(d.allocations);
   renderFindings(d.findings);
+  renderDigest(d.digest, d.receipt);
   renderDrafts(d.drafts);
   renderGates(d.gates);
   renderTrucks(d.statements.per_truck);
@@ -358,6 +372,17 @@ function renderFindings(list) {
   $("findings").innerHTML = `<thead><tr>
     <th>Kind</th><th>Reference</th><th class="r">Amount</th><th>What the books say</th>
   </tr></thead><tbody>${rows}</tbody>`;
+}
+
+function renderDigest(digest, receipt) {
+  if (!digest) { $("digest").innerHTML = ""; return; }
+  const pill = receipt && receipt.delivered
+    ? '<span class="pill ok">delivered</span>'
+    : '<span class="pill info">composed, no channel configured</span>';
+  $("digest").innerHTML = `
+    <h3>${esc(digest.subject)} ${pill}</h3>
+    <div class="to">to ${esc(digest.recipient)}${receipt ? " &middot; " + esc(receipt.detail) : ""}</div>
+    <pre>${esc(digest.body)}</pre>`;
 }
 
 function renderDrafts(list) {

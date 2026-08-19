@@ -1,23 +1,28 @@
 """The chore: close a haulier's month, unattended, end to end.
 
-This is the whole product in one function. A month of mail goes in. Nine steps
+This is the whole product in one function. A month of mail goes in. Ten steps
 later the books are posted, the remittance is split across the loads it
 settles, the exceptions are triaged worst-first, the corrective documents are
-written and filed, the close has checked its own work against five gates, and
-the period is marked closed with a trail you can walk back through.
+written and filed, the close has checked its own work against five gates, the
+period is marked closed with a trail you can walk back through, and the owner
+has a letter about it wherever they read their mail.
 
 Nobody is asked anything at any point. That is the design, and it is the one
 thing this product is being judged on, so it is worth being exact about where
-the autonomy stops. The close acts freely on state Archon owns: its ledger, its
-findings, its drafts, its own record of the period. It does not act on anything
-outside that boundary. The drafts it writes are filed unsent, and sending them
-is the single step a human performs.
+the autonomy stops. There are two outward edges and they have different rules.
 
-That is not a governance hole, it is where the reversibility runs out. Every
-step below can be re-run, and re-running produces the same books, because the
-engine is deterministic and the run is keyed by period. An email to a broker
-cannot be un-sent, so an email to a broker is not something an unattended run
-gets to do.
+**Towards a third party, the close stops.** The letters it writes to brokers and
+suppliers are filed unsent, and sending them is the single step a human
+performs. That is not a governance hole, it is where reversibility runs out:
+every step below can be re-run and produces the same books, because the engine
+is deterministic and the run is keyed by the period and its documents, but an
+email to a broker cannot be un-sent.
+
+**Towards the owner, the close does not stop.** Step 10 writes them a letter and
+puts it where they already read their mail. That is their own books arriving at
+them, it is the reason the work was done overnight, and holding it back until
+they remember to open a console we built is how an unattended agent becomes a
+tab nobody clicks.
 
     from archon import run_close
     result = run_close(period="2026-07", documents=docs)
@@ -30,9 +35,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import allocation as allocation_mod
+from . import delivery as delivery_mod
+from . import digest as digest_mod
 from . import drafts as drafts_mod
 from . import exceptions as exceptions_mod
 from . import validation as validation_mod
+from .delivery import Deliverer, Receipt
+from .digest import Digest
 from .journal import Clock, RunJournal
 from .ledger import Ledger
 from .models import (
@@ -70,6 +79,8 @@ class CloseResult:
     facts: str
     journal: RunJournal
     ledger: Ledger
+    digest: Digest | None = None
+    receipt: Receipt | None = None
     stored: dict = field(default_factory=dict)
 
     @property
@@ -110,6 +121,8 @@ class CloseResult:
             "drafts": _plain(self.drafts),
             "journal": self.journal.to_dict(),
             "recoverable": self.recoverable,
+            "digest": self.digest.to_dict() if self.digest else None,
+            "receipt": self.receipt.to_dict() if self.receipt else None,
             "facts": self.facts,
         }
 
@@ -137,7 +150,9 @@ def run_close(period: str,
               store: Store | None = None,
               clock: Clock | None = None,
               narrator: Narrator | None = None,
-              raw_texts: dict[str, str] | None = None) -> CloseResult:
+              raw_texts: dict[str, str] | None = None,
+              deliverer: Deliverer | None = None,
+              owner_email: str | None = None) -> CloseResult:
     """Close one period. Returns even when it fails; read `outcome`.
 
     Raising on a bad month would be the wrong shape. A close that hits a
@@ -146,6 +161,7 @@ def run_close(period: str,
     whether the books can be trusted.
     """
     store = store or get_store()
+    deliverer = deliverer or delivery_mod.get_deliverer()
     run = RunJournal(run_id=run_id_for(period, documents), period=period, clock=clock)
     ledger = Ledger(period=period, company=company)
     stored: dict = {}
@@ -267,14 +283,38 @@ def run_close(period: str,
         stored["run"] = store.save_run(run.to_dict())
         step.note(
             f"period {period} marked {outcome}; books, {len(filed)} draft(s) and a "
-            f"{len(run.steps) + 1}-step trail persisted to {getattr(store, 'backend', 'store')}",
+            f"{len(run.steps) + 2}-step trail persisted to {getattr(store, 'backend', 'store')}",
             outcome=outcome, backend=getattr(store, "backend", "store"),
         )
 
+    # 10. Tell the owner. The only step that reaches outside Archon on its own,
+    #     and it reaches the owner, not a counterparty. Everything the agent did
+    #     overnight is worth nothing if the person it was done for has to
+    #     remember to come and look for it.
+    with run.step("notify", "Write the owner their month-end letter") as step:
+        recipient = owner_email or delivery_mod.owner_address()
+        digest = digest_mod.compose(result, recipient=recipient, company=company)
+        try:
+            receipt = deliverer.deliver(digest)
+        except Exception as exc:      # a channel failing must not fail a close
+            receipt = delivery_mod.Receipt(
+                channel=getattr(deliverer, "channel", "unknown"), delivered=False,
+                detail=f"delivery raised {type(exc).__name__}; the digest is still in the app",
+                recipient=recipient,
+            )
+        result.digest = digest
+        result.receipt = receipt
+        stored["digest"] = store.save_close(company, f"{period}#digest", digest.to_dict())
+        step.note(
+            f'"{digest.subject}" -> {receipt.detail}',
+            channel=receipt.channel, delivered=receipt.delivered,
+            actions=digest.action_count,
+        )
+
     result.stored = stored
-    # The file step lands after `run.finish`, so the trail records its own
-    # filing. Re-stamping the outcome keeps `journal.outcome` and
-    # `result.outcome` from ever disagreeing.
+    # Both trailing steps land after `run.finish`, so the trail records its own
+    # filing and its own notification. Re-stamping the outcome keeps
+    # `journal.outcome` and `result.outcome` from ever disagreeing.
     run.finish(outcome)
     return result
 
