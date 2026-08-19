@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import pytest
 
-from archon.agents import CloseSession
-from archon.close import run_close
-from archon.journal import FixedClock
-from archon.narrator import facts_sheet
-from archon.store import LocalStore
+from archon.adapters.agents import CloseSession
+from archon.adapters.store import LocalStore
+from archon.domain.narrator import facts_sheet
+from archon.runtime.close import run_close
+from archon.runtime.journal import FixedClock
 from tests.conftest import PERIOD
 
 
@@ -100,7 +100,7 @@ def test_every_draft_the_tools_report_is_filed_and_none_is_sent():
 
 def test_the_adk_agent_constructs_with_the_six_tools():
     pytest.importorskip("google.adk")
-    from archon.agents import build_close_agent
+    from archon.adapters.agents import build_close_agent
     from tests.adk_fakes import ScriptedLlm
 
     agent = build_close_agent(session(), model=ScriptedLlm([("text", "done")]))
@@ -114,7 +114,7 @@ def test_the_adk_agent_constructs_with_the_six_tools():
 
 def test_a_string_model_without_a_key_refuses_rather_than_failing_later():
     pytest.importorskip("google.adk")
-    from archon.agents import build_close_agent
+    from archon.adapters.agents import build_close_agent
 
     with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
         build_close_agent(session(), model="gemini-2.5-flash")
@@ -124,7 +124,7 @@ def test_the_agent_really_calls_its_tools_and_closes_the_month(monkeypatch):
     """Genuine ADK function calling: the scripted model emits six tool calls,
     ADK dispatches each one, and a real month comes out the other end."""
     pytest.importorskip("google.adk")
-    from archon.agents import run_agent_close
+    from archon.adapters.agents import run_agent_close
     from tests.adk_fakes import ScriptedLlm
 
     model = ScriptedLlm([
@@ -152,7 +152,7 @@ def test_the_agent_is_never_asked_anything_by_its_own_instruction():
     Compared with whitespace collapsed, because the instruction is hard-wrapped
     and a reflow is not a change of meaning.
     """
-    from archon.agents import CLOSE_INSTRUCTION
+    from archon.adapters.agents import CLOSE_INSTRUCTION
 
     instruction = " ".join(CLOSE_INSTRUCTION.split())
 
@@ -165,7 +165,7 @@ def test_the_agent_is_never_asked_anything_by_its_own_instruction():
 
 def test_the_report_pipeline_is_three_stages_passing_state_forward():
     pytest.importorskip("google.adk")
-    from archon.agents import build_report_pipeline
+    from archon.adapters.agents import build_report_pipeline
     from tests.adk_fakes import ScriptedText
 
     pipeline = build_report_pipeline(
@@ -182,7 +182,7 @@ def test_the_report_pipeline_is_three_stages_passing_state_forward():
 
 def test_the_report_pipeline_needs_exactly_three_models():
     pytest.importorskip("google.adk")
-    from archon.agents import build_report_pipeline
+    from archon.adapters.agents import build_report_pipeline
 
     with pytest.raises(ValueError, match="exactly three"):
         build_report_pipeline(models=["only-one"])
@@ -190,7 +190,7 @@ def test_the_report_pipeline_needs_exactly_three_models():
 
 def test_the_pipeline_runs_end_to_end_offline_and_hands_state_between_stages():
     pytest.importorskip("google.adk")
-    from archon.agents import run_report_pipeline
+    from archon.adapters.agents import run_report_pipeline
     from tests.adk_fakes import ScriptedText
 
     tools = session()
@@ -211,7 +211,7 @@ def test_the_pipeline_runs_end_to_end_offline_and_hands_state_between_stages():
 
 def test_the_gemini_narrator_returns_the_pipeline_summary():
     pytest.importorskip("google.adk")
-    from archon.agents import gemini_narrator
+    from archon.adapters.agents import gemini_narrator
     from tests.adk_fakes import ScriptedText
 
     narrator = gemini_narrator(models=[
@@ -223,12 +223,12 @@ def test_the_gemini_narrator_returns_the_pipeline_summary():
 
 def test_the_gemini_narrator_returns_nothing_rather_than_raising():
     """So a close never fails because the reporting path was unusable."""
-    from archon.agents import gemini_narrator
+    from archon.adapters.agents import gemini_narrator
 
     assert gemini_narrator(models=["only-one-model"])("facts") == ""
 
 
 def test_the_narrator_instruction_forbids_inventing_a_figure():
-    from archon.narrator import NARRATOR_INSTRUCTION
+    from archon.domain.narrator import NARRATOR_INSTRUCTION
 
     assert "Report only figures that appear in the fact sheet" in NARRATOR_INSTRUCTION

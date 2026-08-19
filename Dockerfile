@@ -2,7 +2,7 @@
 # library, so the layer that matters is the one holding ADK and FastAPI.
 FROM python:3.12-slim
 
-ENV PYTHONUNBUFFERED=1 \
+ENV PYTHONPATH=/app/src \n    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
@@ -12,7 +12,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY archon/ ./archon/
+COPY src/ ./src/
 COPY corpus/ ./corpus/
 COPY web/ ./web/
 
@@ -23,4 +23,4 @@ EXPOSE 8080
 
 # One worker. The close is CPU-light and finishes in milliseconds; concurrency
 # is Cloud Run's job, not gunicorn's.
-CMD exec uvicorn archon.service:app --host 0.0.0.0 --port ${PORT}
+CMD exec uvicorn archon.adapters.service:app --host 0.0.0.0 --port ${PORT}

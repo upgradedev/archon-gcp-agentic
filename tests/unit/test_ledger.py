@@ -1,8 +1,8 @@
 """Double-entry posting and the period roll-up."""
 from __future__ import annotations
 
-from archon.ledger import Ledger
-from archon.models import Account, DocType
+from archon.domain.ledger import Ledger
+from archon.domain.models import Account, DocType
 from tests.conftest import (
     PERIOD,
     bank,
@@ -90,7 +90,7 @@ def test_an_unreadable_document_posts_no_lines():
 
 def test_an_unknown_document_posts_no_lines():
     ledger = Ledger(period=PERIOD)
-    from archon.models import Document
+    from archon.domain.models import Document
 
     ledger.add(Document(doc_type=DocType.UNKNOWN, period=PERIOD, source_file="odd.txt"))
 

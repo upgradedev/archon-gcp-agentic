@@ -55,7 +55,7 @@ def client():
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
 
-    from archon.service import app
+    from archon.adapters.service import app
 
     return TestClient(app)
 
@@ -162,7 +162,7 @@ def test_a_body_that_is_not_json_is_acknowledged(client):
 
 
 def test_the_period_parser_finds_a_month_anywhere_in_the_object_path():
-    from archon.service import _period_from_envelope
+    from archon.adapters.service import _period_from_envelope
 
     assert _period_from_envelope(
         {"message": {"attributes": {"objectId": "tenants/bell-ridge/2026-07/x.pdf"}}}

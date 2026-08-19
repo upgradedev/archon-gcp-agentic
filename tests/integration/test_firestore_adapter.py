@@ -1,0 +1,163 @@
+"""C3: the real Firestore adapter, against a disposable instance.
+
+Everything else in this suite runs against `LocalStore`, which is honest for
+what it tests but proves nothing about the adapter that actually ships. A
+memory store that satisfies the same interface will happily agree with a
+Firestore adapter that gets its collection names wrong, batches incorrectly, or
+writes a dataclass Firestore cannot serialise.
+
+So these run against the Firestore emulator, which is disposable by definition:
+it starts empty, it holds nothing after the process exits, and it needs no
+project, no billing and no credential. CI starts one; locally they skip unless
+`FIRESTORE_EMULATOR_HOST` is already set.
+
+They skip rather than fail when it is absent, and CI is where that matters:
+`.github/workflows/ci.yml` starts the emulator and then asserts these did not
+skip, so an emulator that quietly stopped starting cannot turn this file into
+green nothing.
+"""
+from __future__ import annotations
+
+import os
+import uuid
+
+import pytest
+
+pytest.importorskip("google.cloud.firestore")
+
+pytestmark = pytest.mark.skipif(
+    not os.getenv("FIRESTORE_EMULATOR_HOST"),
+    reason="needs the Firestore emulator; CI starts one",
+)
+
+from archon.adapters.store import FirestoreStore, LocalStore  # noqa: E402
+from archon.domain.models import Draft, DraftKind, ExceptionKind  # noqa: E402
+from archon.runtime.close import run_close  # noqa: E402
+from archon.runtime.mailbox import read_period  # noqa: E402
+
+
+@pytest.fixture
+def store():
+    """A Firestore adapter pointed at the emulator, in its own namespace.
+
+    The project id is randomised per test so two tests cannot see each other's
+    documents, which is what makes these safe to run in parallel and what stops
+    a leftover write from a previous run making an assertion pass.
+    """
+    return FirestoreStore(project=f"archon-test-{uuid.uuid4().hex[:12]}")
+
+
+def test_the_adapter_reports_itself_as_firestore(store):
+    assert store.backend == "firestore"
+
+
+def test_a_close_round_trips_through_real_firestore(store):
+    payload = {"outcome": "closed", "period": "2026-07", "run_id": "r-1"}
+
+    path = store.save_close("Bell Ridge Haulage", "2026-07", payload)
+    read_back = store.load_close("Bell Ridge Haulage", "2026-07")
+
+    assert path == "firestore://closes/Bell Ridge Haulage::2026-07"
+    assert read_back == payload
+
+
+def test_a_missing_close_reads_back_as_none_not_an_error(store):
+    assert store.load_close("Nobody", "1999-01") is None
+
+
+def test_a_run_round_trips_with_its_nested_steps(store):
+    """The trail is a nested document, which is the shape a memory dict hides."""
+    run = {
+        "run_id": "r-2", "period": "2026-07", "outcome": "closed", "total_ms": 15,
+        "steps": [
+            {"index": 1, "name": "intake", "title": "Take in the mail",
+             "detail": "27 artifacts", "counts": {"documents": 27}, "status": "ok"},
+            {"index": 2, "name": "post", "title": "Post the journal",
+             "detail": "26 entries", "counts": {"entries": 26}, "status": "ok"},
+        ],
+    }
+
+    store.save_run(run)
+    read_back = store.load_run("r-2")
+
+    assert read_back["outcome"] == "closed"
+    assert len(read_back["steps"]) == 2
+    assert read_back["steps"][1]["counts"]["entries"] == 26
+
+
+def test_drafts_are_written_as_a_batch_and_read_back(store):
+    """`save_drafts` uses a Firestore batch, which LocalStore does not model."""
+    drafts = [
+        Draft(kind=DraftKind.PAYMENT_REMINDER, recipient="Broker", subject=f"s{i}",
+              body="b", amount=100.0 + i, reference=f"L-{i}",
+              finding_kind=ExceptionKind.LOAD_UNPAID)
+        for i in range(3)
+    ]
+
+    paths = store.save_drafts("r-3", drafts)
+
+    assert paths == [f"firestore://drafts/r-3::{i}" for i in range(3)]
+    stored = [store._db.collection("drafts").document(f"r-3::{i}").get().to_dict()
+              for i in range(3)]
+    assert [d["reference"] for d in stored] == ["L-0", "L-1", "L-2"]
+    assert {d["status"] for d in stored} == {"filed"}
+
+
+def test_enums_and_dataclasses_survive_the_round_trip(store):
+    """Firestore takes documents, not dataclasses or enums. `_plain` is the
+    conversion, and this is the only test that proves the real client accepts
+    what it produces."""
+    draft = Draft(kind=DraftKind.SHORT_PAY_DISPUTE, recipient="Broker", subject="s",
+                  body="b", amount=200.0, reference="L-7105",
+                  finding_kind=ExceptionKind.SHORT_PAY)
+
+    store.save_drafts("r-4", [draft])
+    stored = store._db.collection("drafts").document("r-4::0").get().to_dict()
+
+    assert stored["kind"] == "short_pay_dispute"        # not "DraftKind.SHORT_PAY_DISPUTE"
+    assert stored["finding_kind"] == "short_pay"
+    assert isinstance(stored["amount"], float)
+
+
+def test_a_document_body_round_trips(store):
+    path = store.put_document("load-L-7101.txt", "RATE CONFIRMATION\nLoad Number: L-7101")
+
+    assert path == "firestore://documents/load-L-7101.txt"
+    stored = store._db.collection("documents").document("load-L-7101.txt").get().to_dict()
+    assert "L-7101" in stored["content"]
+
+
+def test_a_whole_close_persists_to_firestore_exactly_as_it_does_locally(store):
+    """The one that matters: run the real chore against the real adapter and
+    assert the durable record matches what the memory path produces."""
+    documents, raw = read_period("2026-07")
+
+    remote = run_close(period="2026-07", documents=documents,
+                       company="Bell Ridge Haulage", store=store, raw_texts=raw)
+    local = run_close(period="2026-07", documents=documents,
+                      company="Bell Ridge Haulage", store=LocalStore(), raw_texts=raw)
+
+    assert remote.outcome == "closed"
+    assert remote.to_dict()["statements"] == local.to_dict()["statements"]
+
+    persisted = store.load_close("Bell Ridge Haulage", "2026-07")
+    assert persisted["outcome"] == "closed"
+    assert len(persisted["journal"]["steps"]) == 10
+    assert len(persisted["findings"]) == 10
+    assert store.load_run(remote.run_id)["outcome"] == "closed"
+
+
+def test_re_closing_the_same_month_overwrites_rather_than_accumulates(store):
+    """Idempotency, asserted against the real store rather than assumed."""
+    documents, raw = read_period("2026-07")
+
+    first = run_close(period="2026-07", documents=documents,
+                      company="Bell Ridge Haulage", store=store, raw_texts=raw)
+    run_close(period="2026-07", documents=documents,
+              company="Bell Ridge Haulage", store=store, raw_texts=raw)
+
+    closes = list(store._db.collection("closes").stream())
+    runs = list(store._db.collection("runs").stream())
+
+    assert len([c for c in closes if c.id.endswith("::2026-07")]) == 1
+    assert len([r for r in runs if r.id == first.run_id]) == 1

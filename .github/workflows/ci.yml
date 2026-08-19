@@ -141,8 +141,8 @@ jobs:
       - name: The bundled month closes with no dependencies at all
         run: |
           python -m venv /tmp/bare
-          /tmp/bare/bin/python -m archon.cli | tail -20
-          /tmp/bare/bin/python -m archon.cli >/dev/null
+          /tmp/bare/bin/python run.py | tail -20
+          /tmp/bare/bin/python run.py >/dev/null
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -150,3 +150,84 @@ jobs:
           name: coverage
           path: coverage.xml
           if-no-files-found: warn
+
+  # Stage 3b. C3: the shipped Firestore adapter, against a disposable instance.
+  # Everything else runs against LocalStore, which cannot catch a wrong
+  # collection name, a bad batch or a value Firestore will not serialise.
+  firestore:
+    name: Firestore adapter
+    needs: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: google-github-actions/setup-gcloud@77e7a554d41e2ee56fc945c52dfd3f33d12def9a # v2.1.4
+
+      - name: Start the Firestore emulator
+        run: |
+          gcloud components install cloud-firestore-emulator beta --quiet
+          nohup gcloud beta emulators firestore start --host-port=127.0.0.1:8686 \
+            > /tmp/firestore.log 2>&1 &
+          for i in $(seq 1 60); do
+            grep -q "Dev App Server is now running" /tmp/firestore.log && break
+            sleep 1
+          done
+          cat /tmp/firestore.log
+
+      - run: pip install -r requirements-dev.txt
+
+      # The gate that stops this job becoming green nothing: a skip is a
+      # failure here, because a skipped adapter test proves exactly as much as
+      # no adapter test.
+      - name: The adapter tests run, and are not allowed to skip
+        env:
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8686
+        run: |
+          python -m pytest tests/integration/test_firestore_adapter.py \
+            -v --no-header -rs | tee /tmp/firestore-tests.log
+          grep -q "SKIPPED" /tmp/firestore-tests.log \
+            && { echo "the emulator did not start; these tests proved nothing"; exit 1; }
+          grep -qE "[0-9]+ passed" /tmp/firestore-tests.log
+
+  # Stage 3c. C5: one browser walking the exact path the video shows, at both
+  # widths the product is seen at.
+  browser:
+    name: Browser journey
+    needs: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Install the browser
+        run: python -m playwright install --with-deps chromium
+
+      - name: Walk the judge's journey, and do not allow a skip
+        env:
+          ARCHON_BROWSER_TESTS: "1"
+        run: |
+          python -m pytest tests/e2e/test_browser_journey.py \
+            -v --no-header -rs | tee /tmp/browser-tests.log
+          grep -q "SKIPPED" /tmp/browser-tests.log \
+            && { echo "playwright was absent; the journey proved nothing"; exit 1; }
+          grep -qE "[0-9]+ passed" /tmp/browser-tests.log
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: browser-failure
+          path: test-results/
+          if-no-files-found: ignore

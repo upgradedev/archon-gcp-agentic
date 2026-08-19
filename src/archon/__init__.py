@@ -23,7 +23,7 @@ PERIOD = "2026-07"
 
 def __getattr__(name):  # pragma: no cover - thin lazy re-export
     if name in ("run_close", "CloseResult"):
-        from . import close
+        from .runtime import close
 
         return getattr(close, name)
     raise AttributeError(name)

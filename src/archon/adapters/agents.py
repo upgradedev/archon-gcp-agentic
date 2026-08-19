@@ -36,11 +36,11 @@ from __future__ import annotations
 import json
 import os
 
-from .close import CloseResult, run_close
-from .journal import Clock
-from .mailbox import read_period
-from .models import Document
-from .narrator import NARRATOR_INSTRUCTION
+from ..domain.models import Document
+from ..domain.narrator import NARRATOR_INSTRUCTION
+from ..runtime.close import CloseResult, run_close
+from ..runtime.journal import Clock
+from ..runtime.mailbox import read_period
 
 #: Gemini model used unless one is injected. Overridable so a deployment can
 #: move without a code change.
@@ -405,8 +405,8 @@ def extract_with_gemini(text: str, source_file: str, period: str, client=None) -
     from google import genai
     from google.genai import types
 
-    from .extract import EXTRACTION_INSTRUCTION, EXTRACTION_SCHEMA
-    from .models import DocType
+    from ..domain.extract import EXTRACTION_INSTRUCTION, EXTRACTION_SCHEMA
+    from ..domain.models import DocType
 
     client = client or genai.Client()
     response = client.models.generate_content(

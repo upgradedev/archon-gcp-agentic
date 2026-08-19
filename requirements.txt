@@ -20,3 +20,8 @@ uvicorn[standard]>=0.32,<1
 # Persistence. Optional at runtime: without GOOGLE_CLOUD_PROJECT the store
 # falls back to memory and the books are identical.
 google-cloud-firestore>=2.19,<3
+
+# Verifying the OIDC token Pub/Sub puts on /events. Without it a deployment
+# that configured an audience refuses every trigger, which is the correct
+# failure but a useless one.
+google-auth>=2.35,<3

@@ -1,7 +1,7 @@
 """The allocation engine: one payment split back across many loads."""
 from __future__ import annotations
 
-from archon.allocation import (
+from archon.domain.allocation import (
     allocate_all,
     allocate_remittance,
     loads_by_ref,

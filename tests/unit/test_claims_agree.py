@@ -84,9 +84,9 @@ def test_the_narration_test_count_matches_the_readme():
 
 def test_the_close_length_agrees_across_every_surface():
     """Ten steps. It has already been nine, and three surfaces had to change."""
-    from archon.close import run_close
-    from archon.mailbox import read_period
-    from archon.store import LocalStore
+    from archon.adapters.store import LocalStore
+    from archon.runtime.close import run_close
+    from archon.runtime.mailbox import read_period
 
     documents, _ = read_period("2026-07")
     steps = len(run_close(period="2026-07", documents=documents,
@@ -99,9 +99,9 @@ def test_the_close_length_agrees_across_every_surface():
 
 def test_the_money_figures_agree_between_the_product_and_the_readme():
     """Every headline figure a judge could check against a live run."""
-    from archon.close import run_close
-    from archon.mailbox import read_period
-    from archon.store import LocalStore
+    from archon.adapters.store import LocalStore
+    from archon.runtime.close import run_close
+    from archon.runtime.mailbox import read_period
 
     documents, _ = read_period("2026-07")
     result = run_close(period="2026-07", documents=documents,

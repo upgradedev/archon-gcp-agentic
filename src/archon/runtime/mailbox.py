@@ -17,11 +17,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .extract import extract_document
-from .models import Document
+from .. import paths
+from ..domain.extract import extract_document
+from ..domain.models import Document
 
 #: Where the bundled month lives, relative to the repository root.
-CORPUS_ROOT = Path(__file__).resolve().parent.parent / "corpus"
+CORPUS_ROOT = paths.CORPUS_ROOT
 
 
 def read_period(period: str, root: Path | None = None) -> tuple[list[Document], dict[str, str]]:

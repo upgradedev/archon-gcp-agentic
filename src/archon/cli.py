@@ -15,8 +15,8 @@ import json
 import sys
 
 from . import PERIOD
-from .close import run_close
-from .mailbox import read_period
+from .runtime.close import run_close
+from .runtime.mailbox import read_period
 
 
 def _print_close(result) -> None:
@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
 
     narrator = None
     if args.agent:
-        from .agents import gemini_narrator
+        from .adapters.agents import gemini_narrator
 
         narrator = gemini_narrator()
 
