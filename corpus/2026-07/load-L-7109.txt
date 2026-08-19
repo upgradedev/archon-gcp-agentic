@@ -1,0 +1,15 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7109
+Date: 2026-07-27
+Broker: Midwest Freight Exchange
+Carrier Unit: T-103
+Origin: Salt Lake City UT
+Destination: Boise ID
+Miles: 980
+Linehaul Rate: 2,120.00
+Accessorial: 0.00
+Accessorial Detail: -
+Total Payable: 2,120.00

@@ -1,0 +1,15 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7105
+Date: 2026-07-13
+Broker: Midwest Freight Exchange
+Carrier Unit: T-102
+Origin: Memphis TN
+Destination: Atlanta GA
+Miles: 1050
+Linehaul Rate: 2,260.00
+Accessorial: 200.00
+Accessorial Detail: Lumper fee
+Total Payable: 2,460.00

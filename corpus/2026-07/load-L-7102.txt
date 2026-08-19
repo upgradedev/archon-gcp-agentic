@@ -1,0 +1,15 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7102
+Date: 2026-07-05
+Broker: Midwest Freight Exchange
+Carrier Unit: T-102
+Origin: Dallas TX
+Destination: Memphis TN
+Miles: 1520
+Linehaul Rate: 3,100.00
+Accessorial: 150.00
+Accessorial Detail: Detention 3h
+Total Payable: 3,250.00

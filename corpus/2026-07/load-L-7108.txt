@@ -1,0 +1,15 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7108
+Date: 2026-07-23
+Broker: Midwest Freight Exchange
+Carrier Unit: T-102
+Origin: Atlanta GA
+Destination: Charlotte NC
+Miles: 1330
+Linehaul Rate: 2,780.00
+Accessorial: 0.00
+Accessorial Detail: -
+Total Payable: 2,780.00

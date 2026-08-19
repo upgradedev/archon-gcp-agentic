@@ -1,0 +1,25 @@
+ROADWAY FUEL NETWORK
+CARD STATEMENT
+
+Document Type: Fuel Card Statement
+Statement Number: FCN-2026-07
+Date: 2026-07-31
+Supplier: Roadway Fuel Network
+Fills: 14
+Statement Total: 7,281.00
+
+FUEL LINES
+2026-07-02  T-101  Effingham IL  Gallons 142.6  Gross 428.30  Tax 34.26
+2026-07-04  T-102  Texarkana AR  Gallons 138.9  Gross 416.70  Tax 33.34
+2026-07-06  T-101  Effingham IL  Gallons 137.6  Gross 412.85  Tax 33.03
+2026-07-07  T-103  Cheyenne WY  Gallons 151.2  Gross 453.60  Tax 36.29
+2026-07-09  T-101  Effingham IL  Gallons 137.6  Gross 412.85  Tax 33.03
+2026-07-10  T-102  Jackson MS  Gallons 129.4  Gross 388.20  Tax 31.06
+2026-07-12  T-103  North Platte NE  Gallons 144.8  Gross 434.40  Tax 34.75
+2026-07-14  T-102  Birmingham AL  Gallons 133.1  Gross 399.30  Tax 31.94
+2026-07-15  T-101  Mount Vernon IL  Gallons 126.7  Gross 380.10  Tax 30.41
+2026-07-17  T-103  Rock Springs WY  Gallons 630.0  Gross 1,890.00  Tax 151.20
+2026-07-20  T-101  Sikeston MO  Gallons 131.5  Gross 394.50  Tax 31.56
+2026-07-22  T-102  Commerce GA  Gallons 140.2  Gross 420.60  Tax 33.65
+2026-07-25  T-103  Ogden UT  Gallons 147.9  Gross 443.70  Tax 35.50
+2026-07-29  T-102  Gastonia NC  Gallons 135.3  Gross 405.90  Tax 32.47

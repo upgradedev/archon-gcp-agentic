@@ -1,0 +1,9 @@
+FIRST PLAINS BANK
+ACCOUNT ACTIVITY
+
+Document Type: Bank Transaction
+Date: 2026-07-30
+Direction: out
+Amount: 7,281.00
+Reference: FCN-2026-07
+Paid To: Roadway Fuel Network

@@ -1,0 +1,9 @@
+FIRST PLAINS BANK
+ACCOUNT ACTIVITY
+
+Document Type: Bank Transaction
+Date: 2026-07-31
+Direction: out
+Amount: 2,450.45
+Reference: DS-2026-07-03 SETTLEMENT
+Driver: Driver 3

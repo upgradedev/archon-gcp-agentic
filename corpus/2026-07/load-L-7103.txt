@@ -1,0 +1,15 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7103
+Date: 2026-07-08
+Broker: Midwest Freight Exchange
+Carrier Unit: T-101
+Origin: Columbus OH
+Destination: Nashville TN
+Miles: 890
+Linehaul Rate: 1,875.00
+Accessorial: 0.00
+Accessorial Detail: -
+Total Payable: 1,875.00
