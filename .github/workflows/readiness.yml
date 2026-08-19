@@ -1,0 +1,59 @@
+# The submission readiness gate, in its own workflow on purpose.
+#
+# It lives apart from ci.yml so the two badges in the README say different,
+# true things. `CI` covers the secret scan, the build and the 214 tests, and it
+# is green. `Readiness` covers the four weighted judging criteria and fetches
+# the live judge URL, and it is RED until that URL is real.
+#
+# This is not the gate being softened. It runs on every push and every pull
+# request, exactly as before, and it still refuses to score while the config
+# carries a placeholder URL. Splitting it stopped the README advertising
+# "CI - failing" to judges, which was false about the build and the tests.
+#
+# Do not add continue-on-error here, and do not pass --offline. Neither can
+# produce a green gate, by design. Ship the demo instead.
+
+name: Readiness
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: readiness-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    name: Readiness gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      # Proof the gate has teeth, run before the gate itself. It asserts that a
+      # dead URL fails, that a failing check drops the score below the
+      # threshold, that a criterion with only user-gated checks scores zero, and
+      # that a check which raises counts as a failure. A gate nobody has seen
+      # fail is a gate nobody should believe.
+      - name: Gate self-test
+        run: python scripts/readiness.py --selftest
+
+      - name: Readiness gate (weighted score, live judge URL, user-gated items)
+        run: python scripts/readiness.py
+
+      - name: Upload readiness.json
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: readiness-report
+          path: readiness.json
+          if-no-files-found: warn
