@@ -32,7 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import PERIOD, __version__, paths
 from ..runtime.close import run_close
 from ..runtime.mailbox import available_periods, read_period
-from . import auth
+from . import auth, headers
 from .store import LocalStore, get_store
 
 WEB_ROOT = paths.WEB_ROOT
@@ -49,6 +49,20 @@ app = FastAPI(
     version=__version__,
     description="An agent that closes a small haulier's month unattended.",
 )
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Every response carries the headers a public page should carry.
+
+    Added because a DAST scan against the running container found five of them
+    missing, and a finding a scanner reports is a finding whether or not anyone
+    was going to exploit it. Fixed here rather than added to the scanner's
+    ignore list.
+    """
+    response = await call_next(request)
+    headers.apply(response.headers)
+    return response
 
 
 def _narrator():

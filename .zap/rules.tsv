@@ -1,14 +1,13 @@
 # ZAP rule overrides. Tab separated: rule id, action, reason.
 #
-# WARN keeps a finding visible in the report but does not fail the build.
-# IGNORE is only used where the finding is structurally impossible here, and
-# each line says why. Nothing is ignored to make the scan pass.
+# Short on purpose. The five header findings this file used to carry were FIXED
+# in src/archon/adapters/headers.py rather than silenced, which is the whole
+# difference between a security gate and a security decoration.
 #
-10015	WARN	(Re-examine cache-control: the demo is a single page and a stale cache is a stale demo, not a leak)
-10021	WARN	(X-Content-Type-Options: worth adding, no user-supplied content is rendered)
-10027	IGNORE	(Information disclosure, suspicious comments: the page is deliberately commented for judges reading source)
-10035	WARN	(HSTS: terminated at Cloud Run's load balancer, not in this container)
-10063	WARN	(Permissions policy: no camera, geolocation or payment API is used)
+# What is left is structural: findings that cannot be true here, each with the
+# reason it cannot. Nothing is ignored to make the scan pass.
+#
+10027	IGNORE	(Suspicious comments: the page is deliberately commented for judges reading source)
 10096	IGNORE	(Timestamp disclosure: the run journal publishes its own timestamps on purpose, that is the product)
 10109	IGNORE	(Modern web application: the page is a modern web application)
-90005	WARN	(Sub-resource integrity: there are no external sub-resources, everything is inline)
+90005	IGNORE	(Sub-resource integrity: there are no sub-resources, everything is inline and same-origin)
