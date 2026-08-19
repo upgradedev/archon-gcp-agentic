@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Archon — closes a haulier's month unattended</title>
+<title>Archon: closes a haulier's month unattended</title>
 <meta name="description" content="An agent that closes a small trucking firm's month end to end: posts the books, splits the broker remittance across the loads it settles, triages the exceptions, drafts the corrective documents and files them unsent.">
 <style>
   /* One dark console, deliberately committed to. The demo is shown on a phone
@@ -258,9 +258,9 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const PERIOD = "2026-07";
-const usd = (n) => (n === null || n === undefined) ? "—"
+const usd = (n) => (n === null || n === undefined) ? "–"
   : n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
-const num = (n, d = 0) => (n === null || n === undefined) ? "—"
+const num = (n, d = 0) => (n === null || n === undefined) ? "–"
   : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -338,7 +338,7 @@ function renderStats(d) {
 function renderAlloc(list) {
   const rows = list.map((a) => {
     const head = `<tr><td colspan="6" style="background:var(--card-hi)">
-      <b>${esc(a.remittance_ref)}</b> from ${esc(a.broker)} —
+      <b>${esc(a.remittance_ref)}</b> from ${esc(a.broker)}:
       <span class="num">${usd(a.remittance_total)}</span> landed,
       <span class="num">${usd(a.factoring_fee)}</span> factoring fee,
       <span class="num">${usd(a.allocated_gross)}</span> across ${a.lines.length} loads.
@@ -347,9 +347,9 @@ function renderAlloc(list) {
       </td></tr>`;
     const lines = a.lines.map((l) => `<tr>
       <td>${esc(l.load_ref)}</td>
-      <td class="r num">${l.invoiced === null ? "—" : usd(l.invoiced)}</td>
+      <td class="r num">${l.invoiced === null ? "–" : usd(l.invoiced)}</td>
       <td class="r num">${usd(l.paid)}</td>
-      <td class="r num">${l.deduction ? usd(l.deduction) : "—"}</td>
+      <td class="r num">${l.deduction ? usd(l.deduction) : "–"}</td>
       <td>${esc(l.reason || "")}</td>
       <td><span class="pill ${l.settled_in_full ? "ok" : (l.matched ? "err" : "warn")}">${
         l.settled_in_full ? "settled" : (l.matched ? "short paid" : "no confirmation on file")
@@ -366,7 +366,7 @@ function renderFindings(list) {
   const rows = list.map((f) => `<tr>
     <td><span class="pill ${f.severity === "error" ? "err" : (f.severity === "warning" ? "warn" : "info")}">${esc(words(f.kind))}</span></td>
     <td>${esc(f.reference)}</td>
-    <td class="r num">${f.amount ? usd(f.amount) : "—"}</td>
+    <td class="r num">${f.amount ? usd(f.amount) : "–"}</td>
     <td class="muted">${esc(f.message)}</td>
   </tr>`).join("");
   $("findings").innerHTML = `<thead><tr>

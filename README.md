@@ -1,7 +1,13 @@
 # Archon
 
 [![CI](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml)
+[![Readiness](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+*The readiness badge is red on purpose and will stay red until the demo URL
+below is real. It is a submission gate, not a build gate: it fetches the live
+judge URL and refuses to pass while that URL is a placeholder. The CI badge
+covers the secret scan, the build and the tests.*
 
 > **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner wakes up to a closed month in their inbox instead of a shoebox they will get to in April.**
 
@@ -366,7 +372,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 178 passing | `python -m pytest` |
+| Tests, all offline | 214 passing | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
