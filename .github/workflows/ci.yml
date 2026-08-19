@@ -1,0 +1,185 @@
+# Starter CI for a hackathon entry. Copy to .github/workflows/ci.yml and edit
+# the build and test jobs. Four stages: secret scan, build, test, readiness gate.
+#
+# The trigger is the point. `push:` carries no `branches:` key, so every branch
+# gets a run. Two of our pull requests sat with zero checks because push was
+# pinned to main, and nobody noticed until merge time. Verified in our own
+# repos: qwen-memoryagent fires on any branch; gcp, cockroachdb and
+# archon-datahub all pin to a branch list.
+#
+# Copied from repos/qwen-memoryagent/.github/workflows/ci.yml: the trigger
+# block, the gitleaks step byte for byte including the pinned release URL and
+# the sha256 check, and the shape of the readiness job. Concurrency block from
+# repos/cockroachdb/.github/workflows/ci.yml. Action SHA pins are the ones
+# already in use across our repos: checkout v7.0.0 (112 uses), upload-artifact
+# v7.0.1 (157 uses), setup-python v6.3.0 (3 uses, qwen demo-video.yml).
+#
+# The readiness job is red until you edit the CONFIG block in readiness.py and
+# the demo is actually serving. That is the correct state for an entry with no
+# live demo. Do not fix it with --offline or continue-on-error. Ship the demo.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Stage 1. Fail fast on any committed secret, before anything else runs.
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: gitleaks detect (pinned v8.18.4, redacted)
+        run: |
+          curl --fail --silent --show-error --location \
+            --output gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          echo "ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d  gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks detect --source . --redact --no-banner
+          # Once the repo has a .gitleaksignore, add:
+          #   --gitleaks-ignore-path .gitleaksignore
+          # It is left off here because a fresh repo has no such file. This is
+          # the qwen-autopilot form of the step; qwen-memoryagent carries the
+          # flag and the file.
+
+  # Stage 2. Build. EDIT THIS JOB. It is a placeholder, not a working build.
+  # Replace the two commented blocks with the one that matches the project and
+  # delete the other. Whatever you use, the build must produce the artifact you
+  # actually ship, so a broken container or a failing typecheck turns the run
+  # red here rather than on the day of the deadline.
+  build:
+    name: Build
+    needs: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Compile every shipped module
+        run: python -m compileall -q archon scripts
+
+      # The image is the artifact that actually ships, so a broken container
+      # turns the run red here rather than on the day of the deadline.
+      - name: Build the Cloud Run image
+        run: docker build -t archon:ci .
+
+      - name: The image serves and closes a month
+        run: |
+          docker run -d --name archon -p 8080:8080 archon:ci
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/api/health >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://localhost:8080/api/health | tee /dev/stderr | grep -q '"status":"ok"'
+          curl -sf -X POST http://localhost:8080/api/close/2026-07             | python -c "import json,sys; d=json.load(sys.stdin);                 assert d['outcome']=='closed', d['outcome'];                 assert len(d['journal']['steps'])==9, d['journal']['steps'];                 print('image closed 2026-07 in', len(d['journal']['steps']), 'steps')"
+          docker rm -f archon
+
+      - name: Dependency CVEs
+        run: python -m pip_audit --strict --requirement requirements.txt
+
+  # Stage 3. Tests. EDIT THIS JOB. Keep the suite offline: no API key, no cloud
+  # credential, no paid call. Anything needing a real service goes in its own
+  # workflow, so an expired token cannot turn the whole pipeline red the night
+  # before a deadline.
+  test:
+    name: Test
+    needs: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-dev.txt
+
+      # The whole suite is offline: no key, no credential, no paid call. The
+      # ADK agent and the SequentialAgent run for real against scripted models,
+      # so genuine function calling and genuine state hand-off are exercised.
+      - name: Test pyramid
+        run: python -m pytest --cov=archon --cov-report=term-missing --cov-report=xml
+
+      # The claim the entry is judged on, asserted as its own step so it is
+      # visible in the run summary rather than buried in a dot.
+      - name: The agent closes the month unattended
+        run: |
+          python -m pytest -q             tests/integration/test_agents.py::test_the_agent_really_calls_its_tools_and_closes_the_month             tests/integration/test_close.py::test_the_month_closes_end_to_end             tests/integration/test_close.py::test_every_detector_fires_on_the_bundled_month             tests/integration/test_close.py::test_no_draft_is_ever_sent
+
+      # The deterministic path must run on a clean checkout with nothing
+      # installed but the standard library. If this breaks, the README lies.
+      - name: The bundled month closes with no dependencies at all
+        run: |
+          python -m venv /tmp/bare
+          /tmp/bare/bin/python -m archon.cli | tail -20
+          /tmp/bare/bin/python -m archon.cli >/dev/null
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: warn
+
+  # Stage 4. The readiness gate. Scores the weighted judging criteria, prints
+  # the user-gated items separately, and fetches the live judge URL. The live
+  # fetch is a veto: no score can outvote a demo that is not serving.
+  #
+  # No install step. readiness.py is standard library only, which is why this
+  # job cannot be broken by a dependency resolution failure at 3am.
+  readiness:
+    name: Readiness gate
+    needs: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+
+      # Proof the gate has teeth, run before the gate itself. It asserts that a
+      # dead URL fails, that a failing check drops the score below the
+      # threshold, that a criterion with only user-gated checks scores zero, and
+      # that a check which raises counts as a failure. A gate nobody has seen
+      # fail is a gate nobody should believe.
+      - name: Gate self-test
+        run: python scripts/readiness.py --selftest
+
+      - name: Readiness gate (weighted score, live judge URL, user-gated items)
+        run: python scripts/readiness.py
+
+      - name: Upload readiness.json
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: readiness-report
+          path: readiness.json
+          if-no-files-found: warn

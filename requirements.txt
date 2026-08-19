@@ -1,0 +1,22 @@
+# Runtime dependencies.
+#
+# The deterministic engine — models, extract, ledger, allocation, exceptions,
+# validation, drafts, journal, close — is standard library only. It needs none
+# of the below, which is why `python -m archon.cli` closes the bundled month on
+# a clean checkout with no install and no key.
+#
+# Everything here powers a surface on top of that engine. Pins keep CI
+# reproducible and make pip-audit mean something.
+
+# The agent that performs the close, and the reporting pipeline.
+# Pinned below 3 deliberately: 2.3 deprecates SequentialAgent in favour of a
+# graph-based Workflow whose LlmAgent adapter is still private. See the README.
+google-adk>=2.3,<3
+
+# The Cloud Run service: the judge's page, the API, the Pub/Sub trigger.
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+
+# Persistence. Optional at runtime: without GOOGLE_CLOUD_PROJECT the store
+# falls back to memory and the books are identical.
+google-cloud-firestore>=2.19,<3

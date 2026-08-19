@@ -1,0 +1,11 @@
+KELLNER TRUCK SERVICE
+INVOICE
+
+Document Type: Maintenance Invoice
+Invoice Number: MNT-5512
+Date: 2026-07-11
+Supplier: Kellner Truck Service
+Unit: T-102
+Net Amount: 1,240.00
+Tax: 99.20
+Total: 1,339.20

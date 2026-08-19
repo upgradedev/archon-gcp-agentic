@@ -1,0 +1,9 @@
+FIRST PLAINS BANK
+ACCOUNT ACTIVITY
+
+Document Type: Bank Transaction
+Date: 2026-07-28
+Direction: out
+Amount: 1,865.00
+Reference: INV-2291
+Paid To: Vandalay Trailer Repair

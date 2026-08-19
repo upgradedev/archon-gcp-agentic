@@ -1,0 +1,15 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7104
+Date: 2026-07-09
+Broker: Midwest Freight Exchange
+Carrier Unit: T-103
+Origin: Denver CO
+Destination: Omaha NE
+Miles: 1410
+Linehaul Rate: 2,940.00
+Accessorial: 0.00
+Accessorial Detail: -
+Total Payable: 2,940.00

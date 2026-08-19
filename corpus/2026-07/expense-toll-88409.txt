@@ -1,0 +1,10 @@
+E-Z PASS MID-ATLANTIC
+INVOICE
+
+Document Type: Toll Invoice
+Invoice Number: TOLL-88409
+Date: 2026-07-15
+Supplier: E-Z Pass Mid-Atlantic
+Net Amount: 388.20
+Tax: 31.06
+Total: 419.26

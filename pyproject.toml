@@ -1,0 +1,47 @@
+[project]
+name = "archon-gcp-agentic"
+version = "0.1.0"
+description = "An agent that closes a small haulier's month unattended."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["archon"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "default",
+    # ADK 2.3 deprecates SequentialAgent for a graph Workflow whose LlmAgent
+    # adapter is still private. Kept visible, never silenced: see the README.
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# readiness.py is a shared submission-kit component, kept Python 3.9 compatible
+# and standard library only so it can run in any repo with no install step.
+# Reformatting its percent-formatting to this repo's target would fork it from
+# the copy every other entry uses, which costs more than the lint is worth.
+extend-exclude = ["scripts/readiness.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+# B008: FastAPI's dependency defaults are call-in-default by design.
+# UP042: every enum here inherits `str, Enum` rather than `StrEnum` so that a
+#   member interpolates and serialises as its own value everywhere, including
+#   the Firestore documents and the JSON the browser renders. Switching would
+#   change `f"{doc_type}"` under our feet for no gain.
+ignore = ["B008", "UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.coverage.run]
+source = ["archon"]
+omit = ["archon/cli.py"]
