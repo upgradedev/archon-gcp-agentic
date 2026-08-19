@@ -1,0 +1,3 @@
+# The synthetic video sync-gate self-test only renders images with Pillow.
+# Keep this exact; regenerate video-selftest.lock with Python 3.11 and pip-tools.
+Pillow==12.3.0

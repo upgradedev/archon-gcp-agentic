@@ -1,0 +1,65 @@
+# Copied from upgradedev/archon-qwen-memoryagent, 603349c,
+# .github/workflows/video-sync-gate-selftest.yml. Pristine copy at
+# video/upstream/qwen-memoryagent/video-sync-gate-selftest.yml.
+# KIT: the only change is that the two watch paths for build_caption_filter.py
+# were dropped, because the kit does not ship that script.
+name: Video Sync Gate Selftest
+
+# Guards the GUARD. The demo video (demo-video.yml) is assembled by a monolithic ffmpeg
+# compose step, so it is NOT trusted blindly: scripts/verify_video_sync.py is a fail-closed
+# A/V/caption sync gate that measures the SHIPPED mp4 (real pixels for segment order, real
+# audio/video stream durations, caption windows) and fails the build on any drift or
+# mis-order. The standing rule is: never ship a demo video without that gate.
+#
+# A detect-only gate is only worth its proven ability to FAIL. This workflow renders tiny
+# SYNTHETIC mp4s (one correct, three deliberately broken) and drives the real gate against
+# each, asserting it PASSES the good one and FAILS — for the RIGHT reason — on a mis-ordered
+# concat (outro not last), a caption that bleeds past the outro, and an audio/video length
+# mismatch. It needs no ElevenLabs/edge-tts, no keys and no network — only ffmpeg + Pillow,
+# exactly what the gate itself needs in CI. So a change that silently breaks the sync gate
+# is caught on push/PR, and a drifted or mis-ordered video can never quietly ship again.
+on:
+  push:
+    paths:
+      - "scripts/verify_video_sync.py"
+      - "tests/video/verify_gate_selftest.py"
+      - "requirements/video-selftest.in"
+      - "requirements/video-selftest.lock"
+      - ".github/workflows/video-sync-gate-selftest.yml"
+  pull_request:
+    paths:
+      - "scripts/verify_video_sync.py"
+      - "tests/video/verify_gate_selftest.py"
+      - "requirements/video-selftest.in"
+      - "requirements/video-selftest.lock"
+      - ".github/workflows/video-sync-gate-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: requirements/video-selftest.lock
+
+      - name: Ensure ffmpeg + hash-locked Pillow (same deps the gate uses in CI)
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          python -m pip install --disable-pip-version-check \
+            --require-hashes --only-binary=:all: \
+            --requirement requirements/video-selftest.lock
+          python -m pip check
+
+      - name: Selftest — the sync gate must PASS good and FAIL drift/mis-order
+        run: |
+          set -euo pipefail
+          python tests/video/verify_gate_selftest.py
