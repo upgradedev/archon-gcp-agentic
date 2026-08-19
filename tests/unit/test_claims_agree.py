@@ -34,7 +34,14 @@ CAPTIONS = " ".join(s["captionText"] for s in NARRATION["segments"])
 
 
 def _readme_test_count() -> int:
-    match = re.search(r"\|\s*Tests, all offline\s*\|\s*([\d,]+) passing", README)
+    """What the README claims the suite is.
+
+    Deliberately the SIZE of the suite rather than how many passed. "N passing"
+    depends on which optional dependencies happen to be installed, so it was
+    true in CI and false locally for no visible reason. The count of tests is
+    the same everywhere.
+    """
+    match = re.search(r"\|\s*Tests, all offline\s*\|\s*([\d,]+)\s*\|", README)
     assert match, "the README evidence table no longer states a test count"
     return int(match.group(1).replace(",", ""))
 

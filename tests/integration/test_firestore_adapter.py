@@ -23,17 +23,22 @@ import uuid
 
 import pytest
 
-pytest.importorskip("google.cloud.firestore")
+from archon.adapters.store import LocalStore
+from archon.domain.models import Draft, DraftKind, ExceptionKind
+from archon.runtime.close import run_close
+from archon.runtime.mailbox import read_period
 
+#: A module-level `importorskip` would stop these being COLLECTED at all when
+#: google-cloud-firestore is absent, which makes the size of the suite depend on
+#: which optional dependencies happen to be installed. That broke the README's
+#: test count: it was right in CI and wrong locally, for no visible reason.
+#:
+#: A `skipif` collects them and marks them skipped instead, so the suite is the
+#: same size everywhere and only the outcome differs.
 pytestmark = pytest.mark.skipif(
     not os.getenv("FIRESTORE_EMULATOR_HOST"),
     reason="needs the Firestore emulator; CI starts one",
 )
-
-from archon.adapters.store import FirestoreStore, LocalStore  # noqa: E402
-from archon.domain.models import Draft, DraftKind, ExceptionKind  # noqa: E402
-from archon.runtime.close import run_close  # noqa: E402
-from archon.runtime.mailbox import read_period  # noqa: E402
 
 
 @pytest.fixture
@@ -44,6 +49,8 @@ def store():
     documents, which is what makes these safe to run in parallel and what stops
     a leftover write from a previous run making an assertion pass.
     """
+    from archon.adapters.store import FirestoreStore
+
     return FirestoreStore(project=f"archon-test-{uuid.uuid4().hex[:12]}")
 
 

@@ -2,7 +2,10 @@
 # library, so the layer that matters is the one holding ADK and FastAPI.
 FROM python:3.12-slim
 
-ENV PYTHONPATH=/app/src \n    PYTHONUNBUFFERED=1 \
+# The package lives under src/, so the interpreter needs to be told once here
+# rather than every command needing to know.
+ENV PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
