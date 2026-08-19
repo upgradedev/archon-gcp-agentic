@@ -3,7 +3,7 @@
 [![CI](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the nine loads it settles and files the letters chasing what was underpaid, so a haulier's month closes itself overnight instead of sitting in a shoebox until April.**
+> **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so a haulier's month closes itself overnight instead of sitting in a shoebox until April.**
 
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
@@ -243,12 +243,15 @@ is a document with a nested trail, written from a stateless container that is
 idle most of the month. Firestore costs nothing when idle. A haulier closes
 their books twelve times a year.
 
-**A note on `SequentialAgent`.** ADK 2.3 deprecates it in favour of a
-graph-based `Workflow` whose LlmAgent adapter is still private
+**A note on `SequentialAgent`.** ADK deprecates it in favour of a graph-based
+`Workflow` whose LlmAgent adapter is still private
 (`google.adk.workflow._llm_agent_wrapper`). This repository stays on
 `SequentialAgent` and pins `google-adk>=2.3,<3` rather than write against an API
-whose public shape cannot be confirmed. The deprecation warning is left visible
-rather than filtered.
+whose public shape cannot be confirmed from the installed package. The offline
+agent tests pass on both versions this has been run against, 2.3.0 locally and
+2.7.1 in CI, so the choice is checked rather than assumed. The deprecation
+warning is left visible rather than filtered: a hidden deprecation is how this
+becomes an emergency.
 
 ## The books are computed, never phrased
 
