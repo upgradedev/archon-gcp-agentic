@@ -1,8 +1,6 @@
 {
   "_comment": "Copy this to <your repo>/video/narration.json, then replace every <PLACEHOLDER>. generate-narration.py refuses to synthesize while any < or > remains. Keys starting with an underscore are ignored by the pipeline.",
-
   "schemaVersion": "archon.submission-video/v1",
-
   "_comment_provider": "elevenlabs reads the key from ELEVENLABS_API_KEY, then XI_API_KEY, then ELEVEN_LABS_KEY. google uses the gcloud access token of whoever is logged in, and reads languageCode, voice and speakingRate instead.",
   "provider": "elevenlabs",
   "elevenLabs": {
@@ -10,55 +8,52 @@
     "modelId": "eleven_multilingual_v2",
     "outputFormat": "mp3_44100_128"
   },
-
   "languageCode": "en-GB",
   "voice": "en-GB-Neural2-B",
   "speakingRate": 0.98,
-
   "_comment_beats": "Seven beats, one per thing a judge has to be told. captionText is what the viewer reads. speechText is what the voice says. They are separate fields on purpose: captions carry the exact product names, spellings and figures a judge will check, and speech carries the spelled-out form a TTS engine pronounces correctly. So DataHub in a caption is Data Hub in speech, MCP is M C P, PR 183 is pull request one eighty three. Contract: each field 20 to 800 characters, ids matching [a-z][a-z-]{1,24}, each beat 3 to 40 seconds of measured speech, whole video 90 to 174 seconds. The real length of this template with a real voice has NOT been measured, so do not plan around a number for it: run the generator once and read the total it prints. It fails outside the 90 to 174 second window and tells you the measured figure, so cut or add words after that first run rather than guessing. Record the browser capture only after you know the total, because the capture must be at least trimLeadSeconds plus that total or the build will reject it.",
-
   "segments": [
     {
       "id": "hook",
       "_beat": "The problem, in the buyer's words. Name a segment, never a market. Nigerian poultry and catfish farms, not SMBs.",
-      "captionText": "<WHO, A NAMED SEGMENT, NOT A MARKET> spends <HOW LONG> on <THE TASK> every <PERIOD>. It still ends in <THE BAD OUTCOME>, because <THE REASON IT KEEPS HAPPENING>. Nobody is paid to fix it, so it happens again next <PERIOD>. <PRODUCT> removes the step entirely.",
-      "speechText": "<WHO, A NAMED SEGMENT, NOT A MARKET> spends <HOW LONG> on <THE TASK> every <PERIOD>. It still ends in <THE BAD OUTCOME>, because <THE REASON IT KEEPS HAPPENING>. Nobody is paid to fix it, so it happens again next <PERIOD>. <PRODUCT> removes the step entirely."
+      "captionText": "An owner-operator trucking firm running three to twelve trucks cannot close its books, because a broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight.",
+      "speechText": "An owner operator trucking firm running three to twelve trucks cannot close its books, because a broker does not pay per load. It pays once a fortnight. One bank credit, covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight."
     },
     {
       "id": "surface",
       "_beat": "The surface the buyer already opens. If the answer only ever appears on a page we built, this beat is a lie and the entry has shipped a twelfth tab.",
-      "captionText": "The answer arrives in <THE SURFACE THEY ALREADY OPEN>, not in another dashboard. <WHO> asks <THE KIND OF QUESTION THEY ASK> and reads the answer where they already were, without <THE THING IT REPLACES>. That is the whole change: same surface, no new habit to learn.",
-      "speechText": "The answer arrives in <THE SURFACE THEY ALREADY OPEN>, not in another dashboard. <WHO> asks <THE KIND OF QUESTION THEY ASK> and reads the answer where they already were, without <THE THING IT REPLACES>. That is the whole change: same surface, no new habit to learn."
+      "captionText": "So the month arrives where the owner already reads their mail. Not a console they have to remember to open, because on the first of the month a haulier is driving.",
+      "speechText": "So the month arrives where the owner already reads their mail. Not a console they have to remember to open, because on the first of the month, a haulier is driving."
     },
     {
       "id": "trigger",
       "_beat": "What fires without anyone asking. A product nobody has to remember to open beats a product with a better interface.",
-      "captionText": "Nothing here waits to be asked. <THE TRIGGER, A REAL EVENT SUCH AS A NEW EMAIL IN A SHARED MAILBOX> fires it. <PRODUCT> does <THE WORK> in <HOW LONG>, checks <WHAT IT CHECKS>, and <WHO> sees <THE RESULT> already finished. No one opened anything.",
-      "speechText": "Nothing here waits to be asked. <THE TRIGGER, A REAL EVENT SUCH AS A NEW EMAIL IN A SHARED MAILBOX> fires it. <PRODUCT> does <THE WORK> in <HOW LONG>, checks <WHAT IT CHECKS>, and <WHO> sees <THE RESULT> already finished. No one opened anything."
+      "captionText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, Eventarc wakes a Cloud Run container, and a Google ADK agent starts work.",
+      "speechText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, Eventarc wakes a Cloud Run container, and a Google A D K agent starts work."
     },
     {
       "id": "live",
       "_beat": "The anonymous path executing the flagship claim, not a neighbour of it. This is the beat the browser capture must actually be showing.",
-      "captionText": "This is the live site at <THE PUBLIC URL>. No account, no install, no credential. <THE INPUT> goes in, and <THE FLAGSHIP RESULT> comes back in <HOW LONG>, with <THE EVIDENCE IT SHOWS> beside it. Everything on this screen is running now, against <WHAT IT IS RUNNING AGAINST>.",
-      "speechText": "This is the live site. No account, no install, no credential. <THE INPUT> goes in, and <THE FLAGSHIP RESULT> comes back in <HOW LONG>, with <THE EVIDENCE IT SHOWS> beside it. Everything on this screen is running now, against <WHAT IT IS RUNNING AGAINST>."
+      "captionText": "Ten steps, unattended. It classifies 27 artifacts, posts the journal, splits the remittance across the eight loads it settles, and proves it: what landed equals what the lines pay, less the fee charged once. Then it finds a broker that paid 200 dollars light, a truck stop that charged 412.85 twice, and 1,865 dollars that left the account with nothing behind it.",
+      "speechText": "Ten steps, unattended. It classifies twenty seven artifacts, posts the journal, splits the remittance across the eight loads it settles, and proves it. What landed equals what the lines pay, less the fee charged once. Then it finds a broker that paid two hundred dollars light, a truck stop that charged four hundred and twelve dollars twice, and one thousand eight hundred and sixty five dollars that left the account with nothing behind it."
     },
     {
       "id": "sponsor",
       "_beat": "One sentence naming how the sponsor's product is load-bearing. If removing it leaves the app working, it is not the hero and the entry will not place.",
-      "captionText": "<SPONSOR PRODUCT> is doing <THE LOAD-BEARING WORK>, inside <WHERE IT RUNS>. Take it out and <WHAT BREAKS> breaks, because <THE REASON IT CANNOT BE SWAPPED FOR SOMETHING ELSE>. It is not a call in a wrapper. It is the part of the product that makes the claim true.",
-      "speechText": "<SPONSOR PRODUCT> is doing <THE LOAD-BEARING WORK>, inside <WHERE IT RUNS>. Take it out and <WHAT BREAKS> breaks, because <THE REASON IT CANNOT BE SWAPPED FOR SOMETHING ELSE>. It is not a call in a wrapper. It is the part of the product that makes the claim true."
+      "captionText": "Remove Google ADK and there is no agent, only a function somebody has to remember to run. Remove Firestore and a container that scales to zero between months has nowhere to keep the trail. Gemini reads the documents and writes the English. It never touches a figure.",
+      "speechText": "Remove Google A D K and there is no agent, only a function somebody has to remember to run. Remove Firestore and a container that scales to zero between months has nowhere to keep the trail. Gemini reads the documents and writes the English. It never touches a figure."
     },
     {
       "id": "evidence",
       "_beat": "What a judge can check without asking us. Every claimed capability is reachable by an anonymous judge, or labelled not-deployed in the same sentence.",
-      "captionText": "Every claim here can be checked without asking us. <THE PUBLIC REPO> carries <WHAT IS IN IT>, and <WHAT CI PROVES ON EVERY COMMIT>. <THE PART THAT IS NOT DEPLOYED> is not deployed, and it is labelled that way on the site rather than filmed and left ambiguous.",
-      "speechText": "Every claim here can be checked without asking us. The public repository carries <WHAT IS IN IT>, and <WHAT CI PROVES ON EVERY COMMIT>. <THE PART THAT IS NOT DEPLOYED> is not deployed, and it is labelled that way on the site rather than filmed and left ambiguous."
+      "captionText": "Every number came from a deterministic ledger. 205 offline tests, no key and no network. Each of the five gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
+      "speechText": "Every number came from a deterministic ledger. Two hundred and five offline tests, no key and no network. Each of the five gates is broken on purpose once, and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
     },
     {
       "id": "close",
       "_beat": "The one sentence to be republished. One mechanism, one consequence, nothing else. Organizers quote this almost verbatim, so write it first and cut it last.",
-      "captionText": "<PRODUCT> uses <THE ONE MECHANISM>, so <WHO> gets <THE ONE CONSEQUENCE>, on the surface they already open, without asking for it. It is live at <THE PUBLIC URL> and open source at <THE PUBLIC REPO>. Try the question on screen yourself.",
-      "speechText": "<PRODUCT> uses <THE ONE MECHANISM>, so <WHO> gets <THE ONE CONSEQUENCE>, on the surface they already open, without asking for it. It is live now, and open source. Try the question on screen yourself."
+      "captionText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner wakes up to a closed month in their inbox instead of a shoebox they will get to in April.",
+      "speechText": "Archon splits one broker payment back across the eight loads it settles, and files the letters chasing what was underpaid, so the owner wakes up to a closed month in their inbox, instead of a shoebox they will get to in April."
     }
   ]
 }

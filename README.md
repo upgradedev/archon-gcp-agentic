@@ -15,6 +15,7 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 
 ## Contents
 
+- [The submission description](#the-submission-description)
 - [The chore](#the-chore)
 - [Why a haulier's month is hard](#why-a-hauliers-month-is-hard)
 - [Spin it up](#spin-it-up)
@@ -28,6 +29,71 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 - [Pre-existing components](#pre-existing-components)
 - [Honest scope](#honest-scope)
 - [Licence](#licence)
+
+---
+
+## The submission description
+
+*This is the text for the entry form, kept here so it is reviewable and so it
+cannot drift from the product. Owner's voice, no em dashes.*
+
+---
+
+Archon closes a small trucking firm's month while nobody is watching, and the
+thing that makes that possible is that it can split one broker payment back
+across the eight separate loads it settles.
+
+That sounds small. It is the reason a haulier's books never close. A broker does
+not pay per load. It pays once a fortnight, in a single bank credit, covering
+however many loads it feels like, minus a factoring fee charged on the whole
+batch, minus whatever it decided to hold back on individual loads. The bank shows
+one number and the books need nine. Matching software cannot do it, because
+matching asks "which document is this payment" and the honest answer is "eight of
+them, at amounts none of which equal the payment."
+
+So Archon allocates instead, and then proves its own answer. What landed in the
+bank has to equal what the lines pay, less the fee charged once. When that leaves
+anything over, it says so rather than pushing it into a suspense account.
+
+A month of documents lands in a Cloud Storage bucket. Nothing is pressed. Eventarc
+wakes a Cloud Run container, and a Google ADK agent works through ten steps: it
+classifies 27 artifacts, posts the double-entry journal, splits the remittance,
+reconciles which loads were paid, finds the nine things that do not add up, writes
+the corrective letters, checks its own books against five gates, and marks the
+period closed with a trail in Firestore you can walk back through.
+
+Then it emails the owner. That last step matters more than it looks. A haulier
+does not open a bookkeeping console on the first of the month, because a haulier
+is driving. If the answer only exists on a page we built, the agent worked all
+night for nobody. So the month arrives where they already read their mail: what
+the firm made, what is still recoverable and from whom, and what Archon already
+did about it.
+
+On the July it ships with, that is 23,005.00 billed over 10,810 miles against
+21,010.76 spent. A margin of 0.184 a mile. And 5,512.85 sitting in five letters
+it wrote: a broker that quietly paid 200.00 light on one load, a truck stop that
+charged the same 412.85 twice in three days, two loads no remittance ever touched,
+and 1,865.00 that left the account with no invoice behind it. On that margin, the
+5,512.85 matters more than the profit does.
+
+The letters to brokers and suppliers are written, costed and filed unsent. That is
+the one thing a person does, and it is deliberate: every step Archon takes can be
+re-run and produces the same books, but an email to a broker cannot be un-sent.
+
+Every figure above was computed by a deterministic ledger, never phrased by a
+model. Gemini reads documents and writes English; it is handed a fact sheet and is
+never in a position to introduce a number. An artifact nobody could read is
+reported as an exception and posted as nothing, and a gate fails the whole close if
+an unreadable document is ever given a figure, because that is the one failure that
+would not announce itself.
+
+Built on Google ADK, Gemini, Cloud Run, Firestore, Cloud Storage and Pub/Sub. Take
+ADK away and there is no agent, only a function somebody has to remember to run.
+Take Firestore away and a container that scales to zero between months has nowhere
+to keep the trail.
+
+It is for owner-operator trucking firms running three to twelve trucks. It replaces
+the shoebox, and the bookkeeper who gets to it in April.
 
 ---
 
