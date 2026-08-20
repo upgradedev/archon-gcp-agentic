@@ -124,9 +124,9 @@ def test_a_visitor_presses_one_button_and_watches_the_month_close(page, base_url
     expect(button).to_be_enabled()
     button.click()
 
-    # Ten steps, each one a thing the agent did while nobody watched.
+    # Eleven steps, each one a thing the agent did while nobody watched.
     steps = page.locator("#trail .step")
-    expect(steps).to_have_count(10, timeout=30_000)
+    expect(steps).to_have_count(11, timeout=30_000)
     expect(steps.first).to_contain_text("Take in the month's mail")
     expect(steps.nth(2)).to_contain_text("Split each remittance across the loads it settles")
     expect(steps.last).to_contain_text("Write the owner their month-end letter")
@@ -139,7 +139,7 @@ def test_the_allocation_beat_is_visible_and_its_identity_closes(page, base_url):
     """The differentiator, on screen. One payment, eight loads, residual zero."""
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
     expect(page.locator("#alloc")).to_contain_text("identity closes, residual 0.00")
     expect(page.locator("#alloc tbody tr")).to_have_count(9)      # header row + 8 loads
@@ -151,7 +151,7 @@ def test_the_owners_letter_is_shown_and_the_brokers_letters_are_not_sent(page, b
     """Both edges of the autonomy boundary, on the page a judge reads."""
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
     expect(page.locator("#digest")).to_contain_text("is recoverable, 5 letters ready")
     expect(page.locator("#digest")).to_contain_text("WHAT I NEED FROM YOU")
@@ -167,7 +167,7 @@ def test_nothing_is_disabled_without_a_reason_and_nothing_renders_empty(page, ba
     """H2 and H3, checked in a browser rather than by reading the CSS."""
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
     # The button disables itself while the close runs and re-enables in a
     # `finally`, which lands after the steps are in the DOM. Asserting on the
@@ -184,7 +184,7 @@ def test_the_page_never_scrolls_sideways(page, base_url):
     """Wide tables scroll inside their own containers. The page does not."""
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
     overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - window.innerWidth")
@@ -195,7 +195,7 @@ def test_the_page_serves_a_closed_month_before_anyone_presses_anything(page, bas
     """A judge arriving at a cold container sees a result, not an empty state."""
     page.goto(base_url, wait_until="networkidle")
 
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
     expect(page.locator("#status")).to_contain_text("last run")
 
 
@@ -207,7 +207,7 @@ def test_the_console_is_clean(page, base_url):
 
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
     expect(page.locator("#run")).to_be_enabled(timeout=30_000)
 
     assert errors == []
@@ -233,7 +233,7 @@ def test_the_content_security_policy_blocks_nothing_the_page_needs(page, base_ur
 
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
     expect(page.locator("#run")).to_be_enabled(timeout=30_000)
 
     violations += page.evaluate("() => window.__cspViolations")
@@ -247,7 +247,7 @@ def test_the_run_trail_still_staggers(page, base_url):
     an unattended run watchable rather than a wall of text appearing at once."""
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
     delays = page.eval_on_selector_all(
         "#trail .step",
@@ -263,7 +263,7 @@ def test_no_element_carries_an_inline_style_attribute(page, base_url):
     block, so the page must not produce one at any point."""
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
-    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
     styled = page.eval_on_selector_all(
         "[style]", "els => els.map(e => e.tagName + '.' + e.className)")
@@ -281,7 +281,7 @@ def test_a_visitor_who_asks_for_less_motion_gets_none(still_page, base_url):
     """
     still_page.goto(base_url, wait_until="networkidle")
     still_page.locator("#run").click()
-    expect(still_page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(still_page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
     opacities = still_page.eval_on_selector_all(
         "#trail .step", "els => els.map(e => getComputedStyle(e).opacity)")

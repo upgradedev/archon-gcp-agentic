@@ -17,8 +17,10 @@ import pytest
 from archon.adapters.agents import CloseSession
 from archon.adapters.store import LocalStore
 from archon.domain.narrator import facts_sheet
+from archon.domain.policy import Disposition
 from archon.runtime.close import run_close
 from archon.runtime.journal import FixedClock
+from archon.runtime.mailbox import read_period
 from tests.conftest import PERIOD
 
 
@@ -76,17 +78,94 @@ def test_the_tools_return_no_figure_the_engine_did_not_compute():
     assert filed["cost_per_mile"] == reference.statements.cost_per_mile
 
 
-def test_the_agent_path_and_the_deterministic_path_agree_exactly():
-    """The equivalence that lets the deterministic path be the reference. If
-    the agent ever drifts, this goes red rather than the drift shipping."""
-    tools = session()
-    tools.verify_and_file()
+def test_the_figures_are_identical_whoever_decided_and_the_decisions_may_differ():
+    """The test this replaces asserted the two paths were byte-identical, which
+    was true only because the agent could not affect anything. That was the
+    criticism, and it was fair.
 
-    reference = run_close(period=PERIOD, documents=tools.documents,
-                          company="Bell Ridge Haulage", store=LocalStore(),
-                          clock=FixedClock(), raw_texts=tools.raw)
+    The boundary is now the thing worth asserting: an agent changes what is
+    DONE about the month and can never change what the month IS.
+    """
+    from archon.domain.policy import Disposition
 
-    assert tools.result.to_dict() == reference.to_dict()
+    documents, raw = read_period(PERIOD)
+
+    def cautious(findings):
+        # Chase nothing. A real bookkeeper's prerogative, and the most extreme
+        # decision available, so any leak into the figures would show here.
+        return dict.fromkeys(range(len(findings)), Disposition.NOTE), None
+
+    standing = run_close(period=PERIOD, documents=documents, company="Bell Ridge Haulage",
+                         store=LocalStore(), clock=FixedClock(), raw_texts=raw)
+    decided = run_close(period=PERIOD, documents=documents, company="Bell Ridge Haulage",
+                        store=LocalStore(), clock=FixedClock(), raw_texts=raw,
+                        decider=cautious)
+
+    # What the month IS: untouched.
+    assert decided.to_dict()["statements"] == standing.to_dict()["statements"]
+    assert decided.to_dict()["findings"] == standing.to_dict()["findings"]
+    assert decided.to_dict()["allocations"] == standing.to_dict()["allocations"]
+    assert decided.to_dict()["gates"] == standing.to_dict()["gates"]
+
+    # What was DONE about it: different, because the agent decided differently.
+    assert len(standing.drafts) == 5
+    assert len(decided.drafts) == 0
+    assert decided.recoverable == 0.0
+
+
+def test_an_agent_cannot_manufacture_a_letter_the_books_refuse():
+    """The guardrail, exercised through the whole close rather than in isolation."""
+    from archon.domain.policy import Disposition
+
+    documents, raw = read_period(PERIOD)
+
+    def reckless(findings):
+        # Chase everything, including the kinds with no honest letter.
+        return dict.fromkeys(range(len(findings)), Disposition.DRAFT), None
+
+    result = run_close(period=PERIOD, documents=documents, company="Bell Ridge Haulage",
+                       store=LocalStore(), clock=FixedClock(), raw_texts=raw,
+                       decider=reckless)
+
+    overruled = [d for d in result.decisions if d.clamped]
+
+    assert overruled, "the reckless decider should have been overruled somewhere"
+    assert len(result.drafts) == 5          # the same five, not one more
+    for draft in result.drafts:
+        assert draft.amount > 0
+
+
+def test_an_agent_can_withhold_a_close_that_passed_every_gate():
+    """Autonomy that only ever agrees is not autonomy."""
+    documents, raw = read_period(PERIOD)
+
+    def suspicious(findings):
+        return None, "blocked"
+
+    result = run_close(period=PERIOD, documents=documents, company="Bell Ridge Haulage",
+                       store=LocalStore(), clock=FixedClock(), raw_texts=raw,
+                       decider=suspicious)
+
+    assert all(gate.passed for gate in result.gates)
+    assert result.outcome == "blocked"
+    assert "withheld" in result.outcome_reason
+
+
+def test_a_decider_that_raises_falls_back_to_the_standing_policy():
+    """A model failing must not fail a month."""
+    documents, raw = read_period(PERIOD)
+
+    def broken(findings):
+        raise RuntimeError("the model is down")
+
+    result = run_close(period=PERIOD, documents=documents, company="Bell Ridge Haulage",
+                       store=LocalStore(), clock=FixedClock(), raw_texts=raw,
+                       decider=broken)
+
+    assert result.outcome == "closed"
+    assert len(result.drafts) == 5
+    decide = next(s for s in result.journal.steps if s.name == "decide")
+    assert "fell back to the standing policy" in decide.detail
 
 
 def test_every_draft_the_tools_report_is_filed_and_none_is_sent():
@@ -98,7 +177,7 @@ def test_every_draft_the_tools_report_is_filed_and_none_is_sent():
 
 # ── the real ADK agent, driven by a scripted model ───────────────────────────
 
-def test_the_adk_agent_constructs_with_the_six_tools():
+def test_the_adk_agent_constructs_with_its_seven_tools():
     pytest.importorskip("google.adk")
     from archon.adapters.agents import build_close_agent
     from tests.adk_fakes import ScriptedLlm
@@ -108,7 +187,8 @@ def test_the_adk_agent_constructs_with_the_six_tools():
     assert agent.name == "archon_close"
     assert [tool.__name__ for tool in agent.tools] == [
         "take_in_mail", "post_journal", "allocate_remittances",
-        "triage_exceptions", "draft_corrections", "verify_and_file",
+        "triage_exceptions", "decide_actions", "draft_corrections",
+        "verify_and_file",
     ]
 
 
@@ -132,6 +212,7 @@ def test_the_agent_really_calls_its_tools_and_closes_the_month(monkeypatch):
         ("call", "post_journal", {}),
         ("call", "allocate_remittances", {}),
         ("call", "triage_exceptions", {}),
+        ("call", "decide_actions", {"actions": {"0": "draft", "1": "escalate"}}),
         ("call", "draft_corrections", {}),
         ("call", "verify_and_file", {}),
         ("text", "July is closed. Five letters are waiting for you to send."),
@@ -142,8 +223,17 @@ def test_the_agent_really_calls_its_tools_and_closes_the_month(monkeypatch):
 
     assert result is not None
     assert result.outcome == "closed"
-    assert len(result.drafts) == 5
     assert "closed" in final
+
+    # The decision travelled through the real ADK function-calling loop and
+    # changed the work. The standing policy writes five letters; this agent
+    # asked for one draft and one escalation, so one letter exists. That
+    # difference is the whole point: an agent whose choices cannot change the
+    # outcome is decoration.
+    assert len(result.drafts) == 1
+    assert result.decisions[0].applied is Disposition.DRAFT
+    assert result.decisions[1].applied is Disposition.ESCALATE
+    assert result.statements.net_profit == 1_994.24     # the books, untouched
 
 
 def test_the_agent_is_never_asked_anything_by_its_own_instruction():
@@ -232,3 +322,59 @@ def test_the_narrator_instruction_forbids_inventing_a_figure():
     from archon.domain.narrator import NARRATOR_INSTRUCTION
 
     assert "Report only figures that appear in the fact sheet" in NARRATOR_INSTRUCTION
+
+
+def test_the_agents_own_decision_changes_what_the_close_does():
+    """Through the tool surface, the way the model reaches it.
+
+    The agent is handed indexed exceptions and answers with a disposition per
+    index. Two different answers produce two different months of work, and the
+    same month of books.
+    """
+    chasing = session()
+    chasing.triage_exceptions()
+    chasing.decide_actions({"0": "draft", "1": "draft", "2": "draft"})
+
+    cautious = session()
+    cautious.triage_exceptions()
+    cautious.decide_actions({str(i): "note" for i in range(12)})
+
+    assert len(chasing.result.drafts) > len(cautious.result.drafts)
+    assert cautious.result.drafts == []
+    assert chasing.result.statements == cautious.result.statements
+
+
+def test_the_agent_is_told_when_it_is_overruled():
+    """Being overruled has to be visible to the agent, or it cannot learn the
+    boundary within a single run."""
+    tools = session()
+    exceptions = tools.triage_exceptions()["exceptions"]
+    outlier = next(e["index"] for e in exceptions if e["kind"] == "amount_outlier")
+
+    reply = tools.decide_actions({str(outlier): "draft"})
+
+    overruled = [row for row in reply["applied"] if row["overruled"]]
+    assert overruled, "asking to chase an outlier should have been overruled"
+    assert any("no honest letter" in row["why"] for row in overruled)
+
+
+def test_the_agent_can_refuse_to_file_the_close():
+    tools = session()
+    tools.triage_exceptions()
+    tools.decide_actions({}, withhold_close=True)
+
+    filed = tools.verify_and_file()
+
+    assert all(gate["passed"] for gate in filed["gates"])
+    assert filed["outcome"] == "blocked"
+
+
+def test_a_value_the_agent_invents_is_ignored_rather_than_crashing():
+    """Models produce unexpected strings. That must not fail a month."""
+    tools = session()
+    tools.triage_exceptions()
+
+    reply = tools.decide_actions({"0": "obliterate", "1": "escalate"})
+
+    assert "0='obliterate'" in reply["unreadable_values_ignored"]
+    assert tools.result.outcome == "closed"

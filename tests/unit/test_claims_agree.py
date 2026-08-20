@@ -215,11 +215,11 @@ def test_the_close_length_agrees_across_every_surface():
 
 
 
-    assert steps == 10
+    assert steps == 11
 
     assert f"{steps}. " in README or f"{steps} steps" in README
 
-    assert "Ten steps" in CAPTIONS or f"{steps} steps" in CAPTIONS
+    assert "Eleven steps" in CAPTIONS or f"{steps} steps" in CAPTIONS
 
 
 
