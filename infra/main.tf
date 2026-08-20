@@ -81,6 +81,19 @@ provider "google" {
 }
 
 locals {
+  # THE audience, computed once and used in both places that need it.
+  #
+  # Cloud Run answers on two URLs: this project-number form and a hashed form
+  # that `google_cloud_run_v2_service.uri` returns. Both reach the service, and
+  # a token minted for one does NOT verify against the other.
+  #
+  # The first terraform-managed run had the subscription signing for the hashed
+  # form while the service verified the number form, so every push was refused
+  # with a 403 that looked exactly like a trigger nobody pulled. The env var
+  # cannot reference the service's own uri without a cycle, which is why it was
+  # hand-computed and why the two drifted. One local, used twice, cannot drift.
+  service_url = "https://${var.service_name}-${data.google_project.this.number}.${var.region}.run.app"
+
   services = [
     "run.googleapis.com",
     "firestore.googleapis.com",
@@ -178,6 +191,22 @@ resource "google_service_account" "pusher" {
   description  = "Mints the OIDC token on /events. Holds no data permission at all."
 }
 
+# Pub/Sub mints the OIDC token AS the pusher account, and it cannot do that
+# without being allowed to impersonate it. `gcloud pubsub subscriptions create`
+# grants this silently, which is why the hand-built version worked and this file
+# did not: the first terraform-managed run produced an unbroken stream of 403s
+# on /events until this binding existed.
+#
+# It is the reason IaC has to be exercised end to end rather than plan-checked.
+# A plan cannot tell you about a permission the CLI was granting behind your back.
+data "google_project" "number" {}
+
+resource "google_service_account_iam_member" "pubsub_mints_pusher_tokens" {
+  service_account_id = google_service_account.pusher.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.number.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
 resource "google_project_iam_member" "runtime_firestore" {
   project = var.project_id
   role    = "roles/datastore.user"
@@ -237,7 +266,7 @@ resource "google_cloud_run_v2_service" "archon" {
       # the service's own URL, which is what Pub/Sub will mint a token for.
       env {
         name  = "ARCHON_EVENTS_AUDIENCE"
-        value = "https://${var.service_name}-${data.google_project.this.number}.${var.region}.run.app"
+        value = local.service_url
       }
       env {
         name  = "ARCHON_EVENTS_CALLER"
@@ -268,13 +297,15 @@ resource "google_pubsub_subscription" "push" {
 
   ack_deadline_seconds = 120
 
+  depends_on = [google_service_account_iam_member.pubsub_mints_pusher_tokens]
+
   push_config {
-    push_endpoint = "${google_cloud_run_v2_service.archon.uri}/events"
+    push_endpoint = "${local.service_url}/events"
 
     # This is the other half of the auth control: the token /events verifies.
     oidc_token {
       service_account_email = google_service_account.pusher.email
-      audience              = google_cloud_run_v2_service.archon.uri
+      audience              = local.service_url
     }
   }
 
@@ -287,7 +318,7 @@ resource "google_pubsub_subscription" "push" {
 }
 
 output "service_url" {
-  value       = google_cloud_run_v2_service.archon.uri
+  value       = local.service_url
   description = "The page a judge opens."
 }
 
@@ -297,6 +328,6 @@ output "mail_bucket" {
 }
 
 output "events_audience" {
-  value       = google_cloud_run_v2_service.archon.uri
+  value       = local.service_url
   description = "What /events verifies tokens against."
 }
