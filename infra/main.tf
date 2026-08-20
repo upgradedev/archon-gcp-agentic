@@ -178,6 +178,22 @@ resource "google_service_account" "pusher" {
   description  = "Mints the OIDC token on /events. Holds no data permission at all."
 }
 
+# Pub/Sub mints the OIDC token AS the pusher account, and it cannot do that
+# without being allowed to impersonate it. `gcloud pubsub subscriptions create`
+# grants this silently, which is why the hand-built version worked and this file
+# did not: the first terraform-managed run produced an unbroken stream of 403s
+# on /events until this binding existed.
+#
+# It is the reason IaC has to be exercised end to end rather than plan-checked.
+# A plan cannot tell you about a permission the CLI was granting behind your back.
+data "google_project" "number" {}
+
+resource "google_service_account_iam_member" "pubsub_mints_pusher_tokens" {
+  service_account_id = google_service_account.pusher.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:service-${data.google_project.number.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+}
+
 resource "google_project_iam_member" "runtime_firestore" {
   project = var.project_id
   role    = "roles/datastore.user"
@@ -267,6 +283,8 @@ resource "google_pubsub_subscription" "push" {
   topic = google_pubsub_topic.mail.name
 
   ack_deadline_seconds = 120
+
+  depends_on = [google_service_account_iam_member.pubsub_mints_pusher_tokens]
 
   push_config {
     push_endpoint = "${google_cloud_run_v2_service.archon.uri}/events"

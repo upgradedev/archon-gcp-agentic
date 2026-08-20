@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import logging
 import os
 
 from fastapi import FastAPI, HTTPException, Request
@@ -34,6 +35,8 @@ from ..runtime.close import run_close
 from ..runtime.mailbox import available_periods, read_period
 from . import auth, headers
 from .store import LocalStore, get_store
+
+log = logging.getLogger("archon.service")
 
 WEB_ROOT = paths.WEB_ROOT
 
@@ -158,6 +161,14 @@ async def events(request: Request) -> JSONResponse:
     # caller identity, and it fails closed when it cannot establish one.
     verdict = auth.verify_push_request(request.headers.get("authorization"))
     if not verdict.allowed:
+        # Logged, because a refusal that only appears in a response body is
+        # invisible to whoever is debugging it. A trigger silently 403ing is
+        # the failure that looks exactly like a trigger nobody pulled, and the
+        # access log alone cannot tell those apart.
+        log.warning(
+            "refused a trigger: %s (caller=%s, audience_configured=%s)",
+            verdict.reason, verdict.caller, auth.required(),
+        )
         return JSONResponse(
             {"status": "refused", "reason": verdict.reason}, status_code=403
         )
