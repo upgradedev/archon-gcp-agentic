@@ -172,15 +172,16 @@ resource "google_cloud_run_v2_service" "archon" {
   name     = var.service_name
   location = var.region
 
-  # Scale to zero between months. That is the whole cost argument.
-  scaling {
-    min_instance_count = 0
-    max_instance_count = 4
-  }
-
   template {
     service_account = google_service_account.runtime.email
     timeout         = "120s"
+
+    # Scale to zero between months. That is the whole cost argument, and in
+    # the v2 resource it belongs inside the template, not beside it.
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 4
+    }
 
     containers {
       image = var.image
