@@ -68,20 +68,40 @@ def test_the_policy_closes_framing_forms_objects_and_base_rewriting():
         assert directive in CONTENT_SECURITY_POLICY
 
 
-def test_inline_is_allowed_only_for_script_and_style_and_that_is_deliberate():
-    """The trade is written down in headers.py: a single self-contained page
-    with no build step cannot carry a nonce. Everything else stays closed."""
-    inline_directives = [part for part in CONTENT_SECURITY_POLICY.split("; ")
-                         if "'unsafe-inline'" in part]
-
-    assert sorted(inline_directives) == [
-        "script-src 'self' 'unsafe-inline'",
-        "style-src 'self' 'unsafe-inline'",
-    ]
+def test_nothing_inline_is_allowed_at_all():
+    """The finding this closed: with `script-src 'unsafe-inline'`, any injected
+    script tag executes. The page is three same-origin files precisely so this
+    can be refused rather than traded away."""
+    assert "'unsafe-inline'" not in CONTENT_SECURITY_POLICY
+    assert "script-src 'self'" in CONTENT_SECURITY_POLICY
+    assert "style-src 'self'" in CONTENT_SECURITY_POLICY
 
 
 def test_no_directive_uses_unsafe_eval():
     assert "unsafe-eval" not in CONTENT_SECURITY_POLICY
+
+
+def test_the_page_really_has_no_inline_script_or_style():
+    """A closed policy over a page with inline blocks is a broken page, so the
+    two facts have to be asserted together."""
+    from archon.adapters.headers import CONTENT_SECURITY_POLICY as policy
+    from archon.paths import WEB_ROOT
+
+    html = (WEB_ROOT / "index.html").read_text(encoding="utf-8")
+
+    assert "<style>" not in html
+    assert "<script>" not in html
+    assert '<script src="/static/app.js"' in html
+    assert '<link rel="stylesheet" href="/static/styles.css">' in html
+    assert "'unsafe-inline'" not in policy
+
+
+def test_the_extracted_files_are_served(client):
+    for path, needle in (("/static/app.js", "function render"),
+                         ("/static/styles.css", "--bg:")):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert needle in response.text
 
 
 # ── the mechanism ────────────────────────────────────────────────────────────

@@ -27,7 +27,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 NARRATION = json.loads((ROOT / "video" / "narration.json").read_text(encoding="utf-8"))
-PAGE = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+#: The page is three files now, and all three are judge-facing: a stranger can
+#: open any of them. House style and the no-other-competition rule apply to the
+#: whole surface, not just the markup.
+PAGE = "\n".join(
+    (ROOT / "web" / name).read_text(encoding="utf-8")
+    for name in ("index.html", "app.js", "styles.css")
+)
 
 SPEECH = " ".join(s["speechText"] for s in NARRATION["segments"])
 CAPTIONS = " ".join(s["captionText"] for s in NARRATION["segments"])
