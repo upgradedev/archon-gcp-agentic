@@ -196,7 +196,16 @@ steps:
                  --format='value(email)' 2>/dev/null | grep -c 'archon-' || true)
         buckets=$$(gcloud storage buckets list --project=${_TF_PROJECT} \
                  --format='value(name)' 2>/dev/null | grep -c 'archon-mail' || true)
+        # Reported, not failed on. The (default) Firestore database SURVIVES
+        # terraform destroy even with protection disabled: measured, 18
+        # resources destroyed, empty state, database still standing, then
+        # removed by an explicit `gcloud firestore databases delete`. So a
+        # rebuild is idempotent over an existing database rather than starting
+        # from a genuinely empty project, and saying so is the point.
+        databases=$$(gcloud firestore databases list --project=${_TF_PROJECT} \
+                 --format='value(name)' 2>/dev/null | wc -l)
 
+        echo "firestore databases: $$databases (the default one is expected to remain)"
         echo "cloud run services : $$run"
         echo "pubsub topics      : $$topics"
         echo "subscriptions      : $$subs"
