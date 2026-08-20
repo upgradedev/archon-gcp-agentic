@@ -13,7 +13,7 @@ covers the secret scan, the build and the tests.*
 
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
-- **Live demo**: [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/) — no account, no install, one button.
+- **Live demo**: [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/). No account, no install, one button.
 - **Demo video**: not yet recorded.
 - **Who it is for**: owner-operator trucking firms running three to twelve trucks.
 
