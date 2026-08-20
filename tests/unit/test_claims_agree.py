@@ -555,3 +555,26 @@ def test_the_narration_voices_no_number_that_moves():
 
     assert "offline tests" not in SPEECH
 
+
+
+def test_every_command_the_readme_tells_a_judge_to_run_exists():
+    """The quickstart shipped broken once, and nothing caught it.
+
+    The README said `python -m archon.cli`. After the package moved under
+    `src/` that stopped resolving on a clean clone, so the first thing a judge
+    would ever run failed. The readiness gate passed anyway, because it greped
+    for the command's text rather than running it.
+
+    This asserts the entry point exists and is the one documented. The gate
+    now runs it for real; between them, a broken quickstart cannot ship.
+    """
+    quickstart = re.findall(r"(?m)^python (\S+)", README)
+
+    assert "run.py" in quickstart, (
+        f"the README's python commands are {quickstart}; the working entry "
+        f"point is run.py"
+    )
+    assert (ROOT / "run.py").is_file()
+    assert "python -m archon.cli" not in README, (
+        "that form needs src/ on the path and fails on a clean clone"
+    )

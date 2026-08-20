@@ -158,12 +158,16 @@ no dependency beyond the Python standard library:
 ```bash
 git clone https://github.com/upgradedev/archon-gcp-agentic.git
 cd archon-gcp-agentic
-python -m archon.cli
+python run.py
 ```
 
-That prints the nine-step trail, the month, the exceptions and the filed
-letters. CI runs the same command inside an empty virtualenv on every push, so
-if this stops being true the build goes red.
+That prints the ten-step trail, the month, the exceptions and the filed
+letters. CI runs that exact command inside an empty virtualenv on every push, and the
+readiness gate runs it too, so if it ever stops working the build goes red
+rather than a judge finding out.
+
+`run.py` is three lines: the package lives under `src/`, and asking a judge to
+`pip install -e .` before seeing anything would make the claim above false.
 
 **The page and the API:**
 
@@ -178,7 +182,7 @@ Then open `http://localhost:8000`, press one button, and watch it run.
 
 ```bash
 export GOOGLE_API_KEY=...
-python -m archon.cli --agent
+python run.py --agent
 ```
 
 **Run the tests:**
@@ -190,7 +194,7 @@ python -m pytest
 
 ## What one run does
 
-Over the bundled month, `python -m archon.cli`:
+Over the bundled month, `python run.py`:
 
 ```
  + 1. Take in the month's mail
@@ -468,7 +472,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 343 | `python -m pytest` |
+| Tests, all offline | 344 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

@@ -172,8 +172,14 @@ CRITERIA = [
              "The description carries no em dash, which is the owner's house style",
              lambda: file_absent("README.md", "\u2014")),
             ("dlv-readme-spinup",
-             "README carries spin-up instructions, which the rules require",
-             lambda: file_contains("README.md", r"python -m archon\.cli")),
+             "The spin-up command in the README actually runs, on this checkout",
+             # Was a grep for the command's TEXT, which passed while the command
+             # itself was broken: the package moved under src/ and
+             # `python -m archon.cli` stopped resolving on a clean clone. A
+             # judge's first action failed and the gate said fine. It runs the
+             # command now. `run.py` is standard library only, so this needs no
+             # install and cannot break the no-install rule for this gate.
+             lambda: command_ok([sys.executable, "run.py"], timeout=120)),
             ("dlv-video-url",
              "Public video URL recorded in the README",
              lambda: file_contains("README.md",
