@@ -149,7 +149,7 @@ def test_a_whole_close_persists_to_firestore_exactly_as_it_does_locally(store):
 
     persisted = store.load_close("Bell Ridge Haulage", "2026-07")
     assert persisted["outcome"] == "closed"
-    assert len(persisted["journal"]["steps"]) == 10
+    assert len(persisted["journal"]["steps"]) == 11
     assert len(persisted["findings"]) == 10
     assert store.load_run(remote.run_id)["outcome"] == "closed"
 

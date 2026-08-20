@@ -11,3 +11,10 @@ build/
 coverage.xml
 htmlcov/
 readiness.json
+
+# Terraform working directory. The provider binary is 125 MB and belongs in a
+# release, never in a clone. The lock file IS committed, because it pins the
+# provider version and that is part of the declaration.
+infra/.terraform/
+*.tfstate
+*.tfstate.*

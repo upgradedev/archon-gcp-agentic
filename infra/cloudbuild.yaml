@@ -1,0 +1,171 @@
+# The full lifecycle, run by Cloud Build inside the project it manages.
+#
+#   destroy -> apply -> verify -> (optionally) destroy again
+#
+# D2 asks for one pipeline that deploys from nothing, runs the tests, and tears
+# everything down, and that it has been RUN at least once end to end. This is
+# that pipeline, and it runs in Cloud Build rather than GitHub Actions for one
+# reason: Cloud Build already has an identity inside the project, so no key
+# leaves anywhere and no workload-identity federation has to exist first.
+#
+# Run it against a THROWAWAY project, never the one serving the submission. The
+# readiness gate's live probe is a veto, so a destroy that runs before a
+# successful re-apply turns CI red and points the judge-facing URL at nothing.
+#
+#   gcloud builds submit --config infra/cloudbuild.yaml \
+#     --substitutions=_TF_PROJECT=<throwaway>,_ACTION=lifecycle .
+#
+# _ACTION:
+#   plan       show what would change, touch nothing
+#   apply      create everything and verify it serves
+#   destroy    remove everything
+#   lifecycle  destroy, apply, verify, destroy. The one D2 actually asks for.
+
+substitutions:
+  _TF_PROJECT: ""          # the project terraform manages. Required.
+  _REGION: us-central1
+  _ACTION: plan
+  _SERVICE: archon
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 3600s
+
+steps:
+  # The image ships with terraform, so nothing is downloaded at run time and
+  # the version cannot drift between runs.
+  - id: guard
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        test -n "${_TF_PROJECT}" || { echo "_TF_PROJECT is required"; exit 1; }
+        # The one thing this pipeline must never do.
+        if [ "${_TF_PROJECT}" = "upgradegr-archon-agentic" ]; then
+          echo "refusing: that project serves the submitted commit."
+          echo "a destroy here would point the judge-facing URL at nothing and"
+          echo "turn the readiness gate red, because its live probe is a veto."
+          exit 1
+        fi
+        echo "managing ${_TF_PROJECT} in ${_REGION}, action ${_ACTION}"
+
+  - id: enable-apis
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        gcloud services enable \
+          run.googleapis.com cloudbuild.googleapis.com firestore.googleapis.com \
+          pubsub.googleapis.com storage.googleapis.com eventarc.googleapis.com \
+          iam.googleapis.com cloudresourcemanager.googleapis.com \
+          --project="${_TF_PROJECT}"
+
+  # Build the image terraform will point Cloud Run at. Done before apply so the
+  # service never references a tag that does not exist yet.
+  - id: image
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE="gcr.io/${_TF_PROJECT}/${_SERVICE}:${SHORT_SHA:-manual}"
+        docker build -t "$$IMAGE" .
+        docker push "$$IMAGE"
+        echo "$$IMAGE" > /workspace/image.txt
+
+  - id: terraform
+    name: hashicorp/terraform:1.9
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        set -eu
+        cd infra
+        IMAGE="$$(cat /workspace/image.txt)"
+        VARS="-var project_id=${_TF_PROJECT} -var region=${_REGION} -var image=$$IMAGE"
+
+        terraform init -input=false
+
+        case "${_ACTION}" in
+          plan)
+            terraform plan -input=false $$VARS
+            ;;
+          apply)
+            terraform apply -auto-approve -input=false $$VARS
+            terraform output -raw service_url > /workspace/url.txt
+            ;;
+          destroy)
+            terraform destroy -auto-approve -input=false $$VARS
+            ;;
+          lifecycle)
+            # From nothing: destroy first so the run proves it can build on an
+            # empty project rather than on whatever was left behind.
+            echo "== destroy any remains =="
+            terraform destroy -auto-approve -input=false $$VARS || true
+            echo "== apply from nothing =="
+            terraform apply -auto-approve -input=false $$VARS
+            terraform output -raw service_url > /workspace/url.txt
+            ;;
+          *)
+            echo "unknown _ACTION ${_ACTION}"; exit 1
+            ;;
+        esac
+
+  # The apply is not finished until the thing it built actually serves. A
+  # green terraform run over a service that answers 500 is not a deployment.
+  - id: verify
+    name: gcr.io/cloud-builders/curl
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        case "${_ACTION}" in
+          apply|lifecycle) ;;
+          *) echo "nothing to verify for ${_ACTION}"; exit 0 ;;
+        esac
+        URL="$$(cat /workspace/url.txt)"
+        echo "verifying $$URL"
+        for i in $$(seq 1 30); do
+          curl -sf "$$URL/api/health" >/dev/null && break
+          sleep 5
+        done
+        curl -sf "$$URL/api/health" | tee /workspace/health.json
+        grep -q '"status":"ok"' /workspace/health.json
+        grep -q '"store":"firestore"' /workspace/health.json
+        curl -sf "$$URL/" | grep -q "closes the month while nobody is watching"
+        # The data plane, not just the CDN: a real close over the internet.
+        curl -sf -X POST "$$URL/api/close/2026-07" > /workspace/close.json
+        grep -q '"outcome": *"closed"' /workspace/close.json \
+          || grep -q '"outcome":"closed"' /workspace/close.json
+        echo "the deployed service closed a month"
+        # And the trigger must be shut to anyone without a token.
+        code=$$(curl -s -o /dev/null -w "%{http_code}" -X POST "$$URL/events" \
+          -H "Content-Type: application/json" -d '{"message":{"attributes":{"period":"2026-07"}}}')
+        test "$$code" = "403" || { echo "/events answered $$code, expected 403"; exit 1; }
+        echo "the trigger refuses an unauthenticated caller"
+
+  - id: teardown
+    name: hashicorp/terraform:1.9
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        set -eu
+        test "${_ACTION}" = "lifecycle" || { echo "keeping the environment"; exit 0; }
+        cd infra
+        IMAGE="$$(cat /workspace/image.txt)"
+        echo "== tear it all down again =="
+        terraform destroy -auto-approve -input=false \
+          -var project_id=${_TF_PROJECT} -var region=${_REGION} -var image=$$IMAGE
+        terraform state list | tee /workspace/leftovers.txt
+        test ! -s /workspace/leftovers.txt \
+          || { echo "resources survived the teardown"; exit 1; }
+        echo "nothing left"
