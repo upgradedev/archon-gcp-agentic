@@ -141,8 +141,8 @@ jobs:
       - name: The bundled month closes with no dependencies at all
         run: |
           python -m venv /tmp/bare
-          /tmp/bare/bin/python -m archon.cli | tail -20
-          /tmp/bare/bin/python -m archon.cli >/dev/null
+          /tmp/bare/bin/python run.py | tail -20
+          /tmp/bare/bin/python run.py >/dev/null
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -150,3 +150,122 @@ jobs:
           name: coverage
           path: coverage.xml
           if-no-files-found: warn
+
+  # Stage 3b. C3: the shipped Firestore adapter, against a disposable instance.
+  # Everything else runs against LocalStore, which cannot catch a wrong
+  # collection name, a bad batch or a value Firestore will not serialise.
+  firestore:
+    name: Firestore adapter
+    needs: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: google-github-actions/setup-gcloud@77e7a554d41e2ee56fc945c52dfd3f33d12def9a # v2.1.4
+
+      # The emulator is a Java program and refuses anything below 21. The
+      # runner's default JRE is older, which is why it never opened its port.
+      # Found only because the readiness check above started failing honestly.
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # The port has to be OPEN before the tests run, and this step has to fail
+      # when it is not. The previous version waited for a log line, gave up
+      # after 60 seconds, and carried on: the adapter tests then ran against a
+      # refused connection and the job still went green.
+      - name: Start the Firestore emulator, and prove it is listening
+        run: |
+          set -euo pipefail
+          gcloud components install cloud-firestore-emulator beta --quiet
+          nohup gcloud beta emulators firestore start --host-port=127.0.0.1:8686 \
+            > /tmp/firestore.log 2>&1 &
+          for i in $(seq 1 90); do
+            if bash -c "</dev/tcp/127.0.0.1/8686" 2>/dev/null; then
+              echo "emulator listening after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "the Firestore emulator never opened 127.0.0.1:8686"
+          cat /tmp/firestore.log
+          exit 1
+
+      - run: pip install -r requirements-dev.txt
+
+      # The gate that stops this job becoming green nothing: a skip is a
+      # failure here, because a skipped adapter test proves exactly as much as
+      # no adapter test.
+      # `set -o pipefail` is the whole point of this block. Without it the
+      # pipeline exits with tee's status, pytest's failure is swallowed, and
+      # `grep "[0-9]+ passed"` happily matches "8 failed, 1 passed". That is
+      # exactly how this job reported success over eight failing tests.
+      - name: The adapter tests run, pass, and are not allowed to skip
+        env:
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8686
+        run: |
+          set -o pipefail
+          python -m pytest tests/integration/test_firestore_adapter.py \
+            -v --no-header -rs | tee /tmp/firestore-tests.log
+          if grep -q "SKIPPED" /tmp/firestore-tests.log; then
+            echo "a test skipped; the emulator proved nothing"
+            exit 1
+          fi
+          if grep -qE "[0-9]+ (failed|error)" /tmp/firestore-tests.log; then
+            echo "the adapter tests failed"
+            exit 1
+          fi
+          grep -qE "[0-9]+ passed" /tmp/firestore-tests.log
+
+  # Stage 3c. C5: one browser walking the exact path the video shows, at both
+  # widths the product is seen at.
+  browser:
+    name: Browser journey
+    needs: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Install the browser
+        run: python -m playwright install --with-deps chromium
+
+      # Same fail-open bug as the Firestore job had: without pipefail this
+      # reported success over "3 failed, 9 passed".
+      - name: Walk the judge's journey, and do not allow a skip
+        env:
+          ARCHON_BROWSER_TESTS: "1"
+        run: |
+          set -o pipefail
+          python -m pytest tests/e2e/test_browser_journey.py \
+            -v --no-header -rs | tee /tmp/browser-tests.log
+          if grep -q "SKIPPED" /tmp/browser-tests.log; then
+            echo "playwright was absent; the journey proved nothing"
+            exit 1
+          fi
+          if grep -qE "[0-9]+ (failed|error)" /tmp/browser-tests.log; then
+            echo "the judge's journey failed"
+            exit 1
+          fi
+          grep -qE "[0-9]+ passed" /tmp/browser-tests.log
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: browser-failure
+          path: test-results/
+          if-no-files-found: ignore

@@ -34,17 +34,17 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from . import allocation as allocation_mod
-from . import delivery as delivery_mod
-from . import digest as digest_mod
-from . import drafts as drafts_mod
-from . import exceptions as exceptions_mod
-from . import validation as validation_mod
-from .delivery import Deliverer, Receipt
-from .digest import Digest
-from .journal import Clock, RunJournal
-from .ledger import Ledger
-from .models import (
+from ..adapters import delivery as delivery_mod
+from ..adapters.delivery import Deliverer, Receipt
+from ..adapters.store import Store, get_store
+from ..domain import allocation as allocation_mod
+from ..domain import digest as digest_mod
+from ..domain import drafts as drafts_mod
+from ..domain import exceptions as exceptions_mod
+from ..domain import validation as validation_mod
+from ..domain.digest import Digest
+from ..domain.ledger import Ledger
+from ..domain.models import (
     AllocationResult,
     DocType,
     Document,
@@ -53,8 +53,8 @@ from .models import (
     Statements,
     ValidationResult,
 )
-from .narrator import facts_sheet, narrate
-from .store import Store, get_store
+from ..domain.narrator import facts_sheet, narrate
+from .journal import Clock, RunJournal
 
 #: A narrator takes the fact sheet and returns English. The default is the
 #: deterministic one; `agents.py` supplies a Gemini-backed one. It can never
@@ -94,7 +94,7 @@ class CloseResult:
 
     def to_dict(self) -> dict:
         """The shape the API serves and the browser renders."""
-        from .store import _plain
+        from ..adapters.store import _plain
 
         return {
             "run_id": self.run_id,
@@ -311,11 +311,22 @@ def run_close(period: str,
             actions=digest.action_count,
         )
 
-    result.stored = stored
-    # Both trailing steps land after `run.finish`, so the trail records its own
-    # filing and its own notification. Re-stamping the outcome keeps
-    # `journal.outcome` and `result.outcome` from ever disagreeing.
+    # The trail cannot be complete until the last step has ended, so the record
+    # written during step 9 is necessarily missing steps 9 and 10. That is not a
+    # rounding detail: the journal is what the owner scrolls through on Monday
+    # and what a judge replays, and a stored trail that stops two steps early is
+    # a trail that hides the filing and the notification.
+    #
+    # So the run is stamped finished and both records are rewritten with the
+    # whole thing. One extra write per close, keyed the same way, so it
+    # overwrites rather than accumulates.
+    #
+    # Found by the Firestore adapter test, which asserted the persisted step
+    # count. Nothing that ran against the in-memory store had ever looked.
     run.finish(outcome)
+    stored["close"] = store.save_close(company, period, result.to_dict())
+    stored["run"] = store.save_run(run.to_dict())
+    result.stored = stored
     return result
 
 

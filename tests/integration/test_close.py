@@ -6,10 +6,10 @@ implementation.
 """
 from __future__ import annotations
 
-from archon.close import documents_summary, run_close, run_id_for
-from archon.journal import FixedClock
-from archon.models import DocType, ExceptionKind
-from archon.store import LocalStore
+from archon.adapters.store import LocalStore
+from archon.domain.models import DocType, ExceptionKind
+from archon.runtime.close import documents_summary, run_close, run_id_for
+from archon.runtime.journal import FixedClock
 from tests.conftest import PERIOD
 
 
@@ -176,6 +176,34 @@ def test_the_close_the_drafts_and_the_trail_are_all_persisted(documents, corpus)
     assert store.load_close("Bell Ridge Haulage", PERIOD)["outcome"] == "closed"
     assert store.load_run(result.run_id)["outcome"] == "closed"
     assert len(store.load_drafts(result.run_id)) == 5
+
+
+def test_the_persisted_trail_is_the_whole_trail(documents, corpus):
+    """The record used to stop two steps short, because it was written from
+    inside step 9. A stored trail missing its own filing and notification is a
+    trail that hides the last thing the agent did."""
+    store = LocalStore()
+    result = close(documents, raw=corpus[1], store=store)
+
+    persisted_run = store.load_run(result.run_id)
+    persisted_close = store.load_close("Bell Ridge Haulage", PERIOD)
+
+    assert len(result.journal.steps) == 10
+    assert len(persisted_run["steps"]) == 10
+    assert len(persisted_close["journal"]["steps"]) == 10
+    assert persisted_run["steps"][-1]["name"] == "notify"
+    assert persisted_run["finished_at"] is not None
+
+
+def test_the_persisted_close_carries_the_digest_and_its_receipt(documents, corpus):
+    """Written during step 10, so the record from step 9 could not have them."""
+    store = LocalStore()
+    close(documents, raw=corpus[1], store=store)
+
+    persisted = store.load_close("Bell Ridge Haulage", PERIOD)
+
+    assert persisted["digest"]["subject"]
+    assert persisted["receipt"]["channel"] == "filed"
 
 
 def test_re_running_the_same_month_reuses_the_same_run_id(documents):

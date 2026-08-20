@@ -27,14 +27,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 NARRATION = json.loads((ROOT / "video" / "narration.json").read_text(encoding="utf-8"))
-PAGE = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+#: The page is three files now, and all three are judge-facing: a stranger can
+#: open any of them. House style and the no-other-competition rule apply to the
+#: whole surface, not just the markup.
+PAGE = "\n".join(
+    (ROOT / "web" / name).read_text(encoding="utf-8")
+    for name in ("index.html", "app.js", "styles.css")
+)
 
 SPEECH = " ".join(s["speechText"] for s in NARRATION["segments"])
 CAPTIONS = " ".join(s["captionText"] for s in NARRATION["segments"])
 
 
 def _readme_test_count() -> int:
-    match = re.search(r"\|\s*Tests, all offline\s*\|\s*([\d,]+) passing", README)
+    """What the README claims the suite is.
+
+    Deliberately the SIZE of the suite rather than how many passed. "N passing"
+    depends on which optional dependencies happen to be installed, so it was
+    true in CI and false locally for no visible reason. The count of tests is
+    the same everywhere.
+    """
+    match = re.search(r"\|\s*Tests, all offline\s*\|\s*([\d,]+)\s*\|", README)
     assert match, "the README evidence table no longer states a test count"
     return int(match.group(1).replace(",", ""))
 
@@ -84,9 +97,9 @@ def test_the_narration_test_count_matches_the_readme():
 
 def test_the_close_length_agrees_across_every_surface():
     """Ten steps. It has already been nine, and three surfaces had to change."""
-    from archon.close import run_close
-    from archon.mailbox import read_period
-    from archon.store import LocalStore
+    from archon.adapters.store import LocalStore
+    from archon.runtime.close import run_close
+    from archon.runtime.mailbox import read_period
 
     documents, _ = read_period("2026-07")
     steps = len(run_close(period="2026-07", documents=documents,
@@ -99,9 +112,9 @@ def test_the_close_length_agrees_across_every_surface():
 
 def test_the_money_figures_agree_between_the_product_and_the_readme():
     """Every headline figure a judge could check against a live run."""
-    from archon.close import run_close
-    from archon.mailbox import read_period
-    from archon.store import LocalStore
+    from archon.adapters.store import LocalStore
+    from archon.runtime.close import run_close
+    from archon.runtime.mailbox import read_period
 
     documents, _ = read_period("2026-07")
     result = run_close(period="2026-07", documents=documents,

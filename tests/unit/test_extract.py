@@ -1,8 +1,8 @@
 """Turning a raw artifact into a structured document."""
 from __future__ import annotations
 
-from archon.extract import EXTRACTION_SCHEMA, classify, extract_document
-from archon.models import DocType
+from archon.domain.extract import EXTRACTION_SCHEMA, classify, extract_document
+from archon.domain.models import DocType
 
 LOAD = """MIDWEST FREIGHT EXCHANGE
 RATE CONFIRMATION
@@ -187,7 +187,7 @@ def test_an_empty_artifact_returns_a_document():
 
 def test_the_gemini_schema_names_only_fields_the_document_model_has():
     """The two extraction paths must not drift apart unnoticed."""
-    from archon.models import Document
+    from archon.domain.models import Document
 
     fields = set(Document.__dataclass_fields__)
     assert set(EXTRACTION_SCHEMA["properties"]) <= fields | {"doc_type"}

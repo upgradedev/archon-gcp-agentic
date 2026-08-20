@@ -6,10 +6,10 @@ widens a threshold to make a run go green.
 """
 from __future__ import annotations
 
-from archon.allocation import allocate_all
-from archon.ledger import Ledger
-from archon.models import Account, DocType, JournalLine
-from archon.validation import (
+from archon.domain.allocation import allocate_all
+from archon.domain.ledger import Ledger
+from archon.domain.models import Account, DocType, JournalLine
+from archon.domain.validation import (
     all_passed,
     g1_entries_balance,
     g2_remittances_reconcile,

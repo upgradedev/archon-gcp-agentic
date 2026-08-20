@@ -1,8 +1,8 @@
 """The corrective documents, and the rule that none of them is ever sent."""
 from __future__ import annotations
 
-from archon.drafts import DRAFT_FOR_FINDING, draft_all, draft_for, recoverable
-from archon.models import ACTIONABLE_KINDS, DraftKind, ExceptionKind, Finding
+from archon.domain.drafts import DRAFT_FOR_FINDING, draft_all, draft_for, recoverable
+from archon.domain.models import ACTIONABLE_KINDS, DraftKind, ExceptionKind, Finding
 
 
 def finding(kind: ExceptionKind, amount: float = 100.0, *,
@@ -67,7 +67,7 @@ def test_every_draft_is_filed_and_never_sent():
 
 def test_no_send_path_exists_in_the_drafts_module():
     """If someone adds one, this test is where they have to think about it."""
-    import archon.drafts as module
+    import archon.domain.drafts as module
 
     assert not [name for name in dir(module) if "send" in name.lower()]
 

@@ -27,6 +27,7 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 - [Spin it up](#spin-it-up)
 - [What one run does](#what-one-run-does)
 - [Architecture](#architecture)
+- [Architecture review, and the gaps left in it](#architecture-review-and-the-gaps-left-in-it)
 - [Where the autonomy stops, and why there](#where-the-autonomy-stops-and-why-there)
 - [What Google is doing here](#what-google-is-doing-here)
 - [The books are computed, never phrased](#the-books-are-computed-never-phrased)
@@ -248,40 +249,135 @@ on a firm's first month, before anyone has configured it.
 
 ## Architecture
 
+Two diagrams. The first is what runs where. The second is the one that matters:
+what the agent does between a file landing and the owner reading about it.
+
+```mermaid
+flowchart TB
+    subgraph gcp["Google Cloud"]
+        gcs[("Cloud Storage<br/>a month's documents land here")]
+        ea["Eventarc"]
+        ps["Pub/Sub push"]
+        subgraph run["Cloud Run"]
+            svc["archon.adapters.service<br/>POST /events · POST /api/close · GET /"]
+            agent["Google ADK Agent<br/>six tools, one per step"]
+        end
+        fs[("Firestore<br/>runs · closes · drafts · documents")]
+        gem["Gemini<br/>reads documents, writes English"]
+    end
+    owner(["the owner's inbox"])
+
+    gcs -->|object finalize| ea --> ps -->|nobody pressed anything| svc
+    svc --> agent
+    agent --> core
+    subgraph core["archon.domain · pure, no SDK, no network"]
+        ledger["ledger<br/>double-entry"]
+        alloc["allocation<br/>one payment, many loads"]
+        exc["exceptions<br/>nine detectors"]
+        val["validation<br/>five gates"]
+        draft["drafts<br/>corrective letters"]
+    end
+    core --> fs
+    agent -.->|fact sheet only,<br/>never a figure| gem
+    core -->|month-end digest| owner
+
+    classDef pure fill:#141a2e,stroke:#6366f1,color:#e8ebf5
+    class ledger,alloc,exc,val,draft pure
 ```
-   a month's documents land in Cloud Storage
-                  |
-        Eventarc -> Pub/Sub push
-                  |
-        +---------v----------+
-        |  Cloud Run         |   POST /events   (nobody pressed anything)
-        |  archon.service    |   POST /api/close/{period}
-        +---------+----------+   GET  /          the page a judge opens
-                  |
-        +---------v----------+
-        |  Google ADK Agent  |   six tools, one per step of the chore
-        +---------+----------+
-                  |
-   +--------------+--------------------------------+
-   |              |            |          |        |
- extract       ledger      allocation  exceptions  drafts
- classify   double-entry   remittance   nine        corrective
- + Gemini    posting        split       detectors   letters
-   |              |            |          |        |
-   +--------------+------+-----+----------+--------+
-                         |
-                    validation          five gates the close must pass
-                         |
-                    run journal  --->   Firestore
-                    the books    --->   runs / closes / drafts / documents
-                         |
-              ADK SequentialAgent        reconciler -> exceptions -> narrator
-              over the fact sheet        (phrases; cannot reach a figure)
+
+The agent flow, from a file landing to the owner reading about it, and where
+the two outward edges sit:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Cloud Storage
+    participant A as ADK Agent
+    participant D as archon.domain
+    participant F as Firestore
+    participant O as Owner
+    participant X as Broker
+
+    B->>A: object finalize, period 2026-07
+    A->>D: take_in_mail
+    D-->>A: 27 artifacts classified
+    A->>D: post_journal
+    D-->>A: 26 entries, all balanced
+    A->>D: allocate_remittances
+    D-->>A: 8 loads settled, identity closes
+    A->>D: triage_exceptions
+    D-->>A: 10 exceptions, 3 errors
+    A->>D: draft_corrections
+    D-->>A: 5 letters, status=filed
+    A->>D: verify_and_file
+    D-->>F: books, drafts, 10-step trail
+    A->>O: month-end digest, delivered
+    Note over A,X: the letters to brokers stop here.<br/>a human presses send.
+    X--xA: nothing is sent unattended
 ```
 
 The deterministic engine is standard library only. ADK, Firestore and FastAPI
 sit on top of it and are imported lazily, which is why the close runs on a clean
 checkout and why the whole test suite runs offline.
+
+## Architecture review, and the gaps left in it
+
+Three frameworks apply to this build. Each table's last column is the residual
+gap, and it is never empty: a review with nothing left over is a review that was
+not done.
+
+### Google Cloud Architecture Framework, plus the agentic lens
+
+| Pillar | What this build does | Residual gap |
+|---|---|---|
+| Operational excellence | Every run writes a ten-step journal to Firestore with counts per step, so an unattended close can be retraced. `POST /api/close/{period}` re-runs it deterministically | No alerting and no SLO. Nobody is paged if a month fails to close |
+| Security | The domain layer holds no credential and reaches no network. Secrets come from environment only, and the SMTP password never reaches a receipt or a stored document, asserted by a test | `POST /events` is unauthenticated so the demo needs no account. A forged Pub/Sub envelope can trigger a close |
+| Reliability | A model outage, a mail server outage or a deliverer raising cannot fail a close: each is caught and the deterministic path continues. Five gates block a close that cannot verify its own books | Single region, no retry budget, no dead-letter topic on the push subscription |
+| Cost optimisation | Firestore and Cloud Run both cost nothing when idle, which is the shape of a business that closes its books twelve times a year | No budget alert configured |
+| Performance efficiency | The close is 27 artifacts and finishes in about 15 ms locally, because the engine is pure Python over in-memory structures | Never load tested. A firm with 40 trucks and 400 fuel lines is untested |
+| Sustainability | Scale to zero between months; no idle compute | Not measured |
+| **Agentic lens: bounded autonomy** | Two edges with different rules. The agent acts freely on state it owns and stops at a third party's inbox. Enforced by there being no send path to a counterparty, asserted by two tests | The boundary is enforced by absence, not by a policy engine. Adding a send path is a code review away |
+| **Agentic lens: grounding** | The model is handed a fact sheet of computed figures as text. It never sees a document and cannot introduce a number. The agent path and the deterministic path are asserted byte-identical | No automated check that the model's prose agrees with the fact sheet; the deterministic summary is the reference, not a judge |
+
+### EU AI Act (Regulation (EU) 2024/1689)
+
+This is a narrow, non-high-risk system: it does bookkeeping for one firm and
+takes no decision about a person. The articles below are the ones that bear on
+it anyway, and the row is what we actually do, not what we intend.
+
+| Article | What it requires | What this build does | Residual gap |
+|---|---|---|---|
+| Art. 10, data governance | Training and input data are relevant, representative and examined for bias | No model is trained here. Input is the firm's own documents, and the anomaly thresholds are learned from that firm's own books rather than from an external norm, so no population assumption is imported | The bundled corpus is synthetic and single-firm. No evaluation of extraction accuracy across document families exists in this repository |
+| Art. 13, transparency | The deployer can interpret the output and use it appropriately | Every figure traces to a source document through `source_file`, the run journal names what each step touched, and the fact sheet the summary is written from is served at `/api/close/{period}` | No per-figure provenance in the interface itself; the trace is available but the page does not surface it per cell |
+| Art. 14, human oversight | A human can oversee, intervene and stop | The one irreversible action, contacting a counterparty, requires a person. Corrective letters are filed with `status="filed"` and no send path exists | Oversight is all-or-nothing at that edge. There is no partial approval, no audit of who approved what, and no way to stop a close mid-run |
+| Art. 15, accuracy and resilience | Accuracy, resilience to error, and cybersecurity appropriate to purpose | Arithmetic is deterministic and unit tested; five gates fail the close rather than publish books that do not verify; an unreadable document is refused rather than estimated, enforced by gate G5 | No measured extraction accuracy against a labelled corpus. Resilience is asserted for the paths tested, not characterised |
+| Art. 50, disclosure | People are told they are interacting with an AI system | The page, the README and the digest all say an agent did the work. The digest is signed by the firm and describes itself as written by Archon | The drafted letters to counterparties do not disclose that an AI drafted them. That is a real gap, and it lands on a third party |
+
+Nothing here claims the system meets the Act. These are the controls that exist,
+and the ones that do not.
+
+### GDPR
+
+| Question | Answer |
+|---|---|
+| What personal data is processed? | In the shipped repository, none. Bell Ridge Haulage, its brokers, its suppliers and its three drivers are invented. The drivers are named "Driver 1" through "Driver 3" precisely so that no synthetic name reads as a real one |
+| Prove it | `grep -rniE "[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}" corpus/` returns nothing. The only address in the product is the configurable `ARCHON_OWNER_EMAIL`, which defaults to an `example` domain |
+| What would be processed in production? | A firm's own commercial documents, and driver settlement data, which is personal data about employees |
+| Where would it live | Firestore and Cloud Storage in the deploying firm's own project. No data leaves that project except the document text sent to Gemini for extraction, and the fact sheet sent for phrasing |
+| For how long | Not implemented. There is no retention policy and no deletion path in this repository, and a production deployment would need both |
+
+### What it costs when nobody is using it
+
+| Service | Idle cost | Measured from |
+|---|---|---|
+| Firestore, Native mode | **0.00**, within the free tier of 50,000 reads, 20,000 writes and 20,000 deletes a day and 1 GiB stored | cloud.google.com/firestore/pricing, us-central1, read 2026-08-19 |
+| Cloud Run, min-instances 0 | **0.00** when no request is in flight | cloud.google.com/run/pricing, read 2026-08-19 |
+| Cloud Storage, one month of documents | under 0.01 at this volume | cloud.google.com/storage/pricing, read 2026-08-19 |
+
+A haulier closes their books twelve times a year, so idle cost is the number
+that decides whether this is affordable. Cloud SQL was rejected for exactly this
+reason: the smallest sensible instance bills by the hour whether a truck moved
+or not.
 
 ## Where the autonomy stops, and why there
 
@@ -372,7 +468,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 214 passing | `python -m pytest` |
+| Tests, all offline | 299 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

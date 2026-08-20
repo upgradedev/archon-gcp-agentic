@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from email.message import EmailMessage
 from typing import Protocol
 
-from .digest import Digest
+from ..domain.digest import Digest
 
 
 @dataclass

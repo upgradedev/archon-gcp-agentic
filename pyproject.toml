@@ -10,7 +10,10 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["archon"]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -52,5 +55,5 @@ ignore = ["B008", "UP042"]
 "tests/*" = ["E501"]
 
 [tool.coverage.run]
-source = ["archon"]
-omit = ["archon/cli.py"]
+source = ["src/archon"]
+omit = ["src/archon/cli.py"]

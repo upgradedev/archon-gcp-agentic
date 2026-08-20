@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import pytest
 
-from archon.journal import FixedClock, RunJournal, Step
-from archon.models import Draft, DraftKind, ExceptionKind
-from archon.store import LocalStore, _plain, close_key
+from archon.adapters.store import LocalStore, _plain, close_key
+from archon.domain.models import Draft, DraftKind, ExceptionKind
+from archon.runtime.journal import FixedClock, RunJournal, Step
 
 # ── the run journal ──────────────────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ def test_dataclasses_and_enums_flatten_to_plain_documents():
 
 
 def test_get_store_falls_back_to_memory_without_a_project(monkeypatch):
-    from archon.store import get_store
+    from archon.adapters.store import get_store
 
     monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
     assert get_store().backend == "memory"

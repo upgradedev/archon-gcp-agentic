@@ -3,15 +3,15 @@ from __future__ import annotations
 
 import pytest
 
-from archon.journal import FixedClock
-from archon.mailbox import read_period
-from archon.models import (
+from archon.adapters.store import LocalStore
+from archon.domain.models import (
     DocType,
     Document,
     FuelLine,
     RemittanceLine,
 )
-from archon.store import LocalStore
+from archon.runtime.journal import FixedClock
+from archon.runtime.mailbox import read_period
 
 PERIOD = "2026-07"
 

@@ -10,16 +10,16 @@ import smtplib
 
 import pytest
 
-from archon.close import run_close
-from archon.delivery import (
+from archon.adapters.delivery import (
     FiledDelivery,
     Receipt,
     SmtpDelivery,
     get_deliverer,
     owner_address,
 )
-from archon.digest import TOP_ACTIONS, compose, subject_line
-from archon.store import LocalStore
+from archon.adapters.store import LocalStore
+from archon.domain.digest import compose, subject_line
+from archon.runtime.close import run_close
 from tests.conftest import PERIOD, load, remittance
 
 
@@ -49,7 +49,7 @@ def test_a_clean_month_leads_with_profit_instead(documents):
 
 def test_a_blocked_close_says_so_in_the_subject_rather_than_burying_it(documents):
     broken = list(documents)
-    from archon.models import DocType
+    from archon.domain.models import DocType
 
     next(d for d in broken
          if d.doc_type is DocType.BROKER_REMITTANCE).remittance_total = 1.0
@@ -69,9 +69,12 @@ def test_the_letter_names_what_was_already_done_and_what_is_left(documents):
 
 
 def test_the_letter_stops_listing_and_says_how_many_it_did_not_list(documents):
+    """The literal is written out on purpose. `f"and {5 - TOP_ACTIONS} more"`
+    was the original, and it is true for every value of TOP_ACTIONS, so it
+    tested nothing. See tests/unit/test_window_boundaries.py."""
     body = close(documents).digest.body
 
-    assert f"and {5 - TOP_ACTIONS} more, all in the app." in body
+    assert "and 2 more, all in the app." in body
 
 
 def test_recoverable_money_is_kept_apart_from_documentation_requests(documents):

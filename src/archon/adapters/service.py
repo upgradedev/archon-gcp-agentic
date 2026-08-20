@@ -24,18 +24,18 @@ import base64
 import binascii
 import json
 import os
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import PERIOD, __version__
-from .close import run_close
-from .mailbox import available_periods, read_period
-from .store import get_store
+from .. import PERIOD, __version__, paths
+from ..runtime.close import run_close
+from ..runtime.mailbox import available_periods, read_period
+from . import auth, headers
+from .store import LocalStore, get_store
 
-WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
+WEB_ROOT = paths.WEB_ROOT
 
 #: Set ARCHON_USE_GEMINI=1 to have the ADK reporting pipeline phrase the
 #: summary. Unset, the deterministic narrator writes it. The books are
@@ -51,6 +51,20 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Every response carries the headers a public page should carry.
+
+    Added because a DAST scan against the running container found five of them
+    missing, and a finding a scanner reports is a finding whether or not anyone
+    was going to exploit it. Fixed here rather than added to the scanner's
+    ignore list.
+    """
+    response = await call_next(request)
+    headers.apply(response.headers)
+    return response
+
+
 def _narrator():
     """The Gemini-backed narrator, when one is asked for and importable."""
     if not USE_GEMINI:
@@ -63,8 +77,14 @@ def _narrator():
         return None
 
 
-def _close(period: str) -> dict:
-    """Run one close and return it as the shape the page renders."""
+def _close(period: str, store=None) -> dict:
+    """Run one close and return it as the shape the page renders.
+
+    `store` decides what the run is allowed to touch, and it is the whole of
+    the least-privilege control: the public route hands in an ephemeral store,
+    the trusted route hands in the durable one. The close itself cannot tell
+    the difference and produces identical books either way.
+    """
     try:
         documents, raw = read_period(period)
     except FileNotFoundError as exc:
@@ -72,7 +92,8 @@ def _close(period: str) -> dict:
 
     result = run_close(
         period=period, documents=documents, company=COMPANY,
-        store=get_store(), narrator=_narrator(), raw_texts=raw,
+        store=store if store is not None else get_store(),
+        narrator=_narrator(), raw_texts=raw,
     )
     return result.to_dict()
 
@@ -86,6 +107,7 @@ def health() -> dict:
         "version": __version__,
         "store": getattr(store, "backend", "unknown"),
         "gemini": USE_GEMINI,
+        "events_auth": auth.posture(),
         "periods": available_periods(),
     }
 
@@ -98,8 +120,15 @@ def periods() -> dict:
 
 @app.post("/api/close/{period}")
 def close_period(period: str) -> dict:
-    """Close a period now. This is what the button on the page calls."""
-    return _close(period)
+    """Close a period now. This is what the button on the page calls.
+
+    Anonymous, and deliberately unable to write. The run happens against an
+    ephemeral in-memory store and is discarded when the response is sent, so a
+    stranger pressing the button cannot change anything the owner will read
+    later. The books are byte-identical to the trusted path; only their
+    lifetime differs.
+    """
+    return _close(period, store=LocalStore())
 
 
 @app.get("/api/close/{period}")
@@ -111,7 +140,7 @@ def read_close(period: str) -> dict:
     that they need to press something first.
     """
     stored = get_store().load_close(COMPANY, period)
-    return stored or _close(period)
+    return stored or _close(period, store=LocalStore())
 
 
 @app.post("/events")
@@ -124,6 +153,15 @@ async def events(request: Request) -> JSONResponse:
     redelivers on a non-2xx, and a message that will never parse would be
     redelivered until it expired, at the cost of one close per attempt.
     """
+    # Verified before anything is parsed or persisted. This is the only route
+    # that can write to the durable store, so it is the only one that needs a
+    # caller identity, and it fails closed when it cannot establish one.
+    verdict = auth.verify_push_request(request.headers.get("authorization"))
+    if not verdict.allowed:
+        return JSONResponse(
+            {"status": "refused", "reason": verdict.reason}, status_code=403
+        )
+
     try:
         envelope = await request.json()
     except (json.JSONDecodeError, ValueError):

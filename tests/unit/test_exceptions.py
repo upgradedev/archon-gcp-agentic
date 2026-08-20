@@ -5,8 +5,8 @@ fires is noise, and noise is what makes an owner stop reading the list.
 """
 from __future__ import annotations
 
-from archon.allocation import allocate_all
-from archon.exceptions import (
+from archon.domain.allocation import allocate_all
+from archon.domain.exceptions import (
     exposure,
     find_all,
     find_amount_outliers,
@@ -20,7 +20,7 @@ from archon.exceptions import (
     find_unreconciled_remittances,
     parse_date,
 )
-from archon.models import DocType, ExceptionKind
+from archon.domain.models import DocType, ExceptionKind
 from tests.conftest import (
     PERIOD,
     bank,

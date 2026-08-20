@@ -1,87 +1,75 @@
 #!/usr/bin/env bash
-# Deploy Archon to Cloud Run, and wire the trigger that makes it unattended.
+# Deploy Archon, and tear it down again.
 #
 #   PROJECT_ID=your-project ./scripts/deploy.sh
+#   PROJECT_ID=your-project ./scripts/deploy.sh destroy
 #
-# What this creates, and why each piece is there:
+# This script builds the image and hands everything else to Terraform, because
+# a resource created by a shell command here is a resource nobody can review,
+# reproduce or remove. `infra/main.tf` is the deployment; this is the two steps
+# Terraform cannot do: build a container, and print what a judge should open.
 #
-#   Cloud Run service   archon           the API, the page, and the /events sink
-#   Firestore database  (default)        the run journal, the books, the drafts
-#   GCS bucket          <project>-archon-mail   where a month's documents land
-#   Pub/Sub topic       archon-mail      object-finalize notifications
-#   Eventarc/push sub   archon-mail-push delivers them to /events
+# What gets created, and why each piece is there:
+#
+#   Cloud Run service       the API, the page, and the /events sink
+#   Firestore (default)     the run journal, the books, the filed drafts
+#   GCS bucket              where a month's documents land
+#   Pub/Sub topic + push    object-finalize becomes a close, with an OIDC token
+#   two service accounts    one runs the service, one only mints that token
 #
 # Take the bucket, the topic and the subscription away and Archon still works,
 # but only when somebody presses a button. Those three are the unattended part.
-#
-# Everything is idempotent: re-running reconciles rather than duplicating.
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:?set PROJECT_ID}"
 REGION="${REGION:-us-central1}"
 SERVICE="${SERVICE:-archon}"
-BUCKET="${BUCKET:-${PROJECT_ID}-archon-mail}"
-TOPIC="${TOPIC:-archon-mail}"
-SUBSCRIPTION="${SUBSCRIPTION:-archon-mail-push}"
+OWNER_EMAIL="${ARCHON_OWNER_EMAIL:-}"
+ACTION="${1:-apply}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
 
-echo "==> project ${PROJECT_ID}, region ${REGION}"
+echo "==> project ${PROJECT_ID}, region ${REGION}, image ${IMAGE}"
 gcloud config set project "${PROJECT_ID}" >/dev/null
 
-echo "==> enabling the services this needs"
-gcloud services enable \
-  run.googleapis.com \
-  cloudbuild.googleapis.com \
-  firestore.googleapis.com \
-  pubsub.googleapis.com \
-  storage.googleapis.com \
-  aiplatform.googleapis.com
-
-# Firestore in Native mode. Free tier: 50,000 reads, 20,000 writes and 20,000
-# deletes a day, 1 GiB stored, and nothing at all when idle. A haulier closes
-# their books twelve times a year, so idle cost is the number that matters.
-echo "==> Firestore (skipped if the default database already exists)"
-gcloud firestore databases create --location="${REGION}" 2>/dev/null \
-  || echo "    already there"
-
-echo "==> building and deploying ${SERVICE}"
-gcloud run deploy "${SERVICE}" \
-  --source "${REPO_ROOT}" \
-  --region "${REGION}" \
-  --platform managed \
-  --allow-unauthenticated \
-  --memory 512Mi \
-  --cpu 1 \
-  --min-instances 0 \
-  --max-instances 4 \
-  --timeout 120 \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},ARCHON_COMPANY=Bell Ridge Haulage"
-
-SERVICE_URL="$(gcloud run services describe "${SERVICE}" --region "${REGION}" \
-  --format 'value(status.url)')"
-echo "==> serving at ${SERVICE_URL}"
-
-echo "==> the mail bucket and its notifications"
-gcloud storage buckets create "gs://${BUCKET}" --location="${REGION}" 2>/dev/null \
-  || echo "    already there"
-gcloud pubsub topics create "${TOPIC}" 2>/dev/null || echo "    topic already there"
-
-# One notification per bucket, or every re-run adds another and every dropped
-# document closes the month twice.
-if ! gcloud storage buckets notifications list "gs://${BUCKET}" 2>/dev/null \
-     | grep -q "${TOPIC}"; then
-  gcloud storage buckets notifications create "gs://${BUCKET}" \
-    --topic="${TOPIC}" --event-types=OBJECT_FINALIZE
-else
-  echo "    notification already there"
+if [[ "${ACTION}" == "destroy" ]]; then
+  # Teardown is a first-class path, not an afterthought. D2 asks for one
+  # pipeline that deploys from nothing and removes everything again, and a
+  # teardown nobody has run is a teardown that does not work.
+  terraform -chdir="${REPO_ROOT}/infra" init -input=false
+  terraform -chdir="${REPO_ROOT}/infra" destroy -auto-approve \
+    -var "project_id=${PROJECT_ID}" \
+    -var "region=${REGION}" \
+    -var "service_name=${SERVICE}" \
+    -var "image=${IMAGE}" \
+    -var "owner_email=${OWNER_EMAIL}"
+  echo "==> torn down"
+  exit 0
 fi
 
-gcloud pubsub subscriptions create "${SUBSCRIPTION}" \
-  --topic="${TOPIC}" \
-  --push-endpoint="${SERVICE_URL}/events" \
-  --ack-deadline=120 2>/dev/null \
-  || gcloud pubsub subscriptions update "${SUBSCRIPTION}" \
-       --push-endpoint="${SERVICE_URL}/events"
+# The one API Terraform needs before it can enable the rest.
+gcloud services enable cloudbuild.googleapis.com run.googleapis.com
+
+echo "==> building the image"
+gcloud builds submit "${REPO_ROOT}" --tag "${IMAGE}"
+
+echo "==> applying infra/main.tf"
+terraform -chdir="${REPO_ROOT}/infra" init -input=false
+terraform -chdir="${REPO_ROOT}/infra" apply -auto-approve \
+  -var "project_id=${PROJECT_ID}" \
+  -var "region=${REGION}" \
+  -var "service_name=${SERVICE}" \
+  -var "image=${IMAGE}" \
+  -var "owner_email=${OWNER_EMAIL}"
+
+SERVICE_URL="$(terraform -chdir="${REPO_ROOT}/infra" output -raw service_url)"
+BUCKET="$(terraform -chdir="${REPO_ROOT}/infra" output -raw mail_bucket)"
+
+echo "==> checking the judge's route actually serves"
+curl --fail --silent --show-error "${SERVICE_URL}/" \
+  | grep -q "closes the month while nobody is watching"
+curl --fail --silent --show-error "${SERVICE_URL}/api/health"
+echo
 
 cat <<SUMMARY
 
@@ -90,6 +78,10 @@ Deployed.
   page          ${SERVICE_URL}/
   health        ${SERVICE_URL}/api/health
   close July    curl -X POST ${SERVICE_URL}/api/close/2026-07
+
+/events is now verified: it takes a Google-signed OIDC token for
+${SERVICE_URL}, minted by the archon-pusher service account and nobody else.
+An unauthenticated POST to it gets a 403.
 
 To watch it fire with nobody touching it, drop a document into the bucket under
 a folder named for the period:
@@ -100,5 +92,9 @@ a folder named for the period:
 Then read the run back:
 
   curl ${SERVICE_URL}/api/close/2026-07 | python -m json.tool | head -40
+
+Tear it all down again:
+
+  PROJECT_ID=${PROJECT_ID} ./scripts/deploy.sh destroy
 
 SUMMARY
