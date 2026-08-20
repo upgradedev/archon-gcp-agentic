@@ -13,7 +13,7 @@ covers the secret scan, the build and the tests.*
 
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
-- **Live demo**: not yet deployed. Run it locally in one command, below.
+- **Live demo**: [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/). No account, no install, one button.
 - **Demo video**: not yet recorded.
 - **Who it is for**: owner-operator trucking firms running three to twelve trucks.
 
@@ -158,12 +158,16 @@ no dependency beyond the Python standard library:
 ```bash
 git clone https://github.com/upgradedev/archon-gcp-agentic.git
 cd archon-gcp-agentic
-python -m archon.cli
+python run.py
 ```
 
-That prints the nine-step trail, the month, the exceptions and the filed
-letters. CI runs the same command inside an empty virtualenv on every push, so
-if this stops being true the build goes red.
+That prints the ten-step trail, the month, the exceptions and the filed
+letters. CI runs that exact command inside an empty virtualenv on every push, and the
+readiness gate runs it too, so if it ever stops working the build goes red
+rather than a judge finding out.
+
+`run.py` is three lines: the package lives under `src/`, and asking a judge to
+`pip install -e .` before seeing anything would make the claim above false.
 
 **The page and the API:**
 
@@ -178,7 +182,7 @@ Then open `http://localhost:8000`, press one button, and watch it run.
 
 ```bash
 export GOOGLE_API_KEY=...
-python -m archon.cli --agent
+python run.py --agent
 ```
 
 **Run the tests:**
@@ -190,7 +194,7 @@ python -m pytest
 
 ## What one run does
 
-Over the bundled month, `python -m archon.cli`:
+Over the bundled month, `python run.py`:
 
 ```
  + 1. Take in the month's mail
@@ -468,7 +472,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 343 | `python -m pytest` |
+| Tests, all offline | 344 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -555,9 +559,11 @@ its persistence model is deliberately not used here.
   rather than a data one. A real deployment puts an OIDC token on the push
   subscription and verifies it on the route. It is named here because it is the
   first question worth asking about this architecture.
-- **The live demo is not deployed yet.** The readiness gate in
-  `scripts/readiness.py` refuses to score until it is, and will stay red until
-  the URL in this README is real.
+- **The live demo is deployed** at [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/), on Cloud Run backed by
+  Firestore, and `/api/health` reports which store it is using so you can check
+  rather than take our word for it. `POST /events` on that deployment is closed:
+  it answers 403 to an unauthenticated trigger while the page stays open to
+  anyone.
 
 ## Licence
 
