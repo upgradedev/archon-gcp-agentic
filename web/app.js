@@ -58,8 +58,11 @@ function renderTrail(j) {
   host.innerHTML = "";
   j.steps.forEach((s, i) => {
     const el = document.createElement("div");
-    el.className = `step ${s.status !== "ok" ? s.status : ""}`;
-    el.style.animationDelay = `${i * 190}ms`;
+    // The stagger is a class, not an inline style. Setting `el.style` here
+    // violates `style-src 'self'`, and a real browser blocks it: the steps
+    // then land all at once and the run stops being watchable. A unit test
+    // could never have seen that, which is what the browser journey is for.
+    el.className = `step ${s.status !== "ok" ? s.status : ""} d${Math.min(i, 15)}`;
     el.innerHTML = `<div class="t">${esc(s.title)}<span class="ms num">${s.duration_ms} ms</span></div>
                     <div class="d">${esc(s.detail)}</div>`;
     host.appendChild(el);
@@ -85,7 +88,7 @@ function renderStats(d) {
 
 function renderAlloc(list) {
   const rows = list.map((a) => {
-    const head = `<tr><td colspan="6" style="background:var(--card-hi)">
+    const head = `<tr><td colspan="6" class="alloc-head">
       <b>${esc(a.remittance_ref)}</b> from ${esc(a.broker)}:
       <span class="num">${usd(a.remittance_total)}</span> landed,
       <span class="num">${usd(a.factoring_fee)}</span> factoring fee,

@@ -72,6 +72,24 @@
   .step { position: relative; padding: 11px 0; opacity: 0; transform: translateY(5px);
           animation: in .34s ease forwards; }
   @keyframes in { to { opacity: 1; transform: none; } }
+  /* The stagger, as classes. Set as an inline style it is blocked by the
+     content security policy, which is why it lives here. */
+  .step.d0 { animation-delay: 0ms; }
+  .step.d1 { animation-delay: 190ms; }
+  .step.d2 { animation-delay: 380ms; }
+  .step.d3 { animation-delay: 570ms; }
+  .step.d4 { animation-delay: 760ms; }
+  .step.d5 { animation-delay: 950ms; }
+  .step.d6 { animation-delay: 1140ms; }
+  .step.d7 { animation-delay: 1330ms; }
+  .step.d8 { animation-delay: 1520ms; }
+  .step.d9 { animation-delay: 1710ms; }
+  .step.d10 { animation-delay: 1900ms; }
+  .step.d11 { animation-delay: 2090ms; }
+  .step.d12 { animation-delay: 2280ms; }
+  .step.d13 { animation-delay: 2470ms; }
+  .step.d14 { animation-delay: 2660ms; }
+  .step.d15 { animation-delay: 2850ms; }
   @media (prefers-reduced-motion: reduce) { .step { animation: none; opacity: 1; transform: none; } }
   .step::before {
     content: ""; position: absolute; left: -25px; top: 17px; width: 11px; height: 11px;
@@ -132,3 +150,9 @@
   .hidden { display: none; }
   .err-box { border: 1px solid var(--error); color: var(--error); border-radius: var(--r-md);
              padding: 14px 16px; font-size: 14px; }
+
+  /* Classes replacing the last inline style attributes. A closed `style-src`
+     refuses a style attribute as firmly as it refuses a <style> block, and a
+     real browser blocked these. */
+  .alloc-head { background: var(--card-hi); }
+  .sub.tight { margin-top: 12px; }

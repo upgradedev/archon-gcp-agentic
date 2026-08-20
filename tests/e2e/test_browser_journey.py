@@ -151,6 +151,10 @@ def test_nothing_is_disabled_without_a_reason_and_nothing_renders_empty(page, ba
     page.locator("#run").click()
     expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
 
+    # The button disables itself while the close runs and re-enables in a
+    # `finally`, which lands after the steps are in the DOM. Asserting on the
+    # count alone raced that, so wait for the control to come back first.
+    expect(page.locator("#run")).to_be_enabled(timeout=30_000)
     assert page.locator("button:disabled").count() == 0
     for selector in ("#trail", "#stats", "#alloc", "#findings", "#drafts",
                      "#digest", "#gates", "#trucks"):
@@ -186,5 +190,64 @@ def test_the_console_is_clean(page, base_url):
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
     expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#run")).to_be_enabled(timeout=30_000)
 
     assert errors == []
+
+
+@pytest.mark.parametrize("page", VIEWPORTS, indirect=True)
+def test_the_content_security_policy_blocks_nothing_the_page_needs(page, base_url):
+    """A closed policy over a page that needs inline is a broken page.
+
+    This is the regression that shipped once: tightening `style-src` to 'self'
+    blocked the run trail's stagger, so every step appeared at once and the
+    close stopped being watchable. Nothing in the unit suite could see it,
+    because the policy and the page were only ever tested apart.
+    """
+    violations = []
+    page.add_init_script(
+        "window.__cspViolations = [];"
+        "document.addEventListener('securitypolicyviolation',"
+        " e => window.__cspViolations.push(e.violatedDirective + ' blocked ' + e.blockedURI));"
+    )
+    page.on("console", lambda msg: violations.append(msg.text)
+            if msg.type == "error" else None)
+
+    page.goto(base_url, wait_until="networkidle")
+    page.locator("#run").click()
+    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+    expect(page.locator("#run")).to_be_enabled(timeout=30_000)
+
+    violations += page.evaluate("() => window.__cspViolations")
+
+    assert violations == []
+
+
+@pytest.mark.parametrize("page", VIEWPORTS, indirect=True)
+def test_the_run_trail_still_staggers(page, base_url):
+    """The thing the policy broke, asserted directly. The stagger is what makes
+    an unattended run watchable rather than a wall of text appearing at once."""
+    page.goto(base_url, wait_until="networkidle")
+    page.locator("#run").click()
+    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+
+    delays = page.eval_on_selector_all(
+        "#trail .step",
+        "els => els.map(e => getComputedStyle(e).animationDelay)")
+
+    assert delays[0] == "0s"
+    assert delays[1] != delays[0], "the steps all land at once"
+    assert len(set(delays)) >= 5, f"expected a stagger, got {sorted(set(delays))}"
+
+
+def test_no_element_carries_an_inline_style_attribute(page, base_url):
+    """`style-src 'self'` refuses a style attribute as firmly as a <style>
+    block, so the page must not produce one at any point."""
+    page.goto(base_url, wait_until="networkidle")
+    page.locator("#run").click()
+    expect(page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+
+    styled = page.eval_on_selector_all(
+        "[style]", "els => els.map(e => e.tagName + '.' + e.className)")
+
+    assert styled == [], f"inline style attributes present: {styled}"
