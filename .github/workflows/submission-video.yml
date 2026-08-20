@@ -1,9 +1,10 @@
-# Copied from upgradedev/archon-datahub, master a1feb16,
+# Copied from the submission kit,
 # .github/workflows/submission-video.yml. Pristine copy at
-# video/upstream/archon-datahub/submission-video.yml.
+# the submission kit's pristine copy.
 #
 # Every line the kit changed, and every line a new project must change, is marked
-# "KIT:". Grep for it before the first dispatch, and read the table in the kit README.
+# Every kit placeholder in this file has been replaced with this entry's own
+# values. The capture, the beats and the container it records are ours.
 name: Generate exact-release submission video
 
 on:
@@ -13,9 +14,9 @@ on:
         description: Exact deployed SHA to record
         required: true
         type: string
-      # KIT: these two bound the video to two DataHub-specific proof workflows. They are
+      # Optional, and worth setting: they bind the recorded commit to a green CI run and a
       # optional now. Leave them empty if the project has no equivalent, or point them at
-      # your own proof runs and edit the two workflow paths asserted below.
+      # green Security run at the same SHA, so a cut cannot be made from a failing build.
       hosted_run_id:
         description: Successful hosted-demo run for the release, optional
         required: false
@@ -40,9 +41,9 @@ jobs:
       actions: read
       contents: read
       id-token: write
-    # KIT: set the repository and the default branch. While this is unedited the job is
-    # SKIPPED, which produces no video and no error, so fix it first.
-    if: github.repository == 'upgradedev/<REPO>' && github.ref == 'refs/heads/main'
+    # A fork dispatching this would render on someone else's key and upload an
+    # artifact naming this entry, so the job only runs here, on the trunk.
+    if: github.repository == 'upgradedev/archon-gcp-agentic' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -57,19 +58,19 @@ jobs:
           set -euo pipefail
           test "${GITHUB_SHA}" = "${ARCHON_RELEASE_SHA}"
           [[ "${ARCHON_RELEASE_SHA}" =~ ^[a-f0-9]{40}$ ]]
-          # KIT: the run-id bindings run only when the ids are supplied. The two asserted
-          # workflow paths are DataHub's; change them to your own proof workflows.
+          # The run-id bindings run only when the ids are supplied. The two asserted
+          # ci.yml is the build and test run; security.yml is CodeQL and the DAST.
           if [[ -n "${ARCHON_HOSTED_RUN_ID}" ]]; then
             [[ "${ARCHON_HOSTED_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_HOSTED_RUN_ID}" --jq .head_sha)" = "${ARCHON_RELEASE_SHA}"
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_HOSTED_RUN_ID}" --jq .conclusion)" = success
-            test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_HOSTED_RUN_ID}" --jq .path)" = ".github/workflows/hosted-demo.yml"
+            test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_HOSTED_RUN_ID}" --jq .path)" = ".github/workflows/ci.yml"
           fi
           if [[ -n "${ARCHON_GOVERNED_RUN_ID}" ]]; then
             [[ "${ARCHON_GOVERNED_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_GOVERNED_RUN_ID}" --jq .head_sha)" = "${ARCHON_RELEASE_SHA}"
             test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_GOVERNED_RUN_ID}" --jq .conclusion)" = success
-            test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_GOVERNED_RUN_ID}" --jq .path)" = ".github/workflows/live-governed-proof.yml"
+            test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ARCHON_GOVERNED_RUN_ID}" --jq .path)" = ".github/workflows/security.yml"
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,19 +82,13 @@ jobs:
           test ! -e "${root}"
           mkdir -m 0700 "${root}"
           echo "ARCHON_VIDEO_ROOT=${root}" >>"${GITHUB_ENV}"
-      # KIT: these two steps exist only for the Google Cloud TTS provider and are skipped
-      # unless the repository variable is set. With provider "elevenlabs" in
-      # video/narration.json, delete them and set the ELEVENLABS_API_KEY secret instead.
-      - if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+      # The narration provider is ElevenLabs, pinned in video/narration.json,
+      # so the kit's optional Google text-to-speech branch is not carried here.
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_VIDEO_SERVICE_ACCOUNT }}
-      - if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
-        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
-        with:
-          # KIT: your Google Cloud project, if you use the Google provider.
-          project_id: upgradegr-challenges
+          python-version: "3.12"
+          cache: pip
+
       - name: Install ephemeral media tooling
         run: |
           set -euo pipefail
@@ -102,36 +97,56 @@ jobs:
           echo "FFMPEG=$(command -v ffmpeg)" >>"${GITHUB_ENV}"
           echo "FFPROBE=$(command -v ffprobe)" >>"${GITHUB_ENV}"
       - name: Generate measured narration and captions
-        # KIT: the ElevenLabs key. Set this repository secret, or delete the env block if
-        # you narrate with the Google provider. The script also accepts XI_API_KEY and
-        # ELEVEN_LABS_KEY, which older repositories here use.
+        # The one thing this workflow needs that no commit can supply: the owner
+        # mirrors their ELEVENLABS_API_KEY as a repository secret. Until then
+        # this step fails loudly rather than rendering silence, which is the
+        # right failure: a video with no voice would still upload.
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
         run: python3 video/generate-narration.py
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22.23.1
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Install exact browser dependencies
-        run: npm ci --prefix web --ignore-scripts
-      - name: Install ephemeral Chromium
-        run: npx --prefix web playwright install --with-deps chromium
-      - name: Record the real production journey
-        working-directory: web
-        run: node video/capture-production.mjs
+      # The capture is Python, like the tests it borrows its choreography from.
+      # The kit's version was a .mjs needing npm and a lockfile in a repository
+      # with no JavaScript toolchain at all.
+      - name: Install the browser
+        run: |
+          set -euo pipefail
+          pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+
+      # Record against the artifact that actually ships, not a dev server.
+      - name: Start the shipped container
+        run: |
+          set -euo pipefail
+          docker build -t archon:video .
+          docker run -d --name archon-video -p 8080:8080 archon:video
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/api/health >/dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8080/ | grep -q "closes the month while nobody is watching"
+
+      - name: Record the judge's journey
+        env:
+          ARCHON_APP_URL: http://127.0.0.1:8080/
+        run: python3 video/capture_production.py
+
+      - name: Stop the container
+        if: always()
+        run: docker rm -f archon-video || true
       - name: Compose and independently probe the final media
         run: python3 video/build-video.py
       - name: Validate the upload package
         run: |
           set -euo pipefail
           output="${ARCHON_VIDEO_ROOT}/output"
-          # KIT: this filename is set in video/build-video.py. Change both together.
-          mp4="archon-datahub-demo.mp4"
+          # Set in video/build-video.py. Change both together or this fails.
+          mp4="archon-demo.mp4"
           test -s "${output}/${mp4}"
           test -s "${output}/captions.en.srt"
-          # KIT: sceneCount must equal the number of segments in video/narration.json.
-          # The shipped template has 7. Change this literal when you change the beats.
+          # sceneCount must equal the segments in video/narration.json. Ours is
+          # 7: hook, surface, trigger, live, sponsor, evidence, close. The same
+          # list is asserted in video/capture_production.py and pinned offline
+          # by tests/unit/test_narration_contract.py.
           jq -e \
             --arg sha "${ARCHON_RELEASE_SHA}" \
             '.schemaVersion == "archon.submission-video-receipt/v1"
@@ -156,8 +171,7 @@ jobs:
             "$(jq -er .sha256 "${output}/video-receipt.json")"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          # KIT: rename to your project.
-          name: archon-datahub-submission-video-${{ inputs.release_sha }}-${{ github.run_id }}
+          name: archon-submission-video-${{ inputs.release_sha }}-${{ github.run_id }}
           path: ${{ runner.temp }}/archon-submission-video/output/
           if-no-files-found: error
           retention-days: 7

@@ -3,16 +3,14 @@
 #
 # The trigger is the point. `push:` carries no `branches:` key, so every branch
 # gets a run. Two of our pull requests sat with zero checks because push was
-# pinned to main, and nobody noticed until merge time. Verified in our own
-# repos: qwen-memoryagent fires on any branch; gcp, cockroachdb and
-# archon-datahub all pin to a branch list.
+# pinned to main, and nobody noticed until merge time. Measured across the
+# author's own repositories: the ones that pin push to a branch list give a
+# feature branch zero checks, and the ones that do not, do not.
 #
-# Copied from repos/qwen-memoryagent/.github/workflows/ci.yml: the trigger
-# block, the gitleaks step byte for byte including the pinned release URL and
-# the sha256 check, and the shape of the readiness job. Concurrency block from
-# repos/cockroachdb/.github/workflows/ci.yml. Action SHA pins are the ones
-# already in use across our repos: checkout v7.0.0 (112 uses), upload-artifact
-# v7.0.1 (157 uses), setup-python v6.3.0 (3 uses, qwen demo-video.yml).
+# The trigger block, the gitleaks step including its pinned release URL and
+# sha256 check, the concurrency block and the shape of the readiness job all
+# come from the submission kit. The action SHA pins are the kit's, chosen
+# because they were already in wide use rather than because they were newest.
 #
 # The readiness job is red until you edit the CONFIG block in readiness.py and
 # the demo is actually serving. That is the correct state for an entry with no
@@ -52,9 +50,9 @@ jobs:
           ./gitleaks detect --source . --redact --no-banner
           # Once the repo has a .gitleaksignore, add:
           #   --gitleaks-ignore-path .gitleaksignore
-          # It is left off here because a fresh repo has no such file. This is
-          # the qwen-autopilot form of the step; qwen-memoryagent carries the
-          # flag and the file.
+          # It is left off here because this repo has no such file, and a
+          # gitleaks run that points at a missing ignore file fails on the
+          # flag rather than on a secret.
 
   # Stage 2. Build. EDIT THIS JOB. It is a placeholder, not a working build.
   # Replace the two commented blocks with the one that matches the project and

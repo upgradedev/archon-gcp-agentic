@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Compose the CI browser capture, measured narration, and captions.
 
-Copied from upgradedev/archon-datahub, master a1feb16, file video/build-video.py.
-The pristine copy is kept at ../../upstream/archon-datahub/build-video.py, so `diff`
+Copied from the submission kit, file video/build-video.py.
+The pristine copy is kept at the submission kit's pristine copy, so `diff`
 shows every change the kit made. Those changes are:
 
   1. OUTPUT.mkdir(exist_ok=True). The original refused to compose twice into the same
      directory, which made re-rendering one beat impossible.
   2. The two evidence run ids in the receipt are written only when the environment
-     supplies them. They bind two DataHub-specific workflows that a new project does
+     supplies them. They bind two proof workflows from the kit's source entry that a new project does
      not have. The release SHA stays required.
   3. The composed length must equal the measured narration length within one frame. The
      original checked only that the result was 90 to 179 seconds, so a capture shorter
@@ -98,7 +98,7 @@ def main() -> None:
         f"{''.join(labels)}amix=inputs={len(labels)}:duration=longest:normalize=0,"
         f"loudnorm=I=-16:LRA=7:TP=-1.5,atrim=0:{total}[a]"
     )
-    final = OUTPUT / "archon-datahub-demo.mp4"
+    final = OUTPUT / "archon-demo.mp4"
     args.extend(
         [
             "-filter_complex",

@@ -11,7 +11,7 @@
   "languageCode": "en-GB",
   "voice": "en-GB-Neural2-B",
   "speakingRate": 0.98,
-  "_comment_beats": "Seven beats, one per thing a judge has to be told. captionText is what the viewer reads. speechText is what the voice says. They are separate fields on purpose: captions carry the exact product names, spellings and figures a judge will check, and speech carries the spelled-out form a TTS engine pronounces correctly. So DataHub in a caption is Data Hub in speech, MCP is M C P, PR 183 is pull request one eighty three. Contract: each field 20 to 800 characters, ids matching [a-z][a-z-]{1,24}, each beat 3 to 40 seconds of measured speech, whole video 90 to 174 seconds. The real length of this template with a real voice has NOT been measured, so do not plan around a number for it: run the generator once and read the total it prints. It fails outside the 90 to 174 second window and tells you the measured figure, so cut or add words after that first run rather than guessing. Record the browser capture only after you know the total, because the capture must be at least trimLeadSeconds plus that total or the build will reject it.",
+  "_comment_beats": "Seven beats, one per thing a judge has to be told, in the order the capture in video/capture-production.mjs holds them. captionText is what the viewer reads; speechText is what the voice says. They are separate on purpose: the caption carries exact names and figures a judge will check, and the speech carries the spelled-out form a text-to-speech engine pronounces correctly, so ADK is A D K and 2026-07 is July twenty twenty six. Deliberately no test count or any other number that moves: voicing one means re-rendering audio and re-cutting to the frame every time a test is added. Those live in the README, where each carries the command that produced it. Contract: each field 20 to 800 characters, ids matching [a-z][a-z-]{1,24}, each beat 3 to 40 seconds of measured speech, whole video 90 to 174 seconds. The measured total is not known until the generator runs once; read the figure it prints and cut or add words then, rather than guessing.",
   "segments": [
     {
       "id": "hook",
@@ -46,8 +46,8 @@
     {
       "id": "evidence",
       "_beat": "What a judge can check without asking us. Every claimed capability is reachable by an anonymous judge, or labelled not-deployed in the same sentence.",
-      "captionText": "Every number came from a deterministic ledger. 299 offline tests, no key and no network. Each of the five gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
-      "speechText": "Every number came from a deterministic ledger. Two hundred and ninety nine offline tests, no key and no network. Each of the five gates is broken on purpose once, and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
+      "captionText": "Every number came from a deterministic ledger, not from a model. The suite runs with no key and no network. Each of the five gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
+      "speechText": "Every number came from a deterministic ledger, not from a model. The test suite runs with no key and no network, and each of the five gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
     },
     {
       "id": "close",

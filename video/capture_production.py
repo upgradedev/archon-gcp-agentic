@@ -1,0 +1,194 @@
+"""Record the judge's journey at 1920x1080, one hold per narration beat.
+
+The choreography is not invented here. It is the sequence already asserted at
+both viewports by `tests/e2e/test_browser_journey.py`, which runs on every push:
+open the page, press the one button, watch ten steps land, read the owner's
+letter, see the five counterparty letters marked filed rather than sent. The
+video shows exactly what that test proves, so the cut cannot drift away from the
+product without CI going red first.
+
+**Python rather than Node, deliberately.** The kit's capture was a `.mjs` that
+needed npm, a `package.json` and a lockfile in a repository that otherwise has
+no JavaScript toolchain at all. Playwright's Python binding records video just
+as well, it is already a dependency because the browser journey uses it, and one
+language means one set of versions to keep honest.
+
+It records against the built container over localhost. A public URL is not
+required for this challenge, and recording the artifact that actually ships is
+more honest than recording a dev server.
+
+    ARCHON_VIDEO_ROOT=/tmp/video ARCHON_RELEASE_SHA=<40 hex> \\
+        python video/capture_production.py
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+from playwright.sync_api import sync_playwright
+
+#: The beats, in the order this file holds them. The narration must agree.
+EXPECTED_BEATS = ["hook", "surface", "trigger", "live", "sponsor", "evidence", "close"]
+
+VIEWPORT = {"width": 1920, "height": 1080}
+
+
+def _fail(message: str) -> None:
+    raise SystemExit(message)
+
+
+def main() -> int:
+    root = os.environ.get("ARCHON_VIDEO_ROOT")
+    release_sha = os.environ.get("ARCHON_RELEASE_SHA", "")
+    app_url = os.environ.get("ARCHON_APP_URL", "http://127.0.0.1:8080/")
+
+    if not root:
+        _fail("ARCHON_VIDEO_ROOT is required.")
+    if not re.fullmatch(r"[a-f0-9]{40}", release_sha):
+        _fail("ARCHON_RELEASE_SHA must be the exact 40 character commit being recorded.")
+
+    root_path = Path(root)
+    capture_dir = root_path / "capture"
+    capture_dir.mkdir(parents=True, exist_ok=False)
+
+    timing = json.loads((root_path / "narration" / "timing.json").read_text(encoding="utf-8"))
+    holds = {scene["id"]: float(scene["holdSeconds"]) for scene in timing["scenes"]}
+
+    # The narration and the journey have to agree beat for beat. If either moves
+    # without the other, the cut goes silent over live pixels or holds on a
+    # frozen frame, so this fails before recording rather than after.
+    actual = [scene["id"] for scene in timing["scenes"]]
+    if actual != EXPECTED_BEATS:
+        _fail(f"narration beats {actual} do not match the journey {EXPECTED_BEATS}")
+
+    errors: list[str] = []
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(args=["--force-device-scale-factor=1"])
+        context = browser.new_context(
+            viewport=VIEWPORT,
+            device_scale_factor=1,
+            record_video_dir=str(capture_dir / "raw"),
+            record_video_size=VIEWPORT,
+        )
+        page = context.new_page()
+
+        # Anything the page throws during the recording is a defect in the take,
+        # and a take with a broken page is not a take. Policy violations count:
+        # one of them once blocked the run trail's stagger, which is the single
+        # thing this video exists to show.
+        page.on("pageerror", lambda exc: errors.append(f"page:{type(exc).__name__}"))
+        page.on("console",
+                lambda msg: errors.append(f"console:{msg.text[:80]}")
+                if msg.type == "error" else None)
+        page.add_init_script(
+            "document.addEventListener('securitypolicyviolation',"
+            " e => console.error('csp:' + e.violatedDirective));"
+        )
+
+        capture_started = time.monotonic()
+        page.goto(app_url, wait_until="networkidle", timeout=60_000)
+        page.get_by_role(
+            "heading", name=re.compile("It closes the month while nobody is watching")
+        ).wait_for(timeout=30_000)
+        timeline_started = time.monotonic()
+
+        def hold(beat: str, action) -> None:
+            started = time.monotonic()
+            action()
+            remaining = holds[beat] - (time.monotonic() - started)
+            if remaining > 0:
+                page.wait_for_timeout(remaining * 1000)
+
+        def scroll_to(selector: str) -> None:
+            page.locator(selector).scroll_into_view_if_needed()
+            page.wait_for_timeout(400)
+
+        # 1. The problem, on the page that states it.
+        hold("hook", lambda: page.evaluate("() => window.scrollTo({top: 0})"))
+
+        # 2. The surface the owner already opens. On arrival the page has
+        #    replayed the last close, so the letter is there before any press.
+        hold("surface", lambda: scroll_to("#digest"))
+
+        # 3. Nobody presses anything. For a judge watching, one press stands in
+        #    for the object landing in the bucket: a file arriving is not
+        #    watchable, and pretending otherwise would be a staged shot.
+        def press():
+            page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
+            page.wait_for_timeout(600)
+            page.locator("#run").click()
+
+        hold("trigger", press)
+
+        # 4. The chore, running. Ten steps, landing one at a time.
+        def watch():
+            scroll_to("#trail")
+            page.wait_for_function(
+                "() => document.querySelectorAll('#trail .step').length === 10",
+                timeout=60_000,
+            )
+
+        hold("live", watch)
+
+        # 5. What the agent did that matching cannot: one payment split across
+        #    eight loads, with the identity closing.
+        hold("sponsor", lambda: scroll_to("#alloc"))
+
+        # 6. The exceptions, then the gates the close ran against its own work.
+        def evidence():
+            scroll_to("#findings")
+            page.wait_for_timeout(holds["evidence"] * 500)
+            scroll_to("#gates")
+
+        hold("evidence", evidence)
+
+        # 7. The letters, every one filed and none sent, then back to the top.
+        def ending():
+            scroll_to("#drafts")
+            page.wait_for_timeout(holds["close"] * 500)
+            page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
+
+        hold("close", ending)
+
+        trim_lead = max(0.0, timeline_started - capture_started)
+        video = page.video
+        if video is None:
+            _fail("Playwright did not create a video recorder.")
+        context.close()
+        raw_path = Path(video.path())
+        browser.close()
+
+    final_path = capture_dir / "production.webm"
+    raw_path.replace(final_path)
+    payload = final_path.read_bytes()
+
+    receipt = {
+        "schemaVersion": "archon.submission-video-capture/v1",
+        "releaseSha": release_sha,
+        "appUrl": app_url,
+        "sceneCount": len(EXPECTED_BEATS),
+        "trimLeadSeconds": round(trim_lead, 3),
+        "timelineSeconds": float(timing["totalSeconds"]),
+        "pageErrors": errors,
+        "bytes": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+    (capture_dir / "capture-receipt.json").write_text(
+        json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
+    )
+
+    if errors:
+        _fail(f"the journey emitted {len(errors)} browser error(s): {errors}")
+
+    print(json.dumps(receipt))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

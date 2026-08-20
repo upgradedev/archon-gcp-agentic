@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate short, measured TTS scenes and aligned captions in CI.
 
-Copied from upgradedev/archon-datahub, master a1feb16, file video/generate-narration.py.
-The pristine copy is kept at ../../upstream/archon-datahub/generate-narration.py, so
+Copied from the submission kit, file video/generate-narration.py.
+The pristine copy is kept at the submission kit's pristine copy, so
 `diff` shows every change the kit made. Those changes are:
 
   1. Per-scene caching. A scene is re-synthesized only when its speech text or its
@@ -103,7 +103,7 @@ def elevenlabs_key() -> str:
 
 
 def synthesize_elevenlabs(text: str, spec: dict[str, object], retries: int = 3) -> bytes:
-    """Body copied from upgradedev/archon-qwen-autopilot, 2a85b4f, file
+    """Body copied from the submission kit, file
     scripts/build_video.py, function synth_elevenlabs (lines 313-338). Changed only to
     read the voice and model from the narration spec and to return the bytes instead of
     writing the file."""

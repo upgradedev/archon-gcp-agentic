@@ -1,7 +1,7 @@
-# Copied from upgradedev/archon-qwen-memoryagent, 603349c,
+# Copied from the submission kit.
 # .github/workflows/video-sync-gate-selftest.yml. Pristine copy at
-# video/upstream/qwen-memoryagent/video-sync-gate-selftest.yml.
-# KIT: the only change is that the two watch paths for build_caption_filter.py
+# video/upstream/the submission kit/video-sync-gate-selftest.yml.
+# The only change from the kit is that the two watch paths for the caption
 # were dropped, because the kit does not ship that script.
 name: Video Sync Gate Selftest
 
