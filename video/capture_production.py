@@ -75,6 +75,11 @@ def main() -> int:
             device_scale_factor=1,
             record_video_dir=str(capture_dir / "raw"),
             record_video_size=VIEWPORT,
+            # Headless Chromium prefers reduced motion, and the page honours
+            # that by switching the stagger off. Without asking for motion the
+            # recording would show all ten steps appearing at once, which is
+            # the one thing this video exists not to show.
+            reduced_motion="no-preference",
         )
         page = context.new_page()
 

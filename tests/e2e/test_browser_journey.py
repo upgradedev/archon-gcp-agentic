@@ -87,8 +87,26 @@ def browser():
 
 @pytest.fixture
 def page(browser, request):
+    """A page that has asked for motion.
+
+    Headless Chromium reports `prefers-reduced-motion: reduce` by default, and
+    the page honours that by switching the run trail's stagger off entirely.
+    That is correct behaviour and it is tested below, but it is not the state
+    the video is recorded in, so the journey asks for motion explicitly rather
+    than inheriting whatever the runner happens to prefer.
+    """
     viewport = getattr(request, "param", {"width": 1280, "height": 800})
-    context = browser.new_context(viewport=viewport)
+    context = browser.new_context(viewport=viewport, reduced_motion="no-preference")
+    page = context.new_page()
+    yield page
+    context.close()
+
+
+@pytest.fixture
+def still_page(browser):
+    """A page from a visitor who has asked for less motion."""
+    context = browser.new_context(viewport={"width": 1280, "height": 800},
+                                  reduced_motion="reduce")
     page = context.new_page()
     yield page
     context.close()
@@ -251,3 +269,21 @@ def test_no_element_carries_an_inline_style_attribute(page, base_url):
         "[style]", "els => els.map(e => e.tagName + '.' + e.className)")
 
     assert styled == [], f"inline style attributes present: {styled}"
+
+
+def test_a_visitor_who_asks_for_less_motion_gets_none(still_page, base_url):
+    """The stagger is presentation. Someone who has asked for less motion still
+    gets every step, immediately, with nothing moving.
+
+    This is why the journey above has to ask for motion explicitly: headless
+    Chromium prefers reduced motion, so without saying so the test was
+    measuring the accessible path and asserting the animated one.
+    """
+    still_page.goto(base_url, wait_until="networkidle")
+    still_page.locator("#run").click()
+    expect(still_page.locator("#trail .step")).to_have_count(10, timeout=30_000)
+
+    opacities = still_page.eval_on_selector_all(
+        "#trail .step", "els => els.map(e => getComputedStyle(e).opacity)")
+
+    assert set(opacities) == {"1"}, "a step is invisible to a reduced-motion visitor"
