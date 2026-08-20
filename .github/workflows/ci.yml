@@ -169,6 +169,14 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@77e7a554d41e2ee56fc945c52dfd3f33d12def9a # v2.1.4
 
+      # The emulator is a Java program and refuses anything below 21. The
+      # runner's default JRE is older, which is why it never opened its port.
+      # Found only because the readiness check above started failing honestly.
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "21"
+
       # The port has to be OPEN before the tests run, and this step has to fail
       # when it is not. The previous version waited for a log line, gave up
       # after 60 seconds, and carried on: the adapter tests then ran against a
