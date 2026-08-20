@@ -167,5 +167,45 @@ steps:
           -var project_id=${_TF_PROJECT} -var region=${_REGION} -var image=$$IMAGE
         terraform state list | tee /workspace/leftovers.txt
         test ! -s /workspace/leftovers.txt \
-          || { echo "resources survived the teardown"; exit 1; }
-        echo "nothing left"
+          || { echo "terraform still tracks resources"; exit 1; }
+        echo "terraform state is empty"
+
+  # An empty terraform state is NOT an empty project, and assuming otherwise is
+  # how the first real teardown reported success while a Cloud Run service, two
+  # service accounts and a Firestore database were still standing. The destroy
+  # had failed on deletion_protection AFTER emptying the state, so the state
+  # was the one thing that could not be trusted to answer the question.
+  #
+  # The last word belongs to the cloud.
+  - id: teardown-verified-against-the-cloud
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        test "${_ACTION}" = "lifecycle" || exit 0
+
+        run=$$(gcloud run services list --project=${_TF_PROJECT} \
+                 --region=${_REGION} --format='value(metadata.name)' 2>/dev/null | wc -l)
+        topics=$$(gcloud pubsub topics list --project=${_TF_PROJECT} \
+                 --format='value(name)' 2>/dev/null | wc -l)
+        subs=$$(gcloud pubsub subscriptions list --project=${_TF_PROJECT} \
+                 --format='value(name)' 2>/dev/null | wc -l)
+        accounts=$$(gcloud iam service-accounts list --project=${_TF_PROJECT} \
+                 --format='value(email)' 2>/dev/null | grep -c 'archon-' || true)
+        buckets=$$(gcloud storage buckets list --project=${_TF_PROJECT} \
+                 --format='value(name)' 2>/dev/null | grep -c 'archon-mail' || true)
+
+        echo "cloud run services : $$run"
+        echo "pubsub topics      : $$topics"
+        echo "subscriptions      : $$subs"
+        echo "archon accounts    : $$accounts"
+        echo "mail buckets       : $$buckets"
+
+        left=0
+        for n in "$$run" "$$topics" "$$subs" "$$accounts" "$$buckets"; do
+          [ "$$n" = "0" ] || left=1
+        done
+        test "$$left" = "0" || { echo "resources survived the teardown"; exit 1; }
+        echo "the project is empty, checked against the cloud"
