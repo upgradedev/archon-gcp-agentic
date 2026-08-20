@@ -32,6 +32,7 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 - [What Google is doing here](#what-google-is-doing-here)
 - [The books are computed, never phrased](#the-books-are-computed-never-phrased)
 - [Tests and evidence](#tests-and-evidence)
+- [The trigger, fired on the live deployment](#the-trigger-fired-on-the-live-deployment)
 - [Deploy it](#deploy-it)
 - [Pre-existing components](#pre-existing-components)
 - [Honest scope](#honest-scope)
@@ -496,6 +497,41 @@ the same run, and that the agent path and the deterministic path agree exactly.
 Each of the five gates is broken on purpose, once, and asserted red. A gate
 nobody has watched fail is a gate nobody should believe.
 
+## The trigger, fired on the live deployment
+
+Not a diagram. This happened, on the URL above, and it is the part of the claim
+that is hardest to believe without seeing it.
+
+```bash
+gcloud storage cp corpus/2026-07/remittance-MFX-RA-4417.txt \
+    gs://upgradegr-archon-agentic-archon-mail/mail/2026-07/
+```
+
+An object landed in a bucket. Cloud Storage published an object-finalize
+notification, Pub/Sub pushed it to `/events` with an OIDC token, and Cloud Run
+closed the month. Nobody pressed anything, and nobody was watching.
+
+Three requests hit that one route, and together they are the whole argument:
+
+```
+12:38:27Z   POST /events  ->  200    a document landed, the month closed
+12:40:46Z   POST /events  ->  403    an anonymous curl, refused
+12:42:58Z   POST /events  ->  200    a second document, caller now pinned
+```
+
+Read from the deployment itself:
+
+```bash
+gcloud logging read 'resource.type=cloud_run_revision
+  AND resource.labels.service_name=archon
+  AND httpRequest.requestUrl:"/events"' --format="value(httpRequest.status,timestamp)"
+```
+
+That contrast is the least-privilege boundary, on live infrastructure rather
+than in a test. The button on the page exists for the same reason the video
+does: a file arriving is not watchable, so a judge gets a way to see the same
+work happen on demand.
+
 ## Deploy it
 
 ```bash
@@ -551,14 +587,11 @@ its persistence model is deliberately not used here.
 - **One period, one company.** There is no multi-tenancy, no authentication and
   no billing here. Those exist in commercial products and would be noise in a
   submission about whether an agent can finish a chore.
-- **`POST /events` is unauthenticated in `scripts/deploy.sh`**, which deploys
-  with `--allow-unauthenticated` so a judge can open the page with no account.
-  A forged Pub/Sub envelope can therefore trigger a close. The blast radius is
-  one idempotent re-close of a period over the same bundled documents, which
-  overwrites itself and sends nothing, so it is a denial-of-wallet question
-  rather than a data one. A real deployment puts an OIDC token on the push
-  subscription and verifies it on the route. It is named here because it is the
-  first question worth asking about this architecture.
+- **`POST /events` is closed on the deployment.** The page is open to anyone
+  with no account, and the trigger is not: it verifies a Google-signed OIDC
+  token for this service's own audience, minted by one named service account
+  and nobody else. An anonymous call gets `403 {"reason":"no bearer token"}`.
+  You can check both from a terminal, and the two are on the same route.
 - **The live demo is deployed** at [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/), on Cloud Run backed by
   Firestore, and `/api/health` reports which store it is using so you can check
   rather than take our word for it. `POST /events` on that deployment is closed:
