@@ -154,3 +154,21 @@ def recoverable(drafts: list[Draft]) -> float:
     chasing = (DraftKind.SHORT_PAY_DISPUTE, DraftKind.DUPLICATE_REFUND,
                DraftKind.PAYMENT_REMINDER)
     return round(sum(d.amount for d in drafts if d.kind in chasing), 2)
+
+
+def draft_for_decisions(decisions, company: str = "Accounts") -> list[Draft]:
+    """Write a letter for every finding that was decided to warrant one.
+
+    The decisions come from `policy.apply_choices`, which has already overruled
+    anything the books will not accept, so this can trust what it is handed and
+    does not re-litigate it. A finding escalated to the owner produces no
+    letter by design: escalation means a person looks, not that nothing happens.
+    """
+    from .policy import Disposition
+
+    drafts = [
+        draft_for(decision.finding, company)
+        for decision in decisions
+        if decision.applied is Disposition.DRAFT
+    ]
+    return [draft for draft in drafts if draft is not None]

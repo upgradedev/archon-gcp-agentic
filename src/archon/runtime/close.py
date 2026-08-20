@@ -1,11 +1,16 @@
 """The chore: close a haulier's month, unattended, end to end.
 
-This is the whole product in one function. A month of mail goes in. Ten steps
-later the books are posted, the remittance is split across the loads it
+This is the whole product in one function. A month of mail goes in. Eleven
+steps later the books are posted, the remittance is split across the loads it
 settles, the exceptions are triaged worst-first, the corrective documents are
 written and filed, the close has checked its own work against five gates, the
 period is marked closed with a trail you can walk back through, and the owner
 has a letter about it wherever they read their mail.
+
+Step 6 is where an agent has real authority. It decides what to do about each
+exception, and `domain/policy.py` clamps any choice the books will not accept
+and records the overrule. Without an agent the standing policy runs and the
+close behaves exactly as it always has.
 
 Nobody is asked anything at any point. That is the design, and it is the one
 thing this product is being judged on, so it is worth being exact about where
@@ -41,6 +46,7 @@ from ..domain import allocation as allocation_mod
 from ..domain import digest as digest_mod
 from ..domain import drafts as drafts_mod
 from ..domain import exceptions as exceptions_mod
+from ..domain import policy as policy_mod
 from ..domain import validation as validation_mod
 from ..domain.digest import Digest
 from ..domain.ledger import Ledger
@@ -54,12 +60,23 @@ from ..domain.models import (
     ValidationResult,
 )
 from ..domain.narrator import facts_sheet, narrate
+from ..domain.policy import Decision, Disposition
 from .journal import Clock, RunJournal
 
 #: A narrator takes the fact sheet and returns English. The default is the
 #: deterministic one; `agents.py` supplies a Gemini-backed one. It can never
 #: introduce a figure, because it is handed text, not documents.
 Narrator = Callable[[str], str]
+
+#: A decider is handed the findings and returns what to do about each one, plus
+#: an optional verdict on whether the month may close. It is the agent's real
+#: authority in this product: it cannot produce a figure, and it can decide
+#: what happens about the figures the ledger produced. Everything it returns
+#: goes through `policy.apply_choices`, which overrules anything the books will
+#: not accept and records why. None means the deterministic default policy.
+Decider = Callable[
+    [list[Finding]], tuple[dict[int, "Disposition"], str | None]
+]
 
 
 @dataclass
@@ -79,6 +96,8 @@ class CloseResult:
     facts: str
     journal: RunJournal
     ledger: Ledger
+    decisions: list[Decision] = field(default_factory=list)
+    outcome_reason: str = ""
     digest: Digest | None = None
     receipt: Receipt | None = None
     stored: dict = field(default_factory=dict)
@@ -119,6 +138,13 @@ class CloseResult:
             "findings": _plain(self.findings),
             "gates": _plain(self.gates),
             "drafts": _plain(self.drafts),
+            "decisions": [
+                {"reference": d.finding.reference, "kind": d.finding.kind.value,
+                 "amount": d.finding.amount, "chosen": d.chosen.value,
+                 "applied": d.applied.value, "clamped": d.clamped, "reason": d.reason}
+                for d in self.decisions
+            ],
+            "outcome_reason": self.outcome_reason,
             "journal": self.journal.to_dict(),
             "recoverable": self.recoverable,
             "digest": self.digest.to_dict() if self.digest else None,
@@ -152,7 +178,8 @@ def run_close(period: str,
               narrator: Narrator | None = None,
               raw_texts: dict[str, str] | None = None,
               deliverer: Deliverer | None = None,
-              owner_email: str | None = None) -> CloseResult:
+              owner_email: str | None = None,
+              decider: Decider | None = None) -> CloseResult:
     """Close one period. Returns even when it fails; read `outcome`.
 
     Raising on a bad month would be the wrong shape. A close that hits a
@@ -225,13 +252,41 @@ def run_close(period: str,
             at_stake=exceptions_mod.exposure(errors),
         )
 
-    # 6. Draft. The step that separates an agent from a report.
+    # 6. Decide, then draft. This is where the agent has authority: which of
+    #    these is worth a letter, which needs the owner, which is just noted.
+    #    Every choice is clamped by the ledger before it can do anything.
+    agent_verdict: str | None = None
+    with run.step("decide", "Decide what to do about each exception") as step:
+        choices = None
+        decided_by = "standing policy"
+        note_suffix = ""
+        if decider is not None:
+            try:
+                choices, agent_verdict = decider(findings)
+                decided_by = "agent"
+            except Exception as exc:      # a decider failing must not fail a close
+                # `note` replaces rather than appends, so the fallback has to
+                # travel to the single note at the end of the step or it is
+                # silently lost. A run that quietly stopped consulting the
+                # agent should say so on the trail.
+                note_suffix = (f"; the decider raised {type(exc).__name__}, "
+                               f"fell back to the standing policy")
+        decisions = policy_mod.apply_choices(findings, choices)
+        overruled = [d for d in decisions if d.clamped]
+        step.note(
+            f"{policy_mod.summarise(decisions)} ({decided_by}){note_suffix}",
+            decided=len(decisions), overruled=len(overruled), by=decided_by,
+        )
+
     with run.step("draft", "Write the corrective documents") as step:
-        filed = drafts_mod.draft_all(findings, company or "Accounts")
+        filed = drafts_mod.draft_for_decisions(decisions, company or "Accounts")
+        escalated = [d for d in decisions if d.applied is Disposition.ESCALATE]
         step.note(
             f"{len(filed)} document(s) drafted and filed unsent, chasing "
-            f"{drafts_mod.recoverable(filed):,.2f}",
+            f"{drafts_mod.recoverable(filed):,.2f}; "
+            f"{len(escalated)} put in front of the owner instead",
             drafts=len(filed), recoverable=drafts_mod.recoverable(filed),
+            escalated=len(escalated),
         )
 
     # 7. Verify. The close checks its own work before it claims to be finished.
@@ -269,20 +324,24 @@ def run_close(period: str,
         )
 
     # 9. File. The period is recorded closed, or recorded blocked and why.
-    outcome = "closed" if validation_mod.all_passed(gates) else "blocked"
+    #    The agent may withhold a close it does not trust. It may never grant
+    #    one the gates refused: that direction is arithmetic, not judgement.
+    outcome, outcome_reason = policy_mod.decide_outcome(gates, decisions, agent_verdict)
     with run.step("file", "File the close and mark the period") as step:
         run.finish(outcome)
         result = CloseResult(
             run_id=run.run_id, period=period, company=company, outcome=outcome,
             statements=statements, allocations=results, findings=findings,
             gates=gates, drafts=filed, summary=summary, facts=facts,
-            journal=run, ledger=ledger,
+            journal=run, ledger=ledger, decisions=decisions,
+            outcome_reason=outcome_reason,
         )
         stored["close"] = store.save_close(company, period, result.to_dict())
         stored["drafts"] = store.save_drafts(run.run_id, filed)
         stored["run"] = store.save_run(run.to_dict())
         step.note(
-            f"period {period} marked {outcome}; books, {len(filed)} draft(s) and a "
+            f"period {period} marked {outcome} ({outcome_reason}); books, "
+            f"{len(filed)} draft(s) and a "
             f"{len(run.steps) + 2}-step trail persisted to {getattr(store, 'backend', 'store')}",
             outcome=outcome, backend=getattr(store, "backend", "store"),
         )

@@ -18,9 +18,19 @@ owner who looks on Monday.
 
 Three deliberate design decisions:
 
-**The tools are the steps, not one do-everything call.** An agent handed a
-single `close_the_month()` tool is a button with extra latency. Handed six, it
-sequences a real chore, and the run journal records what it chose to do.
+**The agent decides something that matters.** An earlier version of this file
+handed the agent six tools that reported slices of a close which had already
+run, and a test asserted that calling them out of order changed nothing. That
+was a fair criticism: an agent whose decisions cannot affect the outcome is
+decoration, and on a submission judged mostly on autonomous action it is the
+worst thing to be.
+
+So `decide_actions` is real authority. The agent weighs each exception and
+chooses to chase, escalate or note it, and may withhold a close it does not
+trust. `domain/policy.py` overrules anything the books will not accept and
+records the reason, so the authority is bounded rather than absolute. What it
+still cannot do is produce a figure: the arithmetic ran before it was asked,
+and a test asserts the numbers are identical whoever decided.
 
 **Models are injectable everywhere.** Every constructor takes a model object,
 so the whole ADK surface, including genuine function calling and genuine
@@ -38,6 +48,7 @@ import os
 
 from ..domain.models import Document
 from ..domain.narrator import NARRATOR_INSTRUCTION
+from ..domain.policy import Disposition
 from ..runtime.close import CloseResult, run_close
 from ..runtime.journal import Clock
 from ..runtime.mailbox import read_period
@@ -50,14 +61,36 @@ CLOSE_INSTRUCTION = """\
 You are Archon, the bookkeeper for a small trucking firm. You have been asked to
 close a month, and nobody is watching. Work through it and finish.
 
-Call the tools in this order, once each:
+Call the tools in this order:
 
   1. take_in_mail        - read the period's documents
   2. post_journal        - post the double-entry books
   3. allocate_remittances - split each broker remittance across the loads it settles
   4. triage_exceptions   - find what is missing or does not add up
-  5. draft_corrections   - write the corrective documents
+  5. decide_actions      - YOUR JUDGEMENT. See below.
   6. verify_and_file     - check the close against its gates and file it
+
+Step 5 is the one that is yours. `triage_exceptions` hands you what the books
+found; you decide what should happen about each one, exactly as a bookkeeper
+would:
+
+  "draft"    - chase it with a letter to the counterparty
+  "escalate" - put it in front of the owner, because it needs a person
+  "note"     - record it and take no action
+
+Weigh it. A large silent short pay is worth a letter. A forty dollar
+discrepancy from a broker who sends steady work may be worth noting and moving
+on, because the relationship is worth more than the forty dollars. Anything you
+cannot read, or that suggests the books themselves are wrong, goes to the owner.
+
+You may also withhold the close. If something about the month looks wrong to
+you even though every check passed, say so, and it will not be filed as closed.
+You cannot do the reverse: a month whose checks failed is never closed, whatever
+you think.
+
+Your choices are checked against the books before they take effect. If you ask
+for something the books will not allow, you will be overruled and the reason
+recorded. That is expected, not a failure.
 
 Do not ask the user anything. Do not stop part way to report progress. Do not
 skip a step because an earlier one found problems: a month with problems is
@@ -92,6 +125,12 @@ class CloseSession:
         self.documents: list[Document] = []
         self.raw: dict[str, str] = {}
         self.result: CloseResult | None = None
+        #: What the agent decided at step 5, and its verdict on the close.
+        #: Empty until `decide_actions` is called, which is what makes the
+        #: agent's judgement load-bearing rather than reported.
+        self.choices: dict[int, Disposition] | None = None
+        self.verdict: str | None = None
+        self._findings: list = []
 
     # ── the six tools, in the order the agent is told to call them ───────────
 
@@ -149,12 +188,56 @@ class CloseSession:
         """
         self._ensure_run()
         assert self.result is not None
+        self._findings = list(self.result.findings)
         return {
             "exceptions": [
-                {"kind": f.kind.value, "severity": f.severity, "reference": f.reference,
-                 "amount": f.amount, "message": f.message}
-                for f in self.result.findings
-            ]
+                {"index": index, "kind": f.kind.value, "severity": f.severity,
+                 "reference": f.reference, "amount": f.amount, "message": f.message}
+                for index, f in enumerate(self._findings)
+            ],
+            "next": ("call decide_actions with what should happen about each index"),
+        }
+
+    def decide_actions(self, actions: dict[str, str], withhold_close: bool = False) -> dict:
+        """Decide what happens about each exception. This is your judgement.
+
+        Args:
+            actions: what to do about each exception, keyed by its index as a
+                string, valued "draft", "escalate" or "note".
+            withhold_close: set true to refuse the close even though the
+                checks passed, because something about the month looks wrong.
+
+        Returns:
+            What was applied, and every place the books overruled you, with the
+            reason. Being overruled is expected and is not a failure.
+        """
+        chosen: dict[int, Disposition] = {}
+        rejected: list[str] = []
+        for key, value in (actions or {}).items():
+            try:
+                chosen[int(key)] = Disposition(str(value).strip().lower())
+            except (ValueError, TypeError):
+                rejected.append(f"{key}={value!r}")
+
+        self.choices = chosen
+        self.verdict = "blocked" if withhold_close else None
+
+        # Re-running is what makes the decision take effect: the close is
+        # recomputed with the decider in place. The figures are identical
+        # either way, which a test asserts; only what is DONE changes.
+        self.result = None
+        self._ensure_run()
+        assert self.result is not None
+
+        return {
+            "applied": [
+                {"reference": d.finding.reference, "you_chose": d.chosen.value,
+                 "applied": d.applied.value, "overruled": d.clamped, "why": d.reason}
+                for d in self.result.decisions
+            ],
+            "letters_to_be_written": sum(1 for d in self.result.decisions
+                                         if d.drafts_a_letter),
+            "unreadable_values_ignored": rejected,
         }
 
     def draft_corrections(self) -> dict:
@@ -211,9 +294,15 @@ class CloseSession:
             return
         if not self.documents:
             self.take_in_mail()
+        choices, verdict = self.choices, self.verdict
+
+        def decider(_findings):
+            return choices, verdict
+
         self.result = run_close(
             period=self.period, documents=self.documents, company=self.company,
             store=self.store, clock=self.clock, raw_texts=self.raw,
+            decider=decider if choices is not None or verdict else None,
         )
 
 
@@ -243,6 +332,7 @@ def build_close_agent(session: CloseSession, model=None, name: str = "archon_clo
             session.post_journal,
             session.allocate_remittances,
             session.triage_exceptions,
+            session.decide_actions,
             session.draft_corrections,
             session.verify_and_file,
         ],

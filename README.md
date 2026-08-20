@@ -114,11 +114,14 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
 3. **splits one broker remittance across the eight loads it settles, net of the factoring fee**
 4. reconciles which loads got paid and which did not
 5. triages what is missing or contradictory, worst first
-6. writes the corrective letters and files them
-7. checks its own work against five gates
-8. writes the month-end summary from a fact sheet it is not allowed to add to
-9. marks the period closed with a trail you can walk back through
-10. **emails the owner their month-end letter**, because a haulier does not open a
+6. **decides what to do about each one**: chase it, put it in front of the owner,
+   or note it. This is the agent's own judgement, and every choice is checked
+   against the books before it can take effect
+7. writes the corrective letters and files them
+8. checks its own work against five gates
+9. writes the month-end summary from a fact sheet it is not allowed to add to
+10. marks the period closed with a trail you can walk back through
+11. **emails the owner their month-end letter**, because a haulier does not open a
     bookkeeping console on the first of the month, they are driving
 
 Nobody is asked anything at any point. The one thing a person does is press send
@@ -162,7 +165,7 @@ cd archon-gcp-agentic
 python run.py
 ```
 
-That prints the ten-step trail, the month, the exceptions and the filed
+That prints the eleven-step trail, the month, the exceptions and the filed
 letters. CI runs that exact command inside an empty virtualenv on every push, and the
 readiness gate runs it too, so if it ever stops working the build goes red
 rather than a judge finding out.
@@ -335,7 +338,7 @@ not done.
 
 | Pillar | What this build does | Residual gap |
 |---|---|---|
-| Operational excellence | Every run writes a ten-step journal to Firestore with counts per step, so an unattended close can be retraced. `POST /api/close/{period}` re-runs it deterministically | No alerting and no SLO. Nobody is paged if a month fails to close |
+| Operational excellence | Every run writes an eleven-step journal to Firestore with counts per step, so an unattended close can be retraced. `POST /api/close/{period}` re-runs it deterministically | No alerting and no SLO. Nobody is paged if a month fails to close |
 | Security | The domain layer holds no credential and reaches no network. Secrets come from environment only, and the SMTP password never reaches a receipt or a stored document, asserted by a test | `POST /events` is unauthenticated so the demo needs no account. A forged Pub/Sub envelope can trigger a close |
 | Reliability | A model outage, a mail server outage or a deliverer raising cannot fail a close: each is caught and the deterministic path continues. Five gates block a close that cannot verify its own books | Single region, no retry budget, no dead-letter topic on the push subscription |
 | Cost optimisation | Firestore and Cloud Run both cost nothing when idle, which is the shape of a business that closes its books twelve times a year | No budget alert configured |
@@ -473,7 +476,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 344 | `python -m pytest` |
+| Tests, all offline | 372 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

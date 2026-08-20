@@ -2,7 +2,7 @@
 
 The choreography is not invented here. It is the sequence already asserted at
 both viewports by `tests/e2e/test_browser_journey.py`, which runs on every push:
-open the page, press the one button, watch ten steps land, read the owner's
+open the page, press the one button, watch eleven steps land, read the owner's
 letter, see the five counterparty letters marked filed rather than sent. The
 video shows exactly what that test proves, so the cut cannot drift away from the
 product without CI going red first.
@@ -131,11 +131,11 @@ def main() -> int:
 
         hold("trigger", press)
 
-        # 4. The chore, running. Ten steps, landing one at a time.
+        # 4. The chore, running. Eleven steps, landing one at a time.
         def watch():
             scroll_to("#trail")
             page.wait_for_function(
-                "() => document.querySelectorAll('#trail .step').length === 10",
+                "() => document.querySelectorAll('#trail .step').length === 11",
                 timeout=60_000,
             )
 

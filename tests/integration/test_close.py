@@ -27,13 +27,13 @@ def test_the_month_closes_end_to_end(documents):
     assert result.closed
 
 
-def test_the_run_is_ten_steps_and_every_one_completed(documents):
+def test_the_run_is_eleven_steps_and_every_one_completed(documents):
     result = close(documents)
 
-    assert len(result.journal.steps) == 10
+    assert len(result.journal.steps) == 11
     assert [s.name for s in result.journal.steps] == [
         "intake", "post", "allocate", "reconcile", "triage",
-        "draft", "verify", "report", "file", "notify",
+        "decide", "draft", "verify", "report", "file", "notify",
     ]
     assert {s.status for s in result.journal.steps} == {"ok"}
 
@@ -188,9 +188,9 @@ def test_the_persisted_trail_is_the_whole_trail(documents, corpus):
     persisted_run = store.load_run(result.run_id)
     persisted_close = store.load_close("Bell Ridge Haulage", PERIOD)
 
-    assert len(result.journal.steps) == 10
-    assert len(persisted_run["steps"]) == 10
-    assert len(persisted_close["journal"]["steps"]) == 10
+    assert len(result.journal.steps) == 11
+    assert len(persisted_run["steps"]) == 11
+    assert len(persisted_close["journal"]["steps"]) == 11
     assert persisted_run["steps"][-1]["name"] == "notify"
     assert persisted_run["finished_at"] is not None
 

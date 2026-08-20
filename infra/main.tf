@@ -56,6 +56,19 @@ variable "company" {
   default = "Bell Ridge Haulage"
 }
 
+variable "deletion_protection" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Whether the database and the service refuse to be destroyed.
+
+    False here on purpose. This entry's claim is that the whole environment can
+    be rebuilt from nothing, and that claim is only worth anything if a teardown
+    actually tears down. A real deployment holding a customer's books sets this
+    true and accepts a deliberate human step before a destroy.
+  EOT
+}
+
 variable "owner_email" {
   type        = string
   default     = ""
@@ -98,6 +111,17 @@ resource "google_firestore_database" "archon" {
   name        = "(default)"
   location_id = var.region
   type        = "FIRESTORE_NATIVE"
+
+  # Both of these default to true, and both silently break a teardown: the
+  # destroy runs, reports most resources gone, empties the state, and leaves
+  # the database standing. Found by running it rather than reading it.
+  #
+  # False is correct for an environment that has to be provably rebuildable
+  # from nothing. A production deployment holding a firm's books would set
+  # both to true and accept that a teardown needs a deliberate human step.
+  # Firestore spells it differently from Cloud Run, which is its own small trap:
+  # the database takes `delete_protection_state` and has no `deletion_protection`.
+  delete_protection_state = var.deletion_protection ? "DELETE_PROTECTION_ENABLED" : "DELETE_PROTECTION_DISABLED"
 
   depends_on = [google_project_service.enabled]
 }
@@ -172,15 +196,20 @@ resource "google_cloud_run_v2_service" "archon" {
   name     = var.service_name
   location = var.region
 
-  # Scale to zero between months. That is the whole cost argument.
-  scaling {
-    min_instance_count = 0
-    max_instance_count = 4
-  }
+  # Same trap as the database: a protected service cannot be destroyed and the
+  # teardown fails half way through, after the state has already been emptied.
+  deletion_protection = var.deletion_protection
 
   template {
     service_account = google_service_account.runtime.email
     timeout         = "120s"
+
+    # Scale to zero between months. That is the whole cost argument, and in
+    # the v2 resource it belongs inside the template, not beside it.
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 4
+    }
 
     containers {
       image = var.image

@@ -17,7 +17,7 @@ def test_the_bundled_month_closes_from_a_clean_checkout(capsys):
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "closed in" in out
-    assert "10. Write the owner their month-end letter" in out
+    assert "11. Write the owner their month-end letter" in out
     assert "filed" in out
 
 
@@ -39,7 +39,7 @@ def test_the_json_form_is_machine_readable(capsys):
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["outcome"] == "closed"
-    assert len(payload["journal"]["steps"]) == 10
+    assert len(payload["journal"]["steps"]) == 11
     assert len(payload["drafts"]) == 5
 
 
@@ -80,7 +80,7 @@ def test_closing_a_period_over_the_api_returns_the_whole_run(client):
     body = client.post("/api/close/2026-07").json()
 
     assert body["outcome"] == "closed"
-    assert len(body["journal"]["steps"]) == 10
+    assert len(body["journal"]["steps"]) == 11
     assert len(body["findings"]) == 10
     assert body["recoverable"] == 5512.85
 
