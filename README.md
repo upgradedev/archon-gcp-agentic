@@ -13,7 +13,7 @@ covers the secret scan, the build and the tests.*
 
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
-- **Live demo**: not yet deployed. Run it locally in one command, below.
+- **Live demo**: [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/) — no account, no install, one button.
 - **Demo video**: not yet recorded.
 - **Who it is for**: owner-operator trucking firms running three to twelve trucks.
 
@@ -555,9 +555,11 @@ its persistence model is deliberately not used here.
   rather than a data one. A real deployment puts an OIDC token on the push
   subscription and verifies it on the route. It is named here because it is the
   first question worth asking about this architecture.
-- **The live demo is not deployed yet.** The readiness gate in
-  `scripts/readiness.py` refuses to score until it is, and will stay red until
-  the URL in this README is real.
+- **The live demo is deployed** at [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/), on Cloud Run backed by
+  Firestore, and `/api/health` reports which store it is using so you can check
+  rather than take our word for it. `POST /events` on that deployment is closed:
+  it answers 403 to an unauthenticated trigger while the page stays open to
+  anyone.
 
 ## Licence
 

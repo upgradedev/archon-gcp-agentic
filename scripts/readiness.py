@@ -92,7 +92,7 @@ THRESHOLD = 95.0
 # The live surface a judge opens with no account and no install. Both entries
 # stay on the placeholder until the Cloud Run service is deployed, and the gate
 # is red until then. That is the correct state for an entry with no live demo.
-DEMO_URL = PLACEHOLDER_URL
+DEMO_URL = "https://archon-70489367760.us-central1.run.app/"
 
 LIVE_CHECKS = [
     {
