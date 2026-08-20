@@ -311,11 +311,22 @@ def run_close(period: str,
             actions=digest.action_count,
         )
 
-    result.stored = stored
-    # Both trailing steps land after `run.finish`, so the trail records its own
-    # filing and its own notification. Re-stamping the outcome keeps
-    # `journal.outcome` and `result.outcome` from ever disagreeing.
+    # The trail cannot be complete until the last step has ended, so the record
+    # written during step 9 is necessarily missing steps 9 and 10. That is not a
+    # rounding detail: the journal is what the owner scrolls through on Monday
+    # and what a judge replays, and a stored trail that stops two steps early is
+    # a trail that hides the filing and the notification.
+    #
+    # So the run is stamped finished and both records are rewritten with the
+    # whole thing. One extra write per close, keyed the same way, so it
+    # overwrites rather than accumulates.
+    #
+    # Found by the Firestore adapter test, which asserted the persisted step
+    # count. Nothing that ran against the in-memory store had ever looked.
     run.finish(outcome)
+    stored["close"] = store.save_close(company, period, result.to_dict())
+    stored["run"] = store.save_run(run.to_dict())
+    result.stored = stored
     return result
 
 
