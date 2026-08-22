@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .drafts import recoverable
+from .drafts import leakage, outstanding, undocumented
 from .models import Draft
 
 #: How many actions the digest names before it stops listing. A digest that
@@ -67,15 +67,22 @@ def _money(amount: float) -> str:
 def subject_line(period: str, statements, drafts: list[Draft], outcome: str) -> str:
     """The subject decides whether the rest is read, so it carries the number.
 
-    Money still recoverable beats profit, because profit is a fact the owner
-    can do nothing about today and the recoverable figure is a list of phone
-    calls they can make this morning.
+    Leakage beats profit, because profit is a fact the owner can do nothing
+    about today and a leak is a phone call they can make this morning.
+
+    Deliberately NOT the sum of every letter. That total was nine times larger
+    on the bundled month, because it counted receivables the broker was always
+    going to pay as though the agent had found them.
     """
     if outcome != "closed":
         return f"{period}: the close did not pass its own checks"
-    chasing = recoverable(drafts)
-    if chasing:
-        return f"{period} closed. {_money(chasing)} is recoverable, {len(drafts)} letters ready"
+    leaked = leakage(drafts)
+    if leaked:
+        return (f"{period} closed. {_money(leaked)} was quietly leaking, "
+                f"{len(drafts)} letters ready")
+    owed = outstanding(drafts)
+    if owed:
+        return f"{period} closed. {_money(owed)} invoiced and unpaid, {len(drafts)} letters ready"
     return f"{period} closed. {_money(statements.net_profit)} profit, nothing outstanding"
 
 
@@ -112,14 +119,21 @@ def compose(result, recipient: str, company: str | None = None) -> Digest:
             )
         if len(result.drafts) > TOP_ACTIONS:
             lines.append(f"  and {len(result.drafts) - TOP_ACTIONS} more, all in the app.")
-        chasing = recoverable(result.drafts)
-        lines += ["", f"  Money these can actually recover: {_money(chasing)}"]
-        no_recovery = round(sum(d.amount for d in result.drafts) - chasing, 2)
-        if no_recovery:
-            lines.append(
-                f"  A further {_money(no_recovery)} is documentation I asked for rather "
-                f"than money I can win back."
-            )
+        # Three different things, said separately, because adding them up
+        # produces a number that flatters the product and misleads the owner.
+        leaked = leakage(result.drafts)
+        owed = outstanding(result.drafts)
+        undocd = undocumented(result.drafts)
+        lines.append("")
+        if leaked:
+            lines.append(f"  {_money(leaked):>14}  was leaking away quietly. This is the "
+                         f"part you would not have caught.")
+        if owed:
+            lines.append(f"  {_money(owed):>14}  is work you invoiced and nobody has paid. "
+                         f"Owed already, now chased.")
+        if undocd:
+            lines.append(f"  {_money(undocd):>14}  left the account with no paperwork. "
+                         f"Recovers nothing; it is a tax and completeness problem.")
 
     watch = [f for f in result.findings if f.severity != "error" and not f.actionable]
     if watch:
@@ -155,7 +169,7 @@ def compose(result, recipient: str, company: str | None = None) -> Digest:
         outcome=result.outcome,
         run_id=result.run_id,
         net_profit=statements.net_profit,
-        recoverable=recoverable(result.drafts),
+        recoverable=leakage(result.drafts),
         action_count=len(result.drafts),
         attachments=[f"{d.kind.value}-{d.reference}.txt" for d in result.drafts],
     )

@@ -97,8 +97,44 @@ def _close(period: str, store=None) -> dict:
         period=period, documents=documents, company=COMPANY,
         store=store if store is not None else get_store(),
         narrator=_narrator(), raw_texts=raw,
+        previous=_previous_statements(period),
     )
     return result.to_dict()
+
+
+def _previous_statements(period: str):
+    """The month before this one, if it has ever been closed.
+
+    Read from the store rather than recomputed, so the comparison is against
+    what was actually filed. A trend that recomputes its own history is a
+    second source of truth for a number that already has one.
+    """
+    from ..domain.models import Statements
+
+    periods = available_periods()
+    try:
+        index = periods.index(period)
+    except ValueError:
+        return None
+    if index == 0:
+        return None
+
+    stored = get_store().load_close(COMPANY, periods[index - 1])
+    if not stored or "statements" not in stored:
+        # Never closed, so close it quietly to have something to compare
+        # against. It is the same deterministic run and it costs milliseconds.
+        try:
+            documents, raw = read_period(periods[index - 1])
+        except FileNotFoundError:
+            return None
+        from ..adapters.store import LocalStore
+
+        return run_close(period=periods[index - 1], documents=documents,
+                         company=COMPANY, store=LocalStore(),
+                         raw_texts=raw).statements
+
+    fields = {f: stored["statements"].get(f) for f in Statements.__dataclass_fields__}
+    return Statements(**fields)
 
 
 @app.get("/api/health")

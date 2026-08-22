@@ -138,7 +138,9 @@ def test_a_corrective_document_is_written_for_every_actionable_finding(documents
     actionable = [f for f in result.findings if f.actionable and f.amount > 0]
 
     assert len(result.drafts) == len(actionable) == 5
-    assert result.recoverable == 5_512.85
+    assert result.leakage == 612.85          # what would have been lost
+    assert result.outstanding == 4_900.00    # owed already, not found
+    assert result.undocumented == 1_865.00   # recovers nothing
 
 
 def test_each_draft_names_a_real_counterparty_not_a_reference(documents):

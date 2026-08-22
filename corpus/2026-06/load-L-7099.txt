@@ -1,0 +1,14 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7099
+Date: 2026-06-22
+Broker: Midwest Freight Exchange
+Carrier Unit: T-103
+Origin: Wichita KS
+Destination: Tulsa OK
+Miles: 640
+Linehaul Rate: 1,340.00
+Accessorial: 0.00
+Total Payable: 1,340.00

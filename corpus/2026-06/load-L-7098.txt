@@ -1,0 +1,14 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7098
+Date: 2026-06-18
+Broker: Midwest Freight Exchange
+Carrier Unit: T-102
+Origin: Little Rock AR
+Destination: Jackson MS
+Miles: 1010
+Linehaul Rate: 2,180.00
+Accessorial: 0.00
+Total Payable: 2,180.00

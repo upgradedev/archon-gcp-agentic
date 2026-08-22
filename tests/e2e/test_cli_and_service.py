@@ -82,7 +82,8 @@ def test_closing_a_period_over_the_api_returns_the_whole_run(client):
     assert body["outcome"] == "closed"
     assert len(body["journal"]["steps"]) == 11
     assert len(body["findings"]) == 10
-    assert body["recoverable"] == 5512.85
+    assert body["leakage"] == 612.85
+    assert body["outstanding"] == 4900.00
 
 
 def test_reading_a_period_serves_a_close_even_on_a_cold_container(client):

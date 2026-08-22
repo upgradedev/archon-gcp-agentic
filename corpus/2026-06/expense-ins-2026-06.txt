@@ -1,0 +1,10 @@
+CORNERSTONE MOTOR CARRIER INSURANCE
+INVOICE
+
+Document Type: Insurance Invoice
+Invoice Number: INS-2026-06
+Date: 2026-06-01
+Supplier: Cornerstone Motor Carrier Insurance
+Net Amount: 2,150.00
+Tax: 172.00
+Total: 2,322.00

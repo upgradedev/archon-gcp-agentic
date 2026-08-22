@@ -1,0 +1,14 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7100
+Date: 2026-06-26
+Broker: Midwest Freight Exchange
+Carrier Unit: T-101
+Origin: Louisville KY
+Destination: Kansas City MO
+Miles: 1150
+Linehaul Rate: 2,400.00
+Accessorial: 0.00
+Total Payable: 2,400.00
