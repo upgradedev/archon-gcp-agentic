@@ -153,7 +153,10 @@ def test_the_owners_letter_is_shown_and_the_brokers_letters_are_not_sent(page, b
     page.locator("#run").click()
     expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
-    expect(page.locator("#digest")).to_contain_text("is recoverable, 5 letters ready")
+    # The subject says what was leaking, not what is "recoverable". That
+    # wording changed when the money language was corrected, and this
+    # assertion had been left behind pointing at the old, inflated claim.
+    expect(page.locator("#digest")).to_contain_text("was quietly leaking, 5 letters ready")
     expect(page.locator("#digest")).to_contain_text("WHAT I NEED FROM YOU")
 
     drafts = page.locator("#drafts .draft")
