@@ -37,6 +37,10 @@ EXPECTED_BEATS = ["hook", "surface", "trigger", "live", "sponsor", "evidence", "
 
 VIEWPORT = {"width": 1920, "height": 1080}
 
+#: Seconds of still page after the last beat. Covers the trim lead and
+#: encoder rounding, so -shortest never clips the ending.
+TAIL_SECONDS = 4.0
+
 
 def _fail(message: str) -> None:
     raise SystemExit(message)
@@ -160,6 +164,20 @@ def main() -> int:
             page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
 
         hold("close", ending)
+
+        # A tail, and it is not decoration.
+        #
+        # The composer runs ffmpeg with -shortest, so if the capture is even a
+        # fraction shorter than the trim lead plus the narration, the last beat
+        # is cut off BOTH streams. The first real run missed by 0.104 seconds:
+        # the holds sum to exactly the narration length, leaving nothing for
+        # encoder rounding.
+        #
+        # The gate's own words were "record a longer capture, do not widen this
+        # tolerance", which is the right instruction. So the capture now ends
+        # with the page sitting still for a moment, which is also how a take
+        # should end rather than cutting on the last syllable.
+        page.wait_for_timeout(TAIL_SECONDS * 1000)
 
         trim_lead = max(0.0, timeline_started - capture_started)
         video = page.video
