@@ -16,15 +16,17 @@ from archon.domain.trends import MATERIAL_PCT, compare, narrate
 
 
 def month(period: str, **overrides) -> Statements:
-    base = dict(
-        period=period, revenue_linehaul=10_000.0, revenue_accessorial=0.0,
-        revenue=10_000.0, fuel=3_000.0, tolls=200.0, maintenance=500.0,
-        insurance=1_000.0, driver_pay=3_000.0, factoring_fees=300.0,
-        operating_expenses=8_000.0, net_profit=2_000.0, cash_in=9_000.0,
-        cash_out=8_000.0, net_cash=1_000.0, accounts_receivable=0.0,
-        accounts_payable=0.0, total_miles=5_000.0, cost_per_mile=1.6,
-        revenue_per_mile=2.0,
-    )
+    base = {
+        "period": period, "revenue_linehaul": 10_000.0,
+        "revenue_accessorial": 0.0, "revenue": 10_000.0, "fuel": 3_000.0,
+        "tolls": 200.0, "maintenance": 500.0, "insurance": 1_000.0,
+        "driver_pay": 3_000.0, "factoring_fees": 300.0,
+        "operating_expenses": 8_000.0, "net_profit": 2_000.0,
+        "cash_in": 9_000.0, "cash_out": 8_000.0, "net_cash": 1_000.0,
+        "accounts_receivable": 0.0, "accounts_payable": 0.0,
+        "total_miles": 5_000.0, "cost_per_mile": 1.6,
+        "revenue_per_mile": 2.0,
+    }
     base.update(overrides)
     return Statements(**base)
 
