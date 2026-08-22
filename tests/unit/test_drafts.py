@@ -1,7 +1,15 @@
 """The corrective documents, and the rule that none of them is ever sent."""
 from __future__ import annotations
 
-from archon.domain.drafts import DRAFT_FOR_FINDING, draft_all, draft_for, recoverable
+from archon.domain.drafts import (
+    DRAFT_FOR_FINDING,
+    draft_all,
+    draft_for,
+    leakage,
+    outstanding,
+    recoverable,
+    undocumented,
+)
 from archon.domain.models import ACTIONABLE_KINDS, DraftKind, ExceptionKind, Finding
 
 
@@ -72,13 +80,31 @@ def test_no_send_path_exists_in_the_drafts_module():
     assert not [name for name in dir(module) if "send" in name.lower()]
 
 
-def test_recoverable_counts_only_what_asks_for_money_back():
+def test_the_three_figures_are_kept_apart():
+    """They used to be added together, and the total read as money found.
+
+    A receivable the broker has not paid is not a discovery: an invoice ledger
+    shows it without any agent. Blending it with a genuine leak overstated the
+    bundled month by nine times.
+    """
     drafts = draft_all([
-        finding(ExceptionKind.PAYMENT_WITHOUT_DOCUMENT, 1000.0),   # recovers nothing
+        finding(ExceptionKind.PAYMENT_WITHOUT_DOCUMENT, 1000.0),
         finding(ExceptionKind.SHORT_PAY, 200.0),
+        finding(ExceptionKind.DUPLICATE_CHARGE, 50.0),
         finding(ExceptionKind.LOAD_UNPAID, 2780.0),
     ])
-    assert recoverable(drafts) == 2980.0
+
+    assert leakage(drafts) == 250.0        # only what would have been lost
+    assert outstanding(drafts) == 2780.0   # owed already
+    assert undocumented(drafts) == 1000.0  # recovers nothing at all
+
+
+def test_recoverable_no_longer_counts_receivables():
+    """The name is kept for the API shape; the meaning is now leakage only."""
+    drafts = draft_all([finding(ExceptionKind.SHORT_PAY, 200.0),
+                        finding(ExceptionKind.LOAD_UNPAID, 2780.0)])
+
+    assert recoverable(drafts) == leakage(drafts) == 200.0
 
 
 def test_the_company_name_signs_every_draft():

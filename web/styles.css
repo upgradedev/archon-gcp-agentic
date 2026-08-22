@@ -156,3 +156,4 @@
      real browser blocked these. */
   .alloc-head { background: var(--card-hi); }
   .sub.tight { margin-top: 12px; }
+  .scroll.spaced { margin-top: 14px; }

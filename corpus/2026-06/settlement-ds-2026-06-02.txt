@@ -1,0 +1,12 @@
+BELL RIDGE HAULAGE
+DRIVER SETTLEMENT
+
+Document Type: Driver Settlement
+Settlement Number: DS-2026-06-02
+Date: 2026-06-30
+Driver: Driver 2
+Unit: T-102
+Gross Pay: 2,440.60
+Tax Withheld: 439.31
+Other Deductions: 97.62
+Net Pay: 1,903.67

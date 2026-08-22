@@ -1,0 +1,9 @@
+FIRST PLAINS BANK
+ACCOUNT ACTIVITY
+
+Document Type: Bank Transaction
+Date: 2026-06-16
+Direction: out
+Amount: 1,015.20
+Reference: MNT-5470
+Paid To: Kellner Truck Service

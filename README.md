@@ -32,6 +32,7 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 - [What Google is doing here](#what-google-is-doing-here)
 - [The books are computed, never phrased](#the-books-are-computed-never-phrased)
 - [Tests and evidence](#tests-and-evidence)
+- [Who owes whom, and which way it is going](#who-owes-whom-and-which-way-it-is-going)
 - [The trigger, fired on the live deployment](#the-trigger-fired-on-the-live-deployment)
 - [Deploy it](#deploy-it)
 - [Pre-existing components](#pre-existing-components)
@@ -74,15 +75,28 @@ Then it emails the owner. That last step matters more than it looks. A haulier
 does not open a bookkeeping console on the first of the month, because a haulier
 is driving. If the answer only exists on a page we built, the agent worked all
 night for nobody. So the month arrives where they already read their mail: what
-the firm made, what is still recoverable and from whom, and what Archon already
-did about it.
+the firm made, what is at stake and of what kind, and what Archon already did
+about it.
 
-On the July it ships with, that is 23,005.00 billed over 10,810 miles against
-21,010.76 spent. A margin of 0.184 a mile. And 5,512.85 sitting in five letters
-it wrote: a broker that quietly paid 200.00 light on one load, a truck stop that
-charged the same 412.85 twice in three days, two loads no remittance ever touched,
-and 1,865.00 that left the account with no invoice behind it. On that margin, the
-5,512.85 matters more than the profit does.
+**This product does not make anyone money.** It does not win work, raise rates or
+cut costs. It removes the hours a month-end takes, and it catches the small
+things that leak away when nobody has those hours. Being precise about that is
+the difference between a tool and a pitch.
+
+On the July it ships with: 23,005.00 billed over 10,810 miles against 21,010.76
+spent, a margin of 0.184 a mile. The five letters it wrote break into three
+different things, and they are reported separately because adding them up
+produces a number that flatters us:
+
+| | | |
+|---|---|---|
+| **612.85** | leaking away quietly | a broker that paid 200.00 light on one load without saying so, and a truck stop that charged the same 412.85 twice in three days. **This is the only figure the agent can be said to have found.** Nobody was going to notice either one |
+| 4,900.00 | invoiced and unpaid | two loads no remittance has touched. Owed already. An invoice ledger shows this without any agent, so chasing it is useful work and not a discovery |
+| 1,865.00 | spent with no paperwork | money already gone, with no invoice behind it. Recovers nothing at all. It is a tax-deductibility and completeness problem |
+
+An earlier version of this README added those to 5,512.85 and called the total
+recoverable. That was a nine-fold overstatement and it is recorded here rather
+than quietly corrected.
 
 The letters to brokers and suppliers are written, costed and filed unsent. That is
 the one thing a person does, and it is deliberate: every step Archon takes can be
@@ -112,7 +126,8 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
 1. takes in 27 artifacts and classifies each one
 2. posts the double-entry journal
 3. **splits one broker remittance across the eight loads it settles, net of the factoring fee**
-4. reconciles which loads got paid and which did not
+4. reconciles which loads got paid and which did not, and builds the **open
+   items register**: who owes the firm, who the firm owes, and how old each is
 5. triages what is missing or contradictory, worst first
 6. **decides what to do about each one**: chase it, put it in front of the owner,
    or note it. This is the agent's own judgement, and every choice is checked
@@ -214,7 +229,8 @@ Over the bundled month, `python run.py`:
  + 5. Find what is missing or does not add up
      10 exception(s), 3 of them errors, 2,477.85 at stake
  + 6. Write the corrective documents
-     5 document(s) drafted and filed unsent, chasing 5,512.85
+     5 document(s) drafted and filed unsent: 612.85 that would have leaked
+     away, 4,900.00 already owed and unpaid; 2 put in front of the owner instead
  + 7. Check the close against its own gates
      5/5 gates passed
  + 8. Write the month-end summary
@@ -222,7 +238,7 @@ Over the bundled month, `python run.py`:
  + 9. File the close and mark the period
      period 2026-07 marked closed
  + 10. Write the owner their month-end letter
-     "2026-07 closed. 5,512.85 is recoverable, 5 letters ready" -> composed for
+     "2026-07 closed. 612.85 was quietly leaking, 5 letters ready" -> composed for
      owner@bellridgehaulage.example and filed; no channel is configured, so
      nothing left this machine
  = closed
@@ -230,8 +246,8 @@ Over the bundled month, `python run.py`:
 
 The month it found: 23,005.00 billed over 10,810 miles, 21,010.76 spent,
 1,994.24 of profit. That is 2.128 a mile earned against 1.944 a mile spent, and
-the 0.184 a mile left over is why the 5,512.85 sitting in those five letters
-matters more than the profit does.
+the 0.184 a mile left over is why the 612.85 that was quietly leaking matters
+at all. On a fatter margin it would be noise.
 
 ### The nine things it looks for
 
@@ -476,7 +492,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 372 | `python -m pytest` |
+| Tests, all offline | 409 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -499,6 +515,47 @@ the same run, and that the agent path and the deterministic path agree exactly.
 
 Each of the five gates is broken on purpose, once, and asserted red. A gate
 nobody has watched fail is a gate nobody should believe.
+
+## Who owes whom, and which way it is going
+
+Two things an owner opens before anything else, and neither existed until a
+reader pointed out that the product was reporting a single receivables total.
+
+**The open items register.** A total tells you the size of the problem and
+nothing about its shape, and a total cannot be chased. The register names the
+counterparty, the reference, what is still open and how old it is.
+
+Two decisions in it are worth stating, because both are places a simpler
+implementation quietly loses money:
+
+- **A load paid short leaves the difference open.** Load L-7105 was invoiced at
+  2,460 and the broker paid 2,260. Money arrived, so a naive reconciliation
+  marks it settled and the 200 vanishes. Here it stays open, listed, and aged.
+- **Age is measured to the end of the period being closed, never to today.** A
+  close is a statement about a month. Re-running last July in December must not
+  age everything by five months, or the same run gives two answers.
+
+**Period over period.** One closed month says what happened; it never says
+whether things are getting better. Two do:
+
+```
+Against 2026-06: fuel up 139%, maintenance up 124%, factoring fees up 58%.
+The margin widened to 0.184 a mile, from 0.181.
+```
+
+Direction is not just a sign. Fuel rising is **worse** and revenue rising is
+**better**, and a comparison that treats them the same is how a dashboard
+congratulates a firm for burning more diesel. Anything under 2% is reported as
+flat rather than dressed up as an improvement.
+
+Both are pure functions over figures the ledger already produced. Neither
+recomputes a total, because a second source of truth for one number is how a
+product ends up contradicting itself on two screens.
+
+The repository ships **two months** so the comparison is real rather than
+hypothetical. June also contains load L-7099, which is the load July's
+remittance pays for and cannot find: the reason that exception exists is in the
+data rather than in a comment.
 
 ## The trigger, fired on the live deployment
 

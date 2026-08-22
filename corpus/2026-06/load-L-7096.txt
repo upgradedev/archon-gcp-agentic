@@ -1,0 +1,14 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7096
+Date: 2026-06-10
+Broker: Midwest Freight Exchange
+Carrier Unit: T-103
+Origin: Denver CO
+Destination: Wichita KS
+Miles: 1420
+Linehaul Rate: 2,960.00
+Accessorial: 120.00
+Total Payable: 3,080.00

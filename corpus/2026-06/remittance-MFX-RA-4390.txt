@@ -1,0 +1,17 @@
+MIDWEST FREIGHT EXCHANGE
+REMITTANCE ADVICE
+
+Document Type: Broker Remittance
+Remittance Number: MFX-RA-4390
+Date: 2026-06-25
+Broker: Midwest Freight Exchange
+Loads Settled: 5
+Factoring Fee: 366.60
+Amount Credited: 11,853.40
+
+LOAD LINES
+Load L-7094  Gross 2,680.00  Deduction 0.00  Reason -
+Load L-7095  Gross 2,450.00  Deduction 0.00  Reason -
+Load L-7096  Gross 3,080.00  Deduction 0.00  Reason -
+Load L-7097  Gross 1,830.00  Deduction 0.00  Reason -
+Load L-7098  Gross 2,180.00  Deduction 0.00  Reason -

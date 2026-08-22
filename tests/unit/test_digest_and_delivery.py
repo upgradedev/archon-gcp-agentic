@@ -34,7 +34,7 @@ def test_the_subject_carries_the_number_that_decides_whether_it_is_read(document
     result = close(documents)
 
     assert result.digest.subject == (
-        "2026-07 closed. 5,512.85 is recoverable, 5 letters ready"
+        "2026-07 closed. 612.85 was quietly leaking, 5 letters ready"
     )
 
 
@@ -77,13 +77,13 @@ def test_the_letter_stops_listing_and_says_how_many_it_did_not_list(documents):
     assert "and 2 more, all in the app." in body
 
 
-def test_recoverable_money_is_kept_apart_from_documentation_requests(documents):
-    """The listed amounts total more than the recoverable figure. Printing the
-    two next to each other without saying so reads as an arithmetic error."""
+def test_the_letter_separates_a_leak_from_a_receivable(documents):
+    """One blended total made the product look nine times better than it is."""
     body = close(documents).digest.body
 
-    assert "Money these can actually recover: 5,512.85" in body
-    assert "A further 1,865.00 is documentation I asked for" in body
+    assert "612.85" in body and "was leaking away quietly" in body
+    assert "4,900.00" in body and "nobody has paid" in body
+    assert "1,865.00" in body and "Recovers nothing" in body
 
 
 def test_every_figure_in_the_letter_came_from_the_close_that_produced_it(documents):

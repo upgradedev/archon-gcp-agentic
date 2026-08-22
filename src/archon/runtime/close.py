@@ -47,6 +47,8 @@ from ..domain import digest as digest_mod
 from ..domain import drafts as drafts_mod
 from ..domain import exceptions as exceptions_mod
 from ..domain import policy as policy_mod
+from ..domain import register as register_mod
+from ..domain import trends as trends_mod
 from ..domain import validation as validation_mod
 from ..domain.digest import Digest
 from ..domain.ledger import Ledger
@@ -61,6 +63,8 @@ from ..domain.models import (
 )
 from ..domain.narrator import facts_sheet, narrate
 from ..domain.policy import Decision, Disposition
+from ..domain.register import Register
+from ..domain.trends import Comparison
 from .journal import Clock, RunJournal
 
 #: A narrator takes the fact sheet and returns English. The default is the
@@ -98,6 +102,8 @@ class CloseResult:
     ledger: Ledger
     decisions: list[Decision] = field(default_factory=list)
     outcome_reason: str = ""
+    register: Register | None = None
+    comparison: Comparison | None = None
     digest: Digest | None = None
     receipt: Receipt | None = None
     stored: dict = field(default_factory=dict)
@@ -107,9 +113,24 @@ class CloseResult:
         return self.outcome == "closed"
 
     @property
+    def leakage(self) -> float:
+        """Money that would have been lost quietly. The honest headline."""
+        return drafts_mod.leakage(self.drafts)
+
+    @property
+    def outstanding(self) -> float:
+        """Invoiced work nobody has paid yet. Owed, not found."""
+        return drafts_mod.outstanding(self.drafts)
+
+    @property
+    def undocumented(self) -> float:
+        """Spending with no paperwork behind it. Recovers nothing."""
+        return drafts_mod.undocumented(self.drafts)
+
+    @property
     def recoverable(self) -> float:
-        """Money the filed drafts are chasing back."""
-        return drafts_mod.recoverable(self.drafts)
+        """Equal to `leakage`. Kept so the API shape does not break."""
+        return self.leakage
 
     def to_dict(self) -> dict:
         """The shape the API serves and the browser renders."""
@@ -145,7 +166,15 @@ class CloseResult:
                 for d in self.decisions
             ],
             "outcome_reason": self.outcome_reason,
+            "register": self.register.to_dict() if self.register else None,
+            "comparison": self.comparison.to_dict() if self.comparison else None,
+            "trend_summary": (
+                trends_mod.narrate(self.comparison) if self.comparison else ""
+            ),
             "journal": self.journal.to_dict(),
+            "leakage": self.leakage,
+            "outstanding": self.outstanding,
+            "undocumented": self.undocumented,
             "recoverable": self.recoverable,
             "digest": self.digest.to_dict() if self.digest else None,
             "receipt": self.receipt.to_dict() if self.receipt else None,
@@ -179,7 +208,8 @@ def run_close(period: str,
               raw_texts: dict[str, str] | None = None,
               deliverer: Deliverer | None = None,
               owner_email: str | None = None,
-              decider: Decider | None = None) -> CloseResult:
+              decider: Decider | None = None,
+              previous: Statements | None = None) -> CloseResult:
     """Close one period. Returns even when it fails; read `outcome`.
 
     Raising on a bad month would be the wrong shape. A close that hits a
@@ -236,9 +266,14 @@ def run_close(period: str,
         settled = allocation_mod.settled_load_refs(results)
         outstanding = allocation_mod.unsettled_loads(documents, results)
         loads = len(allocation_mod.loads_by_ref(documents))
+        open_items = register_mod.build(documents, results, period)
         step.note(
-            f"{len(settled)} of {loads} loads settled, {len(outstanding)} still outstanding",
+            f"{len(settled)} of {loads} loads settled, {len(outstanding)} still "
+            f"outstanding; {open_items.owed_to_us:,.2f} owed to the firm across "
+            f"{len(open_items.receivables)} item(s), {open_items.owed_by_us:,.2f} owed "
+            f"by it across {len(open_items.payables)}",
             loads=loads, settled=len(settled), outstanding=len(outstanding),
+            owed_to_us=open_items.owed_to_us, owed_by_us=open_items.owed_by_us,
         )
 
     # 5. Triage. Nine detectors, ranked worst-first by severity then money.
@@ -282,11 +317,12 @@ def run_close(period: str,
         filed = drafts_mod.draft_for_decisions(decisions, company or "Accounts")
         escalated = [d for d in decisions if d.applied is Disposition.ESCALATE]
         step.note(
-            f"{len(filed)} document(s) drafted and filed unsent, chasing "
-            f"{drafts_mod.recoverable(filed):,.2f}; "
+            f"{len(filed)} document(s) drafted and filed unsent: "
+            f"{drafts_mod.leakage(filed):,.2f} that would have leaked away, "
+            f"{drafts_mod.outstanding(filed):,.2f} already owed and unpaid; "
             f"{len(escalated)} put in front of the owner instead",
-            drafts=len(filed), recoverable=drafts_mod.recoverable(filed),
-            escalated=len(escalated),
+            drafts=len(filed), leakage=drafts_mod.leakage(filed),
+            outstanding=drafts_mod.outstanding(filed), escalated=len(escalated),
         )
 
     # 7. Verify. The close checks its own work before it claims to be finished.
@@ -305,7 +341,10 @@ def run_close(period: str,
     # 8. Report. The only step a model touches, and it is handed text.
     statements = ledger.statements()
     with run.step("report", "Write the month-end summary") as step:
+        comparison = trends_mod.compare(previous, statements) if previous else None
         facts = facts_sheet(statements, findings, gates, filed)
+        if comparison is not None:
+            facts += "\n\nAGAINST THE MONTH BEFORE\n  " + trends_mod.narrate(comparison)
         deterministic = narrate(statements, findings, gates, filed)
         summary = deterministic
         source = "deterministic"
@@ -334,7 +373,8 @@ def run_close(period: str,
             statements=statements, allocations=results, findings=findings,
             gates=gates, drafts=filed, summary=summary, facts=facts,
             journal=run, ledger=ledger, decisions=decisions,
-            outcome_reason=outcome_reason,
+            outcome_reason=outcome_reason, register=open_items,
+            comparison=comparison,
         )
         stored["close"] = store.save_close(company, period, result.to_dict())
         stored["drafts"] = store.save_drafts(run.run_id, filed)

@@ -44,6 +44,8 @@ function render(d) {
   renderStats(d);
   $("summary").textContent = d.summary;
   renderAlloc(d.allocations);
+  renderRegister(d.register);
+  renderTrends(d.comparison, d.trend_summary);
   renderFindings(d.findings);
   renderDigest(d.digest, d.receipt);
   renderDrafts(d.drafts);
@@ -78,7 +80,8 @@ function renderStats(d) {
      `${num(s.revenue_per_mile, 3)} earned, ${num(s.cost_per_mile, 3)} spent`],
     ["Miles run", num(s.total_miles), `${Object.keys(s.per_truck).length} trucks`],
     ["Exceptions", String(d.findings.length), `${errs} of them errors`],
-    ["Being chased", usd(d.recoverable), `${d.drafts.length} letters filed, none sent`],
+    ["Leaking away", usd(d.leakage), "money nobody would have caught"],
+    ["Invoiced, unpaid", usd(d.outstanding), "owed already, now chased"],
     ["Close", words(d.outcome), `${d.gates.filter((g) => g.passed).length}/${d.gates.length} gates passed`],
   ];
   $("stats").innerHTML = cards.map(([k, v, sub]) =>
@@ -178,3 +181,68 @@ fetch(`/api/close/${PERIOD}`).then((r) => r.ok ? r.json() : null).then((d) => {
   if (d && !last) { last = d; render(d); $("status").textContent =
     `last run ${d.run_id} · ${d.outcome}. Press the button to watch it run again.`; }
 }).catch(() => {});
+
+// The open items, both directions. Ageing is measured to the end of the period
+// being closed, never to today, so re-running an old month gives the same answer.
+function renderRegister(reg) {
+  if (!reg) return;
+  $("register-totals").innerHTML = [
+    ["Owed to the firm", usd(reg.owed_to_us), `${reg.receivables.length} open item(s)`],
+    ["Owed by the firm", usd(reg.owed_by_us), `${reg.payables.length} open item(s)`],
+    ["Net position", usd(reg.net_position),
+     reg.net_position >= 0 ? "more coming in than going out" : "more going out than coming in"],
+  ].map(([k, v, sub]) =>
+    `<div class="card"><div class="k">${esc(k)}</div><div class="v num">${esc(v)}</div>
+     <div class="s">${esc(sub)}</div></div>`).join("");
+
+  const section = (title, items) => {
+    if (!items.length) return "";
+    const head = `<tr><td colspan="6" class="alloc-head"><b>${esc(title)}</b></td></tr>`;
+    return head + items.map((i) => `<tr>
+      <td>${esc(i.counterparty)}</td>
+      <td>${esc(i.reference)}</td>
+      <td class="r num">${usd(i.invoiced)}</td>
+      <td class="r num">${i.paid ? usd(i.paid) : "–"}</td>
+      <td class="r num">${usd(i.open_amount)}</td>
+      <td><span class="pill ${i.bucket === "current" ? "ok" : (i.bucket === "undated" ? "info" : "warn")}">${esc(i.bucket)}</span>
+          <span class="muted">${esc(i.note)}</span></td>
+    </tr>`).join("");
+  };
+
+  $("register").innerHTML = `<thead><tr>
+    <th>Counterparty</th><th>Reference</th><th class="r">Invoiced</th>
+    <th class="r">Paid</th><th class="r">Still open</th><th>Age</th>
+  </tr></thead><tbody>
+    ${section("Owed to the firm", reg.receivables)}
+    ${section("Owed by the firm", reg.payables)}
+  </tbody>`;
+}
+
+// Fuel going up is worse; revenue going up is better. Getting that backwards is
+// how a dashboard congratulates a firm for burning more diesel.
+function renderTrends(comparison, line) {
+  if (!comparison) {
+    $("trend-line").textContent =
+      "No earlier month has been closed yet, so there is nothing to compare against.";
+    $("trends").innerHTML = "";
+    return;
+  }
+  $("trend-line").textContent = line || "";
+
+  const arrow = (m) => m.change === null ? "" : (m.change > 0 ? "▲" : (m.change < 0 ? "▼" : ""));
+  const tone = { better: "ok", worse: "err", flat: "info", unknown: "info" };
+  const fmt = (m, v) => v === null || v === undefined ? "–"
+    : (m.unit === "money" ? usd(v) : (m.unit === "rate" ? num(v, 3) : num(v)));
+
+  $("trends").innerHTML = `<thead><tr>
+    <th>Metric</th><th class="r">${esc(comparison.previous_period)}</th>
+    <th class="r">${esc(comparison.current_period)}</th>
+    <th class="r">Change</th><th>Direction</th>
+  </tr></thead><tbody>${comparison.movements.map((m) => `<tr>
+    <td>${esc(m.label)}</td>
+    <td class="r num">${fmt(m, m.previous)}</td>
+    <td class="r num">${fmt(m, m.current)}</td>
+    <td class="r num">${m.change_pct === null ? "–" : `${arrow(m)} ${Math.abs(m.change_pct).toFixed(1)}%`}</td>
+    <td><span class="pill ${tone[m.direction]}">${esc(m.direction)}</span></td>
+  </tr>`).join("")}</tbody>`;
+}

@@ -1,0 +1,9 @@
+FIRST PLAINS BANK
+ACCOUNT ACTIVITY
+
+Document Type: Bank Transaction
+Date: 2026-06-05
+Direction: out
+Amount: 2,322.00
+Reference: INS-2026-06
+Paid To: Cornerstone Motor Carrier Insurance

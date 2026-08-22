@@ -144,16 +144,50 @@ def draft_all(findings: list[Finding], company: str = "Accounts") -> list[Draft]
     return [d for d in drafts if d is not None]
 
 
-def recoverable(drafts: list[Draft]) -> float:
-    """Money the filed drafts are chasing.
+#: Money that would have been lost quietly. A silent short pay and a duplicate
+#: charge are leaks: nobody was going to notice them, and without the close they
+#: stay lost. This is the only figure that represents money the product FOUND.
+LEAKS = (DraftKind.SHORT_PAY_DISPUTE, DraftKind.DUPLICATE_REFUND)
 
-    Only the kinds that ask for money back count. A document request recovers
-    nothing; it makes the books complete, which is worth doing and is not worth
-    overstating as a recovery.
+#: Money already owed, already invoiced, and simply not paid yet. Chasing it is
+#: useful work and it is NOT a discovery: an invoice ledger shows an open
+#: receivable without any agent at all.
+OUTSTANDING = (DraftKind.PAYMENT_REMINDER,)
+
+#: Spending with no paperwork behind it. Recovers nothing at all. It is a
+#: completeness and tax-deductibility problem, not a cash one.
+UNDOCUMENTED = (DraftKind.DOCUMENT_REQUEST,)
+
+
+def leakage(drafts: list[Draft]) -> float:
+    """Money that would otherwise have been lost without anyone noticing.
+
+    This is the honest headline, and it is much smaller than the total the
+    letters add up to. Reporting the sum of every letter as "recoverable" was
+    an eightfold overstatement on the bundled month: it counted receivables the
+    broker was always going to pay as though the agent had found them.
     """
-    chasing = (DraftKind.SHORT_PAY_DISPUTE, DraftKind.DUPLICATE_REFUND,
-               DraftKind.PAYMENT_REMINDER)
-    return round(sum(d.amount for d in drafts if d.kind in chasing), 2)
+    return round(sum(d.amount for d in drafts if d.kind in LEAKS), 2)
+
+
+def outstanding(drafts: list[Draft]) -> float:
+    """Invoiced work nobody has paid yet. Owed, not found."""
+    return round(sum(d.amount for d in drafts if d.kind in OUTSTANDING), 2)
+
+
+def undocumented(drafts: list[Draft]) -> float:
+    """Money already spent with no document behind it. Recovers nothing."""
+    return round(sum(d.amount for d in drafts if d.kind in UNDOCUMENTED), 2)
+
+
+def recoverable(drafts: list[Draft]) -> float:
+    """Kept for the API shape, and deliberately equal to `leakage`.
+
+    It used to include receivables, which made it read as money found. It does
+    not any more. Prefer the three named figures: they say different things and
+    a reader deserves to know which is which.
+    """
+    return leakage(drafts)
 
 
 def draft_for_decisions(decisions, company: str = "Accounts") -> list[Draft]:

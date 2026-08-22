@@ -1,0 +1,14 @@
+MIDWEST FREIGHT EXCHANGE
+RATE CONFIRMATION
+
+Document Type: Load Confirmation
+Load Number: L-7094
+Date: 2026-06-03
+Broker: Midwest Freight Exchange
+Carrier Unit: T-101
+Origin: Kansas City MO
+Destination: Indianapolis IN
+Miles: 1290
+Linehaul Rate: 2,680.00
+Accessorial: 0.00
+Total Payable: 2,680.00
