@@ -36,7 +36,9 @@ if [[ "${ACTION}" == "destroy" ]]; then
   # Teardown is a first-class path, not an afterthought. D2 asks for one
   # pipeline that deploys from nothing and removes everything again, and a
   # teardown nobody has run is a teardown that does not work.
-  terraform -chdir="${REPO_ROOT}/infra" init -input=false
+  terraform -chdir="${REPO_ROOT}/infra" init -input=false \
+    -backend-config="bucket=${PROJECT_ID}-tfstate" \
+    -backend-config="prefix=${SERVICE}"
   terraform -chdir="${REPO_ROOT}/infra" destroy -auto-approve \
     -var "project_id=${PROJECT_ID}" \
     -var "region=${REGION}" \
@@ -54,7 +56,9 @@ echo "==> building the image"
 gcloud builds submit "${REPO_ROOT}" --tag "${IMAGE}"
 
 echo "==> applying infra/main.tf"
-terraform -chdir="${REPO_ROOT}/infra" init -input=false
+terraform -chdir="${REPO_ROOT}/infra" init -input=false \
+    -backend-config="bucket=${PROJECT_ID}-tfstate" \
+    -backend-config="prefix=${SERVICE}"
 terraform -chdir="${REPO_ROOT}/infra" apply -auto-approve \
   -var "project_id=${PROJECT_ID}" \
   -var "region=${REGION}" \

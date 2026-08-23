@@ -80,6 +80,26 @@ steps:
         docker push "$$IMAGE"
         echo "$$IMAGE" > /workspace/image.txt
 
+  # State for THIS project, in THIS project.
+  #
+  # `infra/main.tf` declares `backend "gcs" {}` with nothing in it, on purpose:
+  # a bucket named in that file would be shared by every caller of the
+  # directory, and this pipeline's whole job is to destroy what it built. It
+  # would have destroyed the production state object along with its own.
+  - id: state-bucket
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        BUCKET="gs://${_TF_PROJECT}-tfstate"
+        if ! gcloud storage buckets describe "$$BUCKET" --project "${_TF_PROJECT}" >/dev/null 2>&1; then
+          gcloud storage buckets create "$$BUCKET" --project "${_TF_PROJECT}"             --location="${_REGION}" --uniform-bucket-level-access
+          gcloud storage buckets update "$$BUCKET" --versioning --project "${_TF_PROJECT}"
+        fi
+        echo "state in $$BUCKET"
+
   - id: terraform
     name: hashicorp/terraform:1.9
     entrypoint: sh
@@ -91,7 +111,7 @@ steps:
         IMAGE="$$(cat /workspace/image.txt)"
         VARS="-var project_id=${_TF_PROJECT} -var region=${_REGION} -var image=$$IMAGE"
 
-        terraform init -input=false
+        terraform init -input=false \n          -backend-config="bucket=${_TF_PROJECT}-tfstate" \n          -backend-config="prefix=${_SERVICE}"
 
         case "${_ACTION}" in
           plan)

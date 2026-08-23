@@ -497,7 +497,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 437 | `python -m pytest` |
+| Tests, all offline | 441 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -629,6 +629,14 @@ exists in a repository secret. The trust is created once:
 That prints two repository variables to set. Until they are set the deploy job
 fails loudly rather than skipping, because a deploy that quietly does nothing
 reports a green tick over a service nobody updated.
+
+Run it in `plan` mode once before letting it apply. No non-targeted apply of
+`infra/main.tf` has ever completed from anywhere, and the first one should not
+be discovered against the URL a judge opens:
+
+```bash
+gh workflow run Deploy -f mode=plan
+```
 
 Terraform state lives in a versioned bucket in the project it describes. It was
 a local file, which is precisely what stopped this being automatable: a pipeline
