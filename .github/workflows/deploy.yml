@@ -1,0 +1,151 @@
+# CD: main deploys itself, and only after CI has already gone green on it.
+#
+# ── why `workflow_run` and not `push` ───────────────────────────────────────
+#
+# A `push: branches: [main]` deploy races CI. Both start on the same commit and
+# the deploy usually wins, so a commit that fails its tests reaches production
+# and the red X arrives afterwards, next to a service already serving it. This
+# waits for the CI run to *finish* and refuses to move unless it succeeded.
+#
+# That is also why the checkout below pins `workflow_run.head_sha` rather than
+# taking the tip of main: by the time this starts, main may already carry a
+# newer commit whose CI has not finished. Deploying the tip would deploy an
+# untested commit through a gate designed to prevent exactly that.
+#
+# ── no key exists ───────────────────────────────────────────────────────────
+#
+# Authentication is workload identity federation: GitHub mints a short-lived
+# OIDC token for this specific run, Google trades it for an access token good
+# for an hour, and there is no long-lived credential in a repository secret to
+# leak or to rotate. `scripts/setup-cd.sh` creates that trust once, and the
+# condition on the provider restricts it to this repository. Read its header.
+#
+# ── terraform owns the infrastructure, this file does not ───────────────────
+#
+# The apply below is the whole deployment. Nothing here creates a resource with
+# a gcloud command, because a resource created by a pipeline step is a resource
+# nobody can review, reproduce or remove.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time, and never cancel one that is already running: a
+# terraform apply killed halfway leaves state describing a world that does not
+# exist. Queue instead.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write        # required to mint the OIDC token. Nothing else.
+
+env:
+  PROJECT_ID: upgradegr-archon-agentic
+  REGION: us-central1
+  SERVICE: archon
+
+jobs:
+  deploy:
+    name: Build, apply, verify
+    runs-on: ubuntu-latest
+    # A CI run that failed, was cancelled, or timed out must not deploy. The
+    # manual trigger carries no CI verdict, so it is allowed through on the
+    # explicit judgement of whoever pressed it.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: The commit this deploys
+        id: target
+        run: |
+          set -euo pipefail
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "short=${SHA:0:7}" >> "$GITHUB_OUTPUT"
+          echo "deploying ${SHA}"
+
+      # Configuration missing is a failure, not a skip. A deploy job that
+      # quietly does nothing reports success over a service nobody updated,
+      # which is the same fail-open shape that once let two red test runs
+      # through this repository's CI.
+      - name: Refuse to run unconfigured
+        run: |
+          set -euo pipefail
+          MISSING=0
+          [ -n "${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}" ] || { echo "::error::GCP_WORKLOAD_IDENTITY_PROVIDER is not set"; MISSING=1; }
+          [ -n "${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}" ]     || { echo "::error::GCP_DEPLOY_SERVICE_ACCOUNT is not set"; MISSING=1; }
+          if [ "$MISSING" -ne 0 ]; then
+            echo "::error::Run scripts/setup-cd.sh once, then set both repository variables."
+            exit 1
+          fi
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+
+      - name: Authenticate without a key
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@77e7a554d41e2ee56fc945c52dfd3f33d12def9a
+
+      - name: Build the image
+        run: |
+          set -euo pipefail
+          gcloud builds submit . \
+            --tag "gcr.io/${PROJECT_ID}/${SERVICE}:${{ steps.target.outputs.short }}" \
+            --project "${PROJECT_ID}"
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: Apply the infrastructure
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra init -input=false
+          terraform -chdir=infra apply -auto-approve -input=false \
+            -var "project_id=${PROJECT_ID}" \
+            -var "region=${REGION}" \
+            -var "service_name=${SERVICE}" \
+            -var "image=gcr.io/${PROJECT_ID}/${SERVICE}:${{ steps.target.outputs.short }}"
+
+      # A deploy that reports success without opening the page is a deploy that
+      # has proved nothing. `curl --fail` plus an explicit grep, because a 404
+      # body still greps false and a pipe still swallows an exit code.
+      - name: The judge's route actually serves
+        run: |
+          set -euo pipefail
+          URL="$(terraform -chdir=infra output -raw service_url)"
+          echo "service: ${URL}"
+
+          curl --fail --silent --show-error --retry 5 --retry-delay 6 \
+               --retry-all-errors "${URL}/" -o page.html
+          grep -q "closes the month while nobody is watching" page.html
+
+          # The console, not just the old page: eight sections and a switcher.
+          TABS="$(grep -oE 'data-panel="[a-z]+"' page.html | sort -u | wc -l)"
+          [ "${TABS}" -eq 8 ] || { echo "::error::expected 8 sections, found ${TABS}"; exit 1; }
+          grep -q 'id="period"' page.html
+
+          # The data plane, not a cached shell.
+          curl --fail --silent --show-error "${URL}/api/health" | tee health.json
+          echo
+          curl --fail --silent --show-error -X POST "${URL}/api/close/2026-07" \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["outcome"]=="closed", d["outcome"]; assert len(d["journal"]["steps"])==11, len(d["journal"]["steps"]); print("close ok:", d["run_id"])'
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+
+      - name: Readiness gate, against what is now live
+        run: python scripts/readiness.py

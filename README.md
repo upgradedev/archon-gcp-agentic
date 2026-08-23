@@ -497,7 +497,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 419 | `python -m pytest` |
+| Tests, all offline | 437 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -610,6 +610,29 @@ with nobody touching it:
 ```bash
 gcloud storage cp corpus/2026-07/remittance-MFX-RA-4417.txt gs://your-project-archon-mail/mail/2026-07/
 ```
+
+### Or let main deploy itself
+
+`.github/workflows/deploy.yml` is the pipeline. It waits for the CI run on a
+commit to *finish* and refuses to move unless it succeeded, then builds the
+image, applies `infra/main.tf`, opens the judge's page to check it serves the
+console rather than a stale shell, closes a real month against the deployed
+service, and runs the readiness gate against what is now live.
+
+It authenticates by workload identity federation, so no service account key
+exists in a repository secret. The trust is created once:
+
+```bash
+./scripts/setup-cd.sh
+```
+
+That prints two repository variables to set. Until they are set the deploy job
+fails loudly rather than skipping, because a deploy that quietly does nothing
+reports a green tick over a service nobody updated.
+
+Terraform state lives in a versioned bucket in the project it describes. It was
+a local file, which is precisely what stopped this being automatable: a pipeline
+cannot apply a plan it cannot read.
 
 ## Pre-existing components
 
