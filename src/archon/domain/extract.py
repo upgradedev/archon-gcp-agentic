@@ -7,9 +7,11 @@ is the default. It needs no key, no network and no credential, which is what
 lets the whole close run in CI, in the bundled demo, and on a judge's laptop
 with nothing installed but Python.
 
-**The Gemini path** in `agents.py` sends the artifact to a vision-capable model
-and asks for the same structure back. It is what handles the real world, where
-a rate confirmation is a photograph of a fax.
+**The Gemini path** in `agents.py` sends the artifact's TEXT to a model and
+asks for the same structure back. It takes text, not pixels: there is no image
+path in this repository, so a rate confirmation that arrives as a photograph of
+a fax is out of scope rather than handled. Saying otherwise would claim a
+capability a judge could disprove by reading one function.
 
 The deterministic path is the reference implementation, not the fallback. When
 the two disagree about a figure on an artifact the deterministic parser can

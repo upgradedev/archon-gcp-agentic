@@ -43,19 +43,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--period", default=PERIOD, help="period to close, YYYY-MM")
     parser.add_argument("--json", action="store_true", help="emit the close as JSON")
     parser.add_argument("--agent", action="store_true",
-                        help="drive the close through the ADK agent (needs GOOGLE_API_KEY)")
+                        help="the ADK agent chooses the tool calls (needs a Gemini credential)")
     args = parser.parse_args(argv)
 
     documents, raw = read_period(args.period)
 
-    narrator = None
+    # `--agent` used to swap in the narrator and nothing else, while its help
+    # text said it drove the close through the ADK agent. It now does what it
+    # says: the agent chooses the tool calls, and a failure is reported rather
+    # than silently downgraded, because a flag that quietly does something
+    # smaller than it claims is how the claim stops being true.
     if args.agent:
-        from .adapters.agents import gemini_narrator
+        from .adapters.agents import gemini_narrator, run_agent_close
 
-        narrator = gemini_narrator()
-
-    result = run_close(period=args.period, documents=documents,
-                       company="Bell Ridge Haulage", narrator=narrator, raw_texts=raw)
+        result, final = run_agent_close(
+            period=args.period, company="Bell Ridge Haulage",
+            narrator=gemini_narrator(),
+        )
+        if result is None:
+            print("the agent did not produce a close", file=sys.stderr)
+            if final:
+                print(final, file=sys.stderr)
+            return 2
+    else:
+        result = run_close(period=args.period, documents=documents,
+                           company="Bell Ridge Haulage", raw_texts=raw)
 
     if args.json:
         json.dump(result.to_dict(), sys.stdout, indent=2, default=str)

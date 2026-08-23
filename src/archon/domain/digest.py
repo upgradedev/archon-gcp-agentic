@@ -17,7 +17,9 @@ behind the human gate in `drafts.py`. The owner's own inbox is the owner's own
 books arriving at the owner, which is the whole point of doing the work
 unattended. Those are two different boundaries and the product treats them
 differently on purpose: the letters to counterparties are composed and filed
-unsent, and this one is composed and delivered.
+unsent, and this one is composed and handed to a delivery seam. Whether it is
+actually sent depends on configuration, and the receipt says which happened
+rather than assuming the happy path.
 
 Every figure here comes from the close that produced it. The digest is a view,
 never a second computation, so it cannot disagree with the books it summarises.
