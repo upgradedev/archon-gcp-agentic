@@ -22,6 +22,19 @@
 
 terraform {
   required_version = ">= 1.6"
+
+  # State lives in the project it describes, not on somebody's laptop.
+  #
+  # It was a local file, and that is what stopped this deployment being
+  # automatable: a pipeline cannot apply a plan it cannot read, and the state
+  # was gitignored precisely because it must not be committed. So it moved to a
+  # versioned bucket in the same project. Versioning is not decoration here;
+  # it is the only way back from an apply that corrupts state.
+  backend "gcs" {
+    bucket = "upgradegr-archon-agentic-tfstate"
+    prefix = "archon"
+  }
+
   required_providers {
     google = {
       source  = "hashicorp/google"
