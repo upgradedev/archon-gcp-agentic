@@ -2,6 +2,10 @@
  *
  * Lifted out of the page so the content security policy can refuse inline
  * style outright. Same origin, no build step, no external font or sheet.
+ *
+ * Everything a chart needs is here as a class. Nothing on the page may carry a
+ * `style` attribute: `style-src 'self'` refuses one as firmly as a <style>
+ * block, and a browser test asserts the page never produces one.
  */
   /* One dark console, deliberately committed to. The demo is shown on a phone
      and in a video, so a theme that follows the visitor's OS would mean two
@@ -21,17 +25,23 @@
     font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 18px 72px; }
+  .app { max-width: 1180px; margin: 0 auto; padding: 0 18px 72px; }
   h1, h2, h3 { line-height: 1.2; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
-  h1 { font-size: clamp(26px, 5vw, 40px); }
+  h1 { font-size: clamp(24px, 4.4vw, 36px); }
   h2 { font-size: 19px; margin-bottom: 14px; }
   p { margin: 0; }
   .muted { color: var(--text-2); }
   .dim { color: var(--text-3); }
   .num { font-variant-numeric: tabular-nums; }
+  .hidden { display: none; }
 
-  header { padding: 12px 0 26px; border-bottom: 1px solid var(--border); margin-bottom: 26px; }
-  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+/* ── the application bar ──────────────────────────────────────────────────── */
+
+  .appbar {
+    display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: center;
+    justify-content: space-between; padding: 16px 0 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
   .mark {
     width: 30px; height: 30px; border-radius: 9px; flex: none;
     background: linear-gradient(140deg, var(--primary), var(--violet));
@@ -42,9 +52,22 @@
     color: var(--text-3); border: 1px solid var(--border-strong);
     padding: 3px 9px; border-radius: var(--r-pill);
   }
-  .lede { margin-top: 14px; max-width: 62ch; color: var(--text-2); font-size: 16px; }
+  .appbar-r { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .field {
+    display: flex; flex-direction: column; gap: 2px;
+    border: 1px solid var(--border-strong); border-radius: var(--r-md);
+    padding: 6px 12px; background: var(--card);
+  }
+  .field-k {
+    font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-3);
+  }
+  .field-v { font-size: 13.5px; font-weight: 600; }
+  select {
+    font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text);
+    background: transparent; border: 0; padding: 0; cursor: pointer;
+  }
+  select option { background: var(--card); color: var(--text); }
 
-  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 24px; }
   button {
     font: inherit; font-weight: 600; cursor: pointer; border-radius: var(--r-md);
     border: 1px solid transparent; padding: 12px 22px; color: #fff;
@@ -54,20 +77,121 @@
   button:disabled { opacity: 0.55; cursor: progress; }
   button.ghost { background: var(--fill); border-color: var(--border-strong); color: var(--text); }
 
-  .grid { display: grid; gap: 14px; }
-  .cards { grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); }
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--r-lg); padding: 16px 18px;
+  .statusbar {
+    display: flex; align-items: center; gap: 9px; font-size: 13px;
+    padding: 0 0 14px; border-bottom: 1px solid var(--border);
   }
-  .card .k { font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-3); }
+  .dot.ok { background: var(--positive); }
+  .dot.err { background: var(--error); }
+  .dot.working { background: var(--warning); }
+
+/* ── the section rail ─────────────────────────────────────────────────────── */
+
+  .tabs {
+    display: flex; gap: 6px; overflow-x: auto; padding: 14px 0;
+    border-bottom: 1px solid var(--border); margin-bottom: 26px;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    background: transparent; border: 1px solid transparent; color: var(--text-3);
+    font-size: 13.5px; font-weight: 600; padding: 8px 14px; border-radius: var(--r-pill);
+    white-space: nowrap; flex: none;
+  }
+  .tab:hover:not(.on) { color: var(--text-2); background: var(--fill); filter: none; }
+  .tab.on { color: var(--text); background: var(--card-hi); border-color: var(--border-strong); }
+
+/* ── panels and panes ─────────────────────────────────────────────────────── */
+
+  .panel { margin: 0; }
+  .panel > h2 { font-size: 21px; }
+  .panel > .sub, .pane > .sub {
+    color: var(--text-2); font-size: 14px; margin: -6px 0 18px; max-width: 74ch;
+  }
+  .lede { margin-top: 16px; max-width: 70ch; color: var(--text-2); font-size: 16px; }
+  .pane {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 18px 20px; margin-top: 20px;
+  }
+  .pane > h2 { font-size: 15px; margin-bottom: 6px; }
+  .pane > .sub { margin: 0 0 16px; font-size: 13px; }
+  .spaced { margin-top: 22px; }
+  .sub.tight { margin-top: 10px; margin-bottom: 0; }
+
+  .grid { display: grid; gap: 14px; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(186px, 1fr)); margin-top: 22px; }
+  .two { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .two > .pane { margin-top: 0; }
+
+/* ── the tiles, which are controls ────────────────────────────────────────── */
+
+  .card {
+    display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+    background: var(--card); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--r-lg); padding: 16px 18px; font-weight: 400;
+  }
+  .card:hover:not(.flat) {
+    border-color: var(--border-strong); background: var(--card-hi); filter: none;
+  }
+  .card:hover:not(.flat) .go { color: var(--primary-hi); }
+  .card.flat { cursor: default; }
+  .card .k {
+    font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3);
+  }
   .card .v { font-size: 25px; font-weight: 660; margin-top: 6px; }
   .card .s { font-size: 12.5px; color: var(--text-2); margin-top: 3px; }
+  .card .go { font-size: 11.5px; color: var(--text-3); margin-top: 10px; font-weight: 600; }
 
-  section { margin-top: 34px; }
-  section > .sub { color: var(--text-2); font-size: 14px; margin: -8px 0 14px; max-width: 74ch; }
+/* ── charts: SVG sized by attribute, never by an inline style ─────────────── */
 
-  /* The run trail. Steps land one at a time so the chore is watchable. */
+  .bars { display: flex; flex-direction: column; gap: 9px; }
+  .bar-row {
+    display: grid; grid-template-columns: minmax(78px, 122px) 1fr minmax(58px, auto);
+    align-items: center; gap: 12px; font-size: 12.5px;
+  }
+  .bar-k { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-v { color: var(--text); text-align: right; white-space: nowrap; }
+  .bar { width: 100%; height: 11px; display: block; }
+  .bar.tall { height: 24px; }
+  .f-primary { fill: var(--primary); }
+  .f-ok { fill: var(--positive); }
+  .f-err { fill: var(--error); }
+  .f-warn { fill: var(--warning); }
+  .f-info { fill: var(--info); }
+  .f-muted { fill: var(--border-strong); }
+
+  .legend {
+    display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    margin-top: 14px; font-size: 12px; color: var(--text-3);
+  }
+  .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend .sw:not(:first-child) { margin-left: 10px; }
+  .sw.f-muted { background: var(--border-strong); }
+  .sw.f-primary { background: var(--primary); }
+
+  .donut-wrap { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .donut { width: 146px; height: 146px; flex: none; transform: rotate(-90deg); }
+  .donut .track { stroke: var(--bg-sunken); }
+  .legend-col { display: flex; flex-direction: column; gap: 7px; flex: 1 1 190px; min-width: 0; }
+  .leg-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+  .leg-k { color: var(--text-2); flex: 1 1 auto; min-width: 0;
+           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .leg-v { color: var(--text); white-space: nowrap; }
+  .leg-p { color: var(--text-3); width: 34px; text-align: right; }
+
+  /* Six segment colours, reused by the donut's arcs and the legend's swatches.
+     A stroke on a circle and a background on a span are different properties,
+     so each class sets both and the two can never drift apart. */
+  .s0 { stroke: var(--primary); background: var(--primary); }
+  .s1 { stroke: var(--cyan); background: var(--cyan); }
+  .s2 { stroke: var(--violet); background: var(--violet); }
+  .s3 { stroke: var(--info); background: var(--info); }
+  .s4 { stroke: var(--warning); background: var(--warning); }
+  .s5 { stroke: var(--positive); background: var(--positive); }
+
+/* ── the run trail. Steps land one at a time so the chore is watchable ────── */
+
   .trail { border-left: 2px solid var(--border-strong); padding-left: 18px; margin-left: 7px; }
   .step { position: relative; padding: 11px 0; opacity: 0; transform: translateY(5px);
           animation: in .34s ease forwards; }
@@ -93,13 +217,15 @@
   @media (prefers-reduced-motion: reduce) { .step { animation: none; opacity: 1; transform: none; } }
   .step::before {
     content: ""; position: absolute; left: -25px; top: 17px; width: 11px; height: 11px;
-    border-radius: 50%; background: var(--positive); border: 2px solid var(--bg);
+    border-radius: 50%; background: var(--positive); border: 2px solid var(--card);
   }
   .step.blocked::before { background: var(--warning); }
   .step.failed::before  { background: var(--error); }
   .step .t { font-weight: 600; }
   .step .d { color: var(--text-2); font-size: 13.5px; margin-top: 2px; }
   .step .ms { color: var(--text-3); font-size: 12px; margin-left: 8px; font-weight: 400; }
+
+/* ── tables ───────────────────────────────────────────────────────────────── */
 
   .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .tbl th {
@@ -112,6 +238,17 @@
   .tbl .r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-lg);
             background: var(--card); }
+  .alloc-head { background: var(--card-hi); }
+
+  .kv { display: flex; flex-direction: column; gap: 8px; }
+  .kv-row { display: flex; gap: 14px; font-size: 13px; align-items: baseline; }
+  .kv-k {
+    color: var(--text-3); font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
+    width: 116px; flex: none;
+  }
+  .kv-v { color: var(--text-2); word-break: break-word; min-width: 0; }
+
+/* ── pills, letters, chrome ───────────────────────────────────────────────── */
 
   .pill {
     display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
@@ -139,21 +276,16 @@
   }
   .gate-note b { color: var(--text); }
 
-  .summary {
-    background: linear-gradient(140deg, rgba(99,102,241,.13), rgba(139,92,246,.07));
-    border: 1px solid var(--border-strong); border-radius: var(--r-lg);
-    padding: 18px 20px; font-size: 15.5px; line-height: 1.6;
-  }
   footer { margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--border);
            color: var(--text-3); font-size: 12.5px; }
   footer a { color: var(--text-2); }
-  .hidden { display: none; }
   .err-box { border: 1px solid var(--error); color: var(--error); border-radius: var(--r-md);
-             padding: 14px 16px; font-size: 14px; }
+             padding: 14px 16px; font-size: 14px; margin-bottom: 18px; }
 
-  /* Classes replacing the last inline style attributes. A closed `style-src`
-     refuses a style attribute as firmly as it refuses a <style> block, and a
-     real browser blocked these. */
-  .alloc-head { background: var(--card-hi); }
-  .sub.tight { margin-top: 12px; }
-  .scroll.spaced { margin-top: 14px; }
+  @media (max-width: 560px) {
+    .appbar { padding-top: 14px; }
+    .appbar-r { width: 100%; }
+    #run { flex: 1 1 auto; }
+    .kv-row { flex-direction: column; gap: 2px; }
+    .kv-k { width: auto; }
+  }

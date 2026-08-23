@@ -197,6 +197,11 @@ uvicorn archon.service:app --reload
 
 Then open `http://localhost:8000`, press one button, and watch it run.
 
+The console has eight sections behind the tab rail: overview, open items,
+allocation, exceptions, letters, trends, fleet and checks. A switcher offers
+every month with mail on file. The tiles are controls rather than ornaments,
+because each one opens the ledger its number came out of.
+
 **Let the ADK agent drive it** (needs a Gemini key):
 
 ```bash
@@ -492,7 +497,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 409 | `python -m pytest` |
+| Tests, all offline | 419 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

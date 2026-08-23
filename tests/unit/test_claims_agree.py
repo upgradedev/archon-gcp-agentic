@@ -578,3 +578,63 @@ def test_every_command_the_readme_tells_a_judge_to_run_exists():
     assert "python -m archon.cli" not in README, (
         "that form needs src/ on the path and fails on a clean clone"
     )
+
+
+def test_every_landmark_the_video_scrolls_to_still_exists_on_the_page():
+    """The capture script names selectors; nothing compiles them.
+
+    `video/capture_production.py` opens a tab and then scrolls to a landmark,
+    and both halves are strings. A `data-panel` value that no longer exists, or
+    an id that moved, is not a syntax error: it is a Playwright timeout three
+    minutes into a recording run, discovered while burning a take rather than
+    while editing the page.
+
+    The page became a set of panels in one commit and this file was edited by
+    hand in the same one. That is exactly the pair that drifts.
+    """
+    capture = (ROOT / "video" / "capture_production.py").read_text(encoding="utf-8")
+    page = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+    mapping = dict(re.findall(r'"#([a-z-]+)":\s*"([a-z]+)"', capture))
+    assert mapping, "PANEL_OF was not found in the capture script"
+
+    for landmark, panel in mapping.items():
+        assert f'id="{landmark}"' in page, \
+            f"the video scrolls to #{landmark}, which the page no longer has"
+        assert f'data-panel="{panel}"' in page, \
+            f"the video opens the {panel} tab, which the page no longer has"
+        assert f'id="panel-{panel}"' in page, \
+            f"the {panel} tab has no panel behind it"
+
+    # And the beat that presses the button has to reach a tab that exists.
+    for panel in re.findall(r'\.tab\[data-panel="([a-z]+)"\]', capture):
+        assert f'data-panel="{panel}"' in page, \
+            f"the capture clicks the {panel} tab, which the page no longer has"
+
+
+def test_every_tab_on_the_page_has_a_panel_and_every_panel_has_a_tab():
+    """A tab with nothing behind it is a dead control, and a panel with no tab
+    is content nobody can reach. Both are silent in a browser."""
+    page = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+
+    tabs = set(re.findall(r'data-panel="([a-z]+)"', page))
+    panels = set(re.findall(r'id="panel-([a-z]+)"', page))
+
+    assert tabs, "the page has no tab rail"
+    assert tabs == panels, (
+        f"tabs without panels: {sorted(tabs - panels)}; "
+        f"panels without tabs: {sorted(panels - tabs)}"
+    )
+
+
+def test_every_panel_a_tile_opens_is_a_panel_that_exists():
+    """The tiles are controls: each carries the name of the ledger it opens.
+    A typo there is a tile that silently does nothing when pressed."""
+    page = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+
+    panels = set(re.findall(r'id="panel-([a-z]+)"', page))
+    targets = set(re.findall(r'^\s*\["([a-z]+)",\s*"[A-Z]', script, re.MULTILINE))
+
+    assert targets, "no tile destinations were found in the renderer"
+    assert targets <= panels, f"tiles point at panels that do not exist: {sorted(targets - panels)}"
