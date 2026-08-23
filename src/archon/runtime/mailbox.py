@@ -1,8 +1,9 @@
 """Read a month of mail off disk.
 
-In production this is a Cloud Storage prefix that Eventarc points at: the
-owner's bookkeeper forwards the month's documents, the objects land, and the
-close fires. Locally and in the bundled demo it is a directory. Both produce
+In production this is a Cloud Storage prefix the bucket's finalize
+notification watches: the owner's bookkeeper forwards the month's documents,
+the objects land, and the close fires. Locally and in the bundled demo it is
+a directory. Both produce
 the same list of `Document`, which is why the demo a judge clicks and the
 deployed pipeline exercise the same code.
 

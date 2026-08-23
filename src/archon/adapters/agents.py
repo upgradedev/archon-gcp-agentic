@@ -117,11 +117,18 @@ class CloseSession:
     """
 
     def __init__(self, period: str, company: str | None = None,
-                 store=None, clock: Clock | None = None):
+                 store=None, clock: Clock | None = None,
+                 previous=None, narrator=None):
         self.period = period
         self.company = company
         self.store = store
         self.clock = clock
+        #: Carried through so the agent path produces the SAME payload as the
+        #: reference path. Without them the agent closes a month with no
+        #: comparison against the one before, and the console's trends panel
+        #: renders empty on the live route while it fills on the local one.
+        self.previous = previous
+        self.narrator = narrator
         self.documents: list[Document] = []
         self.raw: dict[str, str] = {}
         self.result: CloseResult | None = None
@@ -302,6 +309,7 @@ class CloseSession:
         self.result = run_close(
             period=self.period, documents=self.documents, company=self.company,
             store=self.store, clock=self.clock, raw_texts=self.raw,
+            previous=self.previous, narrator=self.narrator,
             decider=decider if choices is not None or verdict else None,
         )
 
@@ -341,7 +349,8 @@ def build_close_agent(session: CloseSession, model=None, name: str = "archon_clo
 
 def run_agent_close(period: str, company: str | None = None, model=None,
                     store=None, clock: Clock | None = None,
-                    app_name: str = "archon") -> tuple[CloseResult | None, str]:
+                    app_name: str = "archon", previous=None,
+                    narrator=None) -> tuple[CloseResult | None, str]:
     """Let the ADK agent drive the close. Returns the result and its final word.
 
     This is the path the demo shows and the video records: one instruction in,
@@ -350,7 +359,8 @@ def run_agent_close(period: str, company: str | None = None, model=None,
     from google.adk.runners import InMemoryRunner
     from google.genai import types
 
-    session = CloseSession(period=period, company=company, store=store, clock=clock)
+    session = CloseSession(period=period, company=company, store=store, clock=clock,
+                           previous=previous, narrator=narrator)
     agent = build_close_agent(session, model=model)
     runner = InMemoryRunner(agent=agent, app_name=app_name)
     user, session_id = "owner", f"close-{period}"
@@ -484,8 +494,9 @@ def extract_with_gemini(text: str, source_file: str, period: str, client=None) -
     """Ask Gemini for the structured fields of one artifact.
 
     The deterministic parser in `extract.py` handles the label blocks OCR
-    leaves behind and is what the bundled demo and CI use. This is the path for
-    the real world, where a rate confirmation is a photograph of a fax.
+    leaves behind and is what the bundled demo and CI use. This is a second
+    path over the same TEXT, for artifacts whose wording the parser has never
+    seen. It is not a vision call: the argument is a string.
 
     An artifact the model will not commit to comes back UNREADABLE, which the
     close reports as a finding. That is the correct outcome and it is enforced

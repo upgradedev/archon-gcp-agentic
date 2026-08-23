@@ -638,3 +638,58 @@ def test_every_panel_a_tile_opens_is_a_panel_that_exists():
 
     assert targets, "no tile destinations were found in the renderer"
     assert targets <= panels, f"tiles point at panels that do not exist: {sorted(targets - panels)}"
+
+
+def test_no_judge_facing_surface_names_eventarc():
+    """It was named on four README surfaces, in the architecture diagram, in the
+    spoken narration and in three docstrings, and there has never been an
+    Eventarc trigger in this project.
+
+    `infra/main.tf` creates a `google_storage_notification`, a Pub/Sub topic and
+    a push subscription. `gcloud eventarc triggers list` returns zero items.
+    Misnaming a Google service to Google's own judges is a cheap way to lose
+    the one point that costs nothing to keep.
+    """
+    for name in ("README.md", "video/narration.json"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert "ventarc" not in text, f"{name} still names Eventarc"
+
+
+def test_no_surface_claims_a_vision_or_photograph_path():
+    """`extract_with_gemini` takes a string. There is no image input anywhere in
+    this repository, so a photograph of a fax is out of scope. The README used
+    to say the Gemini vision path handled exactly that."""
+    import archon.adapters.agents as agents
+
+    source = (ROOT / "src" / "archon" / "adapters" / "agents.py").read_text(encoding="utf-8")
+    for marker in ("inline_data", "inlineData", "from_uri", "image/"):
+        assert marker not in source, f"an image path appeared: {marker}"
+
+    assert "text" in agents.extract_with_gemini.__doc__.lower()
+
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "vision path" not in readme
+    assert "no image path" in readme, "the README should say plainly that there is none"
+
+
+def test_the_readme_never_claims_a_step_count_that_moved():
+    """The count test asserts the right number appears somewhere. It cannot see
+    a stale one still sitting two hundred lines away, and 'ten steps' and
+    '10-step trail' both survived the move to eleven."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    for stale in ("ten steps", "10-step", "nine steps", "9-step"):
+        assert stale not in readme.lower(), f"README still says {stale!r}"
+
+
+def test_the_quickstart_names_a_module_that_can_actually_be_imported():
+    """It said `uvicorn archon.service:app` for weeks after the move to
+    `archon.adapters.service`. The readiness gate greps command text, so it
+    stayed green over a quickstart that raises ModuleNotFoundError."""
+    import importlib
+    import re
+
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    for module in re.findall(r"uvicorn\s+([a-z_.]+):app", readme):
+        importlib.import_module(module)

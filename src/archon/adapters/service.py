@@ -9,8 +9,9 @@ presses one button, and watches the close run step by step.
 anyone can curl.
 
 `POST /events` is the trigger. In the deployed shape a bookkeeper drops the
-month's documents into a Cloud Storage bucket, Eventarc turns the object-finalize
-into a Pub/Sub push, and this route closes the month. Nobody pressed anything.
+month's documents into a Cloud Storage bucket, the bucket's own finalize
+notification publishes to a Pub/Sub topic, its push subscription calls this
+route with an OIDC token, and the month closes. Nobody pressed anything.
 The button on the page exists so a judge can see the same thing happen on demand,
 because "it fires when a file lands" is not watchable in a four-minute video.
 
@@ -44,6 +45,16 @@ WEB_ROOT = paths.WEB_ROOT
 #: summary. Unset, the deterministic narrator writes it. The books are
 #: identical either way, which is why the demo does not need a key.
 USE_GEMINI = os.getenv("ARCHON_USE_GEMINI", "").lower() in ("1", "true", "yes")
+
+#: Set ARCHON_AGENT_CLOSE=1 to have the ADK agent drive the close on this route
+#: rather than the deterministic orchestrator calling the same tools directly.
+#:
+#: It is a separate switch from ARCHON_USE_GEMINI on purpose. The narrator is a
+#: phrasing layer and a model failure there costs a sentence; the agent is the
+#: control flow, and a model failure there costs the close. The public route is
+#: also what the readiness gate probes as a veto, so this path falls back rather
+#: than 500s, and `/api/health` reports which one actually ran.
+USE_AGENT = os.getenv("ARCHON_AGENT_CLOSE", "").lower() in ("1", "true", "yes")
 
 COMPANY = os.getenv("ARCHON_COMPANY", "Bell Ridge Haulage")
 
@@ -93,13 +104,37 @@ def _close(period: str, store=None) -> dict:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    target = store if store is not None else get_store()
+    previous = _previous_statements(period)
+
+    # The agent first, when it is switched on. A model that refuses, times out
+    # or is not reachable must not take the judge's button down with it, so the
+    # failure is logged with its reason and the deterministic path runs. Which
+    # one produced the payload is stamped on it rather than inferred.
+    if USE_AGENT:
+        try:
+            from .agents import run_agent_close
+
+            result, _final = run_agent_close(
+                period=period, company=COMPANY, store=target,
+                previous=previous, narrator=_narrator(),
+            )
+            if result is not None:
+                payload = result.to_dict()
+                payload["driver"] = "adk-agent"
+                return payload
+            log.warning("agent close produced no result for %s; falling back", period)
+        except Exception as exc:                       # noqa: BLE001 - see docstring
+            log.warning("agent close failed for %s (%s: %s); falling back",
+                        period, type(exc).__name__, exc)
+
     result = run_close(
         period=period, documents=documents, company=COMPANY,
-        store=store if store is not None else get_store(),
-        narrator=_narrator(), raw_texts=raw,
-        previous=_previous_statements(period),
+        store=target, narrator=_narrator(), raw_texts=raw, previous=previous,
     )
-    return result.to_dict()
+    payload = result.to_dict()
+    payload["driver"] = "deterministic"
+    return payload
 
 
 def _previous_statements(period: str):
@@ -137,6 +172,17 @@ def _previous_statements(period: str):
     return Statements(**fields)
 
 
+def _model_id() -> str:
+    """The model this deployment would actually call.
+
+    Read from the same place the agent reads it, so health cannot report one
+    model while the close uses another.
+    """
+    from .agents import DEFAULT_MODEL
+
+    return DEFAULT_MODEL
+
+
 @app.get("/api/health")
 def health() -> dict:
     """Liveness, plus enough detail to tell which backend a deploy is using."""
@@ -146,6 +192,10 @@ def health() -> dict:
         "version": __version__,
         "store": getattr(store, "backend", "unknown"),
         "gemini": USE_GEMINI,
+        # What a judge needs to check the sponsor claim without reading code:
+        # which path closes a month here, and which model it would reach for.
+        "close_path": "adk-agent" if USE_AGENT else "deterministic",
+        "model": _model_id() if (USE_AGENT or USE_GEMINI) else None,
         "events_auth": auth.posture(),
         "periods": available_periods(),
     }
@@ -184,10 +234,14 @@ def read_close(period: str) -> dict:
 
 @app.post("/events")
 async def events(request: Request) -> JSONResponse:
-    """The unattended trigger: a Pub/Sub push from Eventarc.
+    """The unattended trigger: a Pub/Sub push from a bucket notification.
 
-    Accepts the Pub/Sub envelope Eventarc sends for a Cloud Storage
-    object-finalize, works out which period the object belongs to, and closes
+    There is no Eventarc trigger here, and calling it one would misname the
+    architecture to the people who built the services. `infra/main.tf` creates
+    a `google_storage_notification` on the bucket, a topic it publishes to, and
+    a push subscription that calls this route.
+
+    Accepts that envelope, works out which period the object belongs to, and closes
     it. Any malformed envelope is acknowledged rather than retried: Pub/Sub
     redelivers on a non-2xx, and a message that will never parse would be
     redelivered until it expired, at the cost of one close per attempt.

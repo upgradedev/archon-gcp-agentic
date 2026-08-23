@@ -64,10 +64,12 @@ So Archon allocates instead, and then proves its own answer. What landed in the
 bank has to equal what the lines pay, less the fee charged once. When that leaves
 anything over, it says so rather than pushing it into a suspense account.
 
-A month of documents lands in a Cloud Storage bucket. Nothing is pressed. Eventarc
-wakes a Cloud Run container, and a Google ADK agent works through ten steps: it
-classifies 27 artifacts, posts the double-entry journal, splits the remittance,
-reconciles which loads were paid, finds the nine things that do not add up, writes
+A month of documents lands in a Cloud Storage bucket. Nothing is pressed. The
+bucket's own finalize notification publishes to a Pub/Sub topic, whose push
+subscription wakes a Cloud Run container with an OIDC token, and the close works
+through eleven steps: it classifies 27 artifacts, posts the double-entry journal,
+splits the remittance, reconciles which loads were paid, finds the ten things
+that do not add up, writes
 the corrective letters, checks its own books against five gates, and marks the
 period closed with a trail in Firestore you can walk back through.
 
@@ -142,8 +144,9 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
 Nobody is asked anything at any point. The one thing a person does is press send
 on the letters that leave for a third party.
 
-**The trigger**: an object landing in the Cloud Storage bucket, via Eventarc.
-Nobody presses anything.
+**The trigger**: an object landing in the Cloud Storage bucket. The bucket
+notifies a Pub/Sub topic, and its push subscription calls the service with an
+OIDC token. Nobody presses anything.
 **The surface**: the owner's own inbox, which they already open.
 **What it replaces**: the shoebox, and the bookkeeper who reconciles it in April.
 
@@ -192,7 +195,7 @@ rather than a judge finding out.
 
 ```bash
 pip install -r requirements.txt
-uvicorn archon.service:app --reload
+uvicorn archon.adapters.service:app --reload
 ```
 
 Then open `http://localhost:8000`, press one button, and watch it run.
@@ -285,7 +288,7 @@ what the agent does between a file landing and the owner reading about it.
 flowchart TB
     subgraph gcp["Google Cloud"]
         gcs[("Cloud Storage<br/>a month's documents land here")]
-        ea["Eventarc"]
+        ea["Bucket notification<br/>OBJECT_FINALIZE"]
         ps["Pub/Sub push"]
         subgraph run["Cloud Run"]
             svc["archon.adapters.service<br/>POST /events · POST /api/close · GET /"]
@@ -339,8 +342,8 @@ sequenceDiagram
     A->>D: draft_corrections
     D-->>A: 5 letters, status=filed
     A->>D: verify_and_file
-    D-->>F: books, drafts, 10-step trail
-    A->>O: month-end digest, delivered
+    D-->>F: books, drafts, 11-step trail
+    A->>O: month-end digest, composed and filed
     Note over A,X: the letters to brokers stop here.<br/>a human presses send.
     X--xA: nothing is sent unattended
 ```
@@ -455,7 +458,7 @@ filed letters, and the owner who looks on Monday has nothing to look at.
 | Model | **Gemini** | extraction and reporting | deterministic parser and narrator |
 | Memory | **Firestore** | `archon/store.py` | in-memory, for the demo and tests |
 | Serving | **Cloud Run** | `Dockerfile`, `scripts/deploy.sh` | local uvicorn |
-| Trigger | **Pub/Sub + Eventarc** | `POST /events` | the button on the page |
+| Trigger | **Cloud Storage notification + Pub/Sub push** | `POST /events` | the button on the page |
 | Reaching the owner | SMTP, standard library | `archon/delivery.py` | compose and file, sending nothing |
 
 Firestore rather than a managed SQL instance, on purpose: what Archon persists
@@ -497,7 +500,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 441 | `python -m pytest` |
+| Tests, all offline | 455 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -515,8 +518,9 @@ paid call.
   envelope closing the month with nobody present.
 
 Three properties are asserted rather than assumed, because they are the product:
-that no counterparty draft is ever sent, that the owner's letter is delivered in
-the same run, and that the agent path and the deterministic path agree exactly.
+that no counterparty draft is ever sent, that the owner's letter is composed and
+filed in the same run, and that the agent path and the deterministic path agree
+exactly. Delivery is a configured seam, not something the demo performs.
 
 Each of the five gates is broken on purpose, once, and asserted red. A gate
 nobody has watched fail is a gate nobody should believe.
@@ -672,9 +676,11 @@ its persistence model is deliberately not used here.
   each defect the detectors look for, so that a run demonstrates each one on
   something real rather than on a fixture that agrees with it.
 - **The deterministic extractor is the reference path**, and it is what the demo
-  and CI use. It parses the label blocks OCR leaves behind. The Gemini vision
-  path in `archon/agents.py` is what handles a photograph of a fax, and it is
-  not exercised in CI, because CI has no key.
+  and CI use. It parses the label blocks OCR leaves behind. `extract_with_gemini`
+  in `archon/adapters/agents.py` is a second, model-driven path over the same
+  text, and it is not exercised in CI because CI has no key. **It takes text, not
+  pixels.** There is no image path and no vision call anywhere in this
+  repository, so a photograph of a fax is out of scope rather than handled.
 - **The digest is composed but not delivered in the demo**, because no mail
   server is configured and configuring one would put a credential in a public
   repository. `SmtpDelivery` is real, runs on the standard library, and is
