@@ -138,7 +138,9 @@ def test_two_deploys_cannot_run_at_once_and_neither_is_cancelled(deploy):
 def test_terraform_applies_rather_than_a_step_creating_resources(deploy_text):
     """A resource created by a pipeline step is a resource nobody can review,
     reproduce or remove."""
-    assert "terraform -chdir=infra apply" in deploy_text
+    assert "terraform -chdir=infra ${VERB}" in deploy_text
+    assert 'VERB="apply -auto-approve"' in deploy_text
+    assert 'VERB="plan"' in deploy_text, "there is no way to read a diff before taking it"
     assert "gcloud run deploy" not in deploy_text, \
         "this bypasses terraform and puts the state out of step with the world"
 
@@ -147,6 +149,49 @@ def test_terraform_state_is_remote_because_a_pipeline_cannot_read_a_laptop():
     main_tf = (ROOT / "infra" / "main.tf").read_text(encoding="utf-8")
 
     assert 'backend "gcs"' in main_tf, "state is local, so nothing but this machine can apply"
+
+
+def test_the_backend_names_no_bucket_and_every_caller_brings_its_own():
+    """The near miss this file exists to stop recurring.
+
+    The backend was first written with the production bucket hardcoded. That
+    makes every caller of `infra/` share one state object, and one of those
+    callers is `infra/cloudbuild.yaml`, whose entire purpose is
+    `destroy -> apply -> verify -> destroy` against a throwaway project. Its
+    guard refuses to run against the production *project*; it says nothing
+    about a state bucket. A lifecycle run would have loaded production state,
+    applied it under a different project id, and written an empty state over
+    it on the final destroy, leaving the judge-facing infrastructure
+    unmanaged while the URL a judge opens stayed up and looked perfectly fine.
+
+    Asserting that `backend "gcs"` is present cannot see any of that.
+    """
+    main_tf = (ROOT / "infra" / "main.tf").read_text(encoding="utf-8")
+    block = main_tf.split('backend "gcs"')[1].split("}")[0]
+
+    assert "bucket" not in block, \
+        "the backend names a bucket, so every caller shares one state object"
+    assert "prefix" not in block
+
+    # Which is only safe because each caller supplies its own at init time.
+    callers = {
+        "scripts/deploy.sh": "${PROJECT_ID}-tfstate",
+        ".github/workflows/deploy.yml": "${PROJECT_ID}-tfstate",
+        "infra/cloudbuild.yaml": "${_TF_PROJECT}-tfstate",
+    }
+    for path, bucket in callers.items():
+        # Continuations are joined first, so a multi-line init reads as the
+        # one command it actually is.
+        raw = (ROOT / path).read_text(encoding="utf-8")
+        text = raw.replace("\\\n", " ")
+        inits = [line.strip() for line in text.splitlines()
+                 if "terraform" in line and " init" in line
+                 and not line.strip().startswith("#")]
+
+        assert inits, f"{path} never inits terraform"
+        for init in inits:
+            assert "-backend-config" in init, f"{path} inits with no backend"
+            assert bucket in init, f"{path} does not point at its own bucket"
 
 
 def test_the_deploy_opens_the_page_before_calling_itself_done(deploy_text):
@@ -169,8 +214,6 @@ def test_the_verification_asserts_the_console_and_not_just_the_old_page(deploy_t
     assert 'id="period"' in verify
 
 
-# ── the whole workflow directory ─────────────────────────────────────────────
-
 @pytest.mark.parametrize("workflow", sorted(WORKFLOWS.glob("*.yml")), ids=lambda p: p.name)
 def test_every_action_is_pinned_to_a_commit_rather_than_a_tag(workflow):
     """A tag is a movable pointer. `@v3` today and `@v3` next week can be
@@ -182,3 +225,24 @@ def test_every_action_is_pinned_to_a_commit_rather_than_a_tag(workflow):
     ]
 
     assert unpinned == [], f"{workflow.name} has unpinned actions: {unpinned}"
+
+
+@pytest.mark.parametrize("path", [
+    ".github/workflows/deploy.yml", "infra/cloudbuild.yaml", "scripts/deploy.sh",
+], ids=lambda p: p.rsplit("/", 1)[-1])
+def test_no_shell_line_carries_a_two_character_backslash_n(path):
+    """A line continuation that got written as the two characters backslash-n.
+
+    This shipped once, in this file's own commit: an edit meant to break a
+    terraform init across three lines emitted `-input=false \n  -backend-config`
+    on one line instead. YAML parses, the workflow lints, and the assertion that
+    `-backend-config` appears in the init passes, because it does appear. The
+    command bash actually runs is a different command.
+
+    Nothing else here can see it, because every other check works on the parsed
+    structure and this is a defect in the text.
+    """
+    text = (ROOT / path).read_text(encoding="utf-8")
+    offenders = [line.strip() for line in text.splitlines() if "\n" in line]
+
+    assert offenders == [], f"{path} has a literal backslash-n: {offenders}"

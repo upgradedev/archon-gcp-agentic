@@ -30,10 +30,25 @@ terraform {
   # was gitignored precisely because it must not be committed. So it moved to a
   # versioned bucket in the same project. Versioning is not decoration here;
   # it is the only way back from an apply that corrupts state.
-  backend "gcs" {
-    bucket = "upgradegr-archon-agentic-tfstate"
-    prefix = "archon"
-  }
+  #
+  # DELIBERATELY EMPTY, and this is load bearing. Naming the bucket here makes
+  # every caller of this directory share one state object, and one of those
+  # callers is `cloudbuild.yaml`, whose whole job is `destroy -> apply ->
+  # verify -> destroy` against a THROWAWAY project. Its guard refuses to run
+  # against the production project; it has nothing to say about a state bucket.
+  # So a lifecycle run would have loaded production state, applied it under a
+  # different project id, and written an empty state over it on the final
+  # destroy, leaving the judge-facing infrastructure unmanaged.
+  #
+  # Every caller therefore passes its own bucket at init time:
+  #
+  #   terraform init \\
+  #     -backend-config="bucket=${PROJECT}-tfstate" \\
+  #     -backend-config="prefix=archon"
+  #
+  # which makes the state per project, and isolation the default rather than
+  # something each caller has to remember.
+  backend "gcs" {}
 
   required_providers {
     google = {

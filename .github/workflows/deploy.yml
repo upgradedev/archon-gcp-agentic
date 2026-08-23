@@ -33,6 +33,12 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan reads what would change; apply changes it"
+        type: choice
+        default: plan
+        options: [plan, apply]
 
 # One deploy at a time, and never cancel one that is already running: a
 # terraform apply killed halfway leaves state describing a world that does not
@@ -109,11 +115,21 @@ jobs:
           terraform_version: "1.9.8"
           terraform_wrapper: false
 
+      # `plan` exists because the first run of this pipeline would be a full
+      # apply against the one URL a judge opens, and no non-targeted apply of
+      # infra/main.tf has ever completed from anywhere. Dispatch it in plan
+      # mode once and read the diff before letting it change anything.
       - name: Apply the infrastructure
+        id: tf
         run: |
           set -euo pipefail
-          terraform -chdir=infra init -input=false
-          terraform -chdir=infra apply -auto-approve -input=false \
+          MODE="${{ github.event.inputs.mode || 'apply' }}"
+          terraform -chdir=infra init -input=false \
+            -backend-config="bucket=${PROJECT_ID}-tfstate" \
+            -backend-config="prefix=${SERVICE}"
+          if [ "${MODE}" = "plan" ]; then VERB="plan"; else VERB="apply -auto-approve"; fi
+          echo "planned=$([ "${MODE}" = "plan" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          terraform -chdir=infra ${VERB} -input=false \
             -var "project_id=${PROJECT_ID}" \
             -var "region=${REGION}" \
             -var "service_name=${SERVICE}" \
@@ -123,6 +139,7 @@ jobs:
       # has proved nothing. `curl --fail` plus an explicit grep, because a 404
       # body still greps false and a pipe still swallows an exit code.
       - name: The judge's route actually serves
+        if: steps.tf.outputs.planned != 'true'
         run: |
           set -euo pipefail
           URL="$(terraform -chdir=infra output -raw service_url)"
@@ -148,4 +165,5 @@ jobs:
           python-version: "3.12"
 
       - name: Readiness gate, against what is now live
+        if: steps.tf.outputs.planned != 'true'
         run: python scripts/readiness.py
