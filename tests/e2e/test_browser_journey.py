@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import socket
 import threading
 import time
@@ -136,11 +137,19 @@ def test_a_visitor_presses_one_button_and_watches_the_month_close(page, base_url
 
 @pytest.mark.parametrize("page", VIEWPORTS, indirect=True)
 def test_the_allocation_beat_is_visible_and_its_identity_closes(page, base_url):
-    """The differentiator, on screen. One payment, eight loads, residual zero."""
+    """The differentiator, on screen. One payment, eight loads, residual zero.
+
+    The tab is opened rather than assumed. `to_contain_text` reads textContent
+    and passes on a `display:none` subtree, so before the console had panels
+    this test would have gone green over an allocation nobody could reach.
+    """
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
     expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
+    page.locator('.tab[data-panel="alloc"]').click()
+
+    expect(page.locator("#alloc")).to_be_visible()
     expect(page.locator("#alloc")).to_contain_text("identity closes, residual 0.00")
     expect(page.locator("#alloc tbody tr")).to_have_count(9)      # header row + 8 loads
     expect(page.locator("#alloc")).to_contain_text("short paid")  # L-7105
@@ -152,6 +161,9 @@ def test_the_owners_letter_is_shown_and_the_brokers_letters_are_not_sent(page, b
     page.goto(base_url, wait_until="networkidle")
     page.locator("#run").click()
     expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    page.locator('.tab[data-panel="letters"]').click()
+    expect(page.locator("#digest")).to_be_visible()
 
     # The subject says what was leaking, not what is "recoverable". That
     # wording changed when the money language was corrected, and this
@@ -290,3 +302,109 @@ def test_a_visitor_who_asks_for_less_motion_gets_none(still_page, base_url):
         "#trail .step", "els => els.map(e => getComputedStyle(e).opacity)")
 
     assert set(opacities) == {"1"}, "a step is invisible to a reduced-motion visitor"
+
+
+# ── the console shell ────────────────────────────────────────────────────────
+#
+# The page stopped being one long scroll and became a set of panels with a
+# period switcher, because an owner arrives with one question out of eight and
+# should not scroll past the other seven to reach it. That is new behaviour and
+# these are the assertions that keep it honest.
+
+#: Every tab, and the landmark that proves its panel actually rendered.
+PANELS = [
+    ("overview", "#stats"), ("register", "#register"), ("alloc", "#alloc"),
+    ("findings", "#findings"), ("letters", "#drafts"), ("trends", "#trends"),
+    ("trucks", "#trucks"), ("checks", "#gates"),
+]
+
+
+@pytest.mark.parametrize("page", VIEWPORTS, indirect=True)
+def test_every_tab_opens_a_panel_that_has_something_in_it(page, base_url):
+    """Eight sections, walked. A tab that opens an empty pane is a dead end."""
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    for name, landmark in PANELS:
+        page.locator(f'.tab[data-panel="{name}"]').click()
+        expect(page.locator(f"#panel-{name}")).to_be_visible()
+        expect(page.locator(landmark)).to_be_visible()
+        assert page.locator(landmark).inner_text().strip(), f"{name} opened empty"
+        # Exactly one panel at a time, or the tabs are decoration.
+        assert page.locator(".panel:visible").count() == 1
+
+
+@pytest.mark.parametrize("page", VIEWPORTS, indirect=True)
+def test_a_tile_opens_the_ledger_its_number_came_out_of(page, base_url):
+    """A figure an owner cannot drill into is a figure they take on trust."""
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    page.locator('#stats [data-goto="findings"]').first.click()
+
+    expect(page.locator("#panel-findings")).to_be_visible()
+    expect(page.locator("#panel-overview")).to_be_hidden()
+    expect(page.locator('.tab[data-panel="findings"]')).to_have_class(re.compile(r"\bon\b"))
+
+
+def test_the_charts_are_drawn_without_a_single_inline_style(page, base_url):
+    """The bars and the donut are the newest place `style="width:62%"` wants to
+    happen, and the policy refuses it. Assert the geometry is attributes."""
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    widths = page.eval_on_selector_all(
+        "#chart-expense circle.seg", "els => els.map(e => e.getAttribute('stroke-dasharray'))")
+    assert widths and all(w for w in widths), "the donut drew no segments"
+
+    page.locator('.tab[data-panel="trucks"]').click()
+    bars = page.eval_on_selector_all(
+        "#chart-trucks rect", "els => els.map(e => e.getAttribute('width'))")
+    assert bars, "the fleet chart drew no bars"
+    assert all(float(w) <= 100.0 for w in bars), f"a bar overflows its viewBox: {bars}"
+
+    assert page.eval_on_selector_all("[style]", "els => els.length") == 0
+
+
+def test_the_period_switcher_offers_every_month_with_mail(page, base_url):
+    """Two closed months are on file. A console that can only show one of them
+    is a demo of one month, not a set of books."""
+    page.goto(base_url, wait_until="networkidle")
+
+    options = page.eval_on_selector_all(
+        "#period option", "els => els.map(e => e.value)")
+
+    assert len(options) >= 2, f"only {options} on offer"
+    assert options == sorted(options, reverse=True), "the newest month is not first"
+
+
+def test_the_earliest_month_says_there_is_nothing_behind_it(page, base_url):
+    """The edge every chart renderer gets wrong once.
+
+    The first month on file has no month before it, so `comparison` is null.
+    Drawing an empty axis would read as a real zero, which is a different and
+    wrong claim, and a naive percentage against a missing month is an infinity.
+    """
+    errors = []
+    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+    page.on("pageerror", lambda exc: errors.append(str(exc)))
+
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    earliest = page.eval_on_selector_all(
+        "#period option", "els => els.map(e => e.value).sort()[0]")
+    page.select_option("#period", earliest)
+
+    expect(page.locator("#status")).to_contain_text(f"showing {earliest}", timeout=30_000)
+
+    page.locator('.tab[data-panel="trends"]').click()
+    expect(page.locator("#trend-line")).to_contain_text("nothing behind it")
+
+    # Every other panel still has to hold a real month.
+    for name, landmark in PANELS:
+        page.locator(f'.tab[data-panel="{name}"]').click()
+        assert page.locator(landmark).inner_text().strip() or name == "trends", \
+            f"{name} rendered empty for {earliest}"
+
+    assert errors == []

@@ -114,7 +114,26 @@ def main() -> int:
             if remaining > 0:
                 page.wait_for_timeout(remaining * 1000)
 
+        #: Which section of the console holds each landmark. The page is a set
+        #: of panels now rather than one long scroll, and an inactive panel is
+        #: `display:none`, which `scroll_into_view_if_needed` refuses to act on.
+        #: So the beat opens the tab first and then scrolls, exactly as a
+        #: visitor does. Getting this wrong does not produce a bad take, it
+        #: produces a timeout, which is the failure mode to prefer.
+        PANEL_OF = {
+            "#trail": "overview", "#stats": "overview",
+            "#register": "register", "#alloc": "alloc", "#findings": "findings",
+            "#digest": "letters", "#drafts": "letters",
+            "#trends": "trends", "#trucks": "trucks", "#gates": "checks",
+        }
+
         def scroll_to(selector: str) -> None:
+            panel = PANEL_OF.get(selector)
+            if panel:
+                tab = page.locator(f'.tab[data-panel="{panel}"]')
+                if not tab.evaluate("el => el.classList.contains('on')"):
+                    tab.click()
+                    page.wait_for_timeout(350)
             page.locator(selector).scroll_into_view_if_needed()
             page.wait_for_timeout(400)
 
@@ -129,6 +148,11 @@ def main() -> int:
         #    for the object landing in the bucket: a file arriving is not
         #    watchable, and pretending otherwise would be a staged shot.
         def press():
+            # Back to Overview before the press, not after. The trail's stagger
+            # is a CSS animation that starts when the steps enter the DOM, so a
+            # run begun on another tab has already played by the time the tab
+            # opens, and the one thing this video exists to show is gone.
+            page.locator('.tab[data-panel="overview"]').click()
             page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
             page.wait_for_timeout(600)
             page.locator("#run").click()
