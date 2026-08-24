@@ -28,8 +28,8 @@
     {
       "id": "trigger",
       "_beat": "What fires without anyone asking. A product nobody has to remember to open beats a product with a better interface.",
-      "captionText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, the bucket notifies a Pub/Sub topic, and its push subscription wakes a Cloud Run container that closes the month.",
-      "speechText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, the bucket notifies a Pub Sub topic, and its push subscription wakes a Cloud Run container that closes the month."
+      "captionText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, the bucket notifies a Pub/Sub topic, its push subscription wakes a Cloud Run container, and a Google ADK agent closes the month.",
+      "speechText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, the bucket notifies a Pub Sub topic, its push subscription wakes a Cloud Run container, and a Google A D K agent closes the month."
     },
     {
       "id": "live",
