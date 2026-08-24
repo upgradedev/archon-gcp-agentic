@@ -109,6 +109,24 @@ LIVE_CHECKS = [
         "expect_status": 200,
         "expect_text": '"outcome"',
     },
+    {
+        # Behavioural, not regex decoration: the persisted record must say the
+        # agent drove it and the mail came off the bucket. If production falls
+        # back to deterministic-only, or the ingestion regresses to the bundled
+        # corpus, this line goes red before a judge sees it.
+        "id": "live-agent-drove-gcs-close",
+        "desc": "The stored close was agent-driven from bucket bytes",
+        "url": DEMO_URL + "api/close/2026-07",
+        "expect_status": 200,
+        "expect_text": '"driver":"adk-agent"',
+    },
+    {
+        "id": "live-provenance-present",
+        "desc": "The stored close names its GCS mailbox",
+        "url": DEMO_URL + "api/close/2026-07",
+        "expect_status": 200,
+        "expect_text": '"mailbox":"gcs"',
+    },
 ]
 
 # Weighted criteria.

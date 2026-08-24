@@ -22,8 +22,8 @@
     {
       "id": "surface",
       "_beat": "The surface the buyer already opens. If the answer only ever appears on a page we built, this beat is a lie and the entry has shipped a twelfth tab.",
-      "captionText": "So the month arrives where the owner already reads their mail. Not a console they have to remember to open, because on the first of the month a haulier is driving.",
-      "speechText": "So the month arrives where the owner already reads their mail. Not a console they have to remember to open, because on the first of the month, a haulier is driving."
+      "captionText": "The close ends as a letter for the owner: the month in the shape they would read it, composed and filed with a delivery receipt. Wire a mail channel and it is delivered; this public demo files it, and says so.",
+      "speechText": "The close ends as a letter for the owner: the month in the shape they would read it, composed and filed with a delivery receipt. Wire a mail channel and it is delivered. This public demo files it, and says so."
     },
     {
       "id": "trigger",
@@ -40,8 +40,8 @@
     {
       "id": "sponsor",
       "_beat": "One sentence naming how the sponsor's product is load-bearing. If removing it leaves the app working, it is not the hero and the entry will not place.",
-      "captionText": "Remove Google ADK and there is no agent, only a function somebody has to remember to run. Remove Firestore and a container that scales to zero between months has nowhere to keep the trail. Gemini reads the documents and writes the English. It never touches a figure.",
-      "speechText": "Remove Google A D K and there is no agent, only a function somebody has to remember to run. Remove Firestore and a container that scales to zero between months has nowhere to keep the trail. Gemini reads the documents and writes the English. It never touches a figure."
+      "captionText": "Remove Google ADK and the judgement goes with it: the trigger would still fire arithmetic, but nothing would weigh the exceptions or withhold a bad close. Remove Firestore and a container that scales to zero has nowhere to keep the trail. Gemini sequences and judges. It never touches a figure.",
+      "speechText": "Remove Google A D K and the judgement goes with it: the trigger would still fire arithmetic, but nothing would weigh the exceptions or withhold a bad close. Remove Firestore and a container that scales to zero has nowhere to keep the trail. Gemini sequences and judges. It never touches a figure."
     },
     {
       "id": "evidence",

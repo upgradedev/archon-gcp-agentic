@@ -334,11 +334,19 @@ async def events(request: Request) -> JSONResponse:
         except Exception as exc:                       # noqa: BLE001 - push handler
             log.error("gcs mailbox read failed for %s (%s: %s)",
                       period, type(exc).__name__, exc)
+            # Transient storage trouble is retryable and says so: a 503 makes
+            # Pub/Sub redeliver once the blip passes. Anything else is acked
+            # with the reason recorded, because a permanently malformed event
+            # redelivered until expiry is a close per attempt for nothing.
+            transient = type(exc).__name__ in {
+                "ServiceUnavailable", "InternalServerError", "TooManyRequests",
+                "DeadlineExceeded", "GatewayTimeout", "RetryError",
+            }
             return JSONResponse(
                 {"status": "error",
                  "reason": f"could not read gs://{bucket}/mail/{period}/: "
                            f"{type(exc).__name__}"},
-                status_code=200)
+                status_code=503 if transient else 200)
     elif period not in available_periods():
         return JSONResponse(
             {"status": "ignored", "reason": f"no mail for {period}"}, status_code=200

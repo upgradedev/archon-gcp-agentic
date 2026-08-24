@@ -289,3 +289,27 @@ def test_the_blocking_close_runs_off_the_event_loop():
         direct = [line.strip() for line in body.splitlines()
                   if call in line and "run_in_threadpool" not in line]
         assert direct == [], f"called synchronously on the loop: {direct}"
+
+
+def test_a_transient_storage_failure_is_retryable_and_a_permanent_one_is_not(
+        wired, monkeypatch):
+    """A 200 on a transient blip acks the event permanently and the month
+    never closes; a non-2xx on a malformed event redelivers it until expiry,
+    one close attempt per redelivery. Each failure gets the right one."""
+    class ServiceUnavailable(Exception):
+        pass
+
+    def blip(bucket, period, client=None):
+        raise ServiceUnavailable("storage had a moment")
+
+    monkeypatch.setattr(service.gcs, "read_gcs_period", blip)
+    response = _post(envelope(generation="880"))
+    assert response.status_code == 503, "a transient failure must be redelivered"
+
+    def broken(bucket, period, client=None):
+        raise ValueError("this event will never parse better")
+
+    monkeypatch.setattr(service.gcs, "read_gcs_period", broken)
+    response = _post(envelope(generation="881"))
+    assert response.status_code == 200, "a permanent failure must not redeliver forever"
+    assert json.loads(response.body)["status"] == "error"

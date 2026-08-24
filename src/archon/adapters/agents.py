@@ -138,11 +138,14 @@ class CloseSession:
         #: renders empty on the live route while it fills on the local one.
         self.previous = previous
         self.narrator = narrator
-        #: Mail may be injected (the events path hands in what it read off
-        #: Cloud Storage); take_in_mail only reads the bundled corpus when
-        #: nothing was injected, and `source` says which happened.
-        self.documents: list[Document] = documents or []
-        self.raw: dict[str, str] = raw or {}
+        #: Whether a mailbox was handed in is remembered as a fact of its
+        #: own, tested with `is not None` rather than truthiness. `documents
+        #: or []` cannot tell "the trigger injected an empty mailbox" from
+        #: "nothing was injected", and the difference is the difference
+        #: between an honest empty close and silently substituting the sample.
+        self._mail_injected = documents is not None
+        self.documents: list[Document] = list(documents) if documents is not None else []
+        self.raw: dict[str, str] = dict(raw) if raw is not None else {}
         self.source = source
         self.result: CloseResult | None = None
         #: What the agent decided at step 5, and its verdict on the close.
@@ -157,10 +160,19 @@ class CloseSession:
     def take_in_mail(self) -> dict:
         """Read every document waiting for the period being closed.
 
+        When the trigger already handed a mailbox in (the events path injects
+        the exact objects it read off the bucket), this counts THAT mail and
+        must not touch the bundled corpus. It used to read `read_period`
+        unconditionally, which overwrote the injected documents with the
+        sample month: the persisted record then carried genuine GCS hashes
+        over books computed from bundled files, invisible only because the two
+        happen to hold identical bytes. Found by audit, 2026-08-24.
+
         Returns:
             A count of the artifacts found, broken down by document family.
         """
-        self.documents, self.raw = read_period(self.period)
+        if not self._mail_injected:
+            self.documents, self.raw = read_period(self.period)
         counts: dict[str, int] = {}
         for doc in self.documents:
             counts[doc.doc_type.value] = counts.get(doc.doc_type.value, 0) + 1
