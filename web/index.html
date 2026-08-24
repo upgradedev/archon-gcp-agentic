@@ -27,6 +27,7 @@
       <select id="period" aria-label="Accounting period"></select>
     </label>
     <button id="run">Close the month</button>
+    <button class="ghost" id="replay">Replay the run</button>
     <button class="ghost" id="raw">JSON</button>
   </div>
 </header>
@@ -54,6 +55,7 @@
   <!-- Overview -->
   <section class="panel" id="panel-overview">
     <h1>It closes the month while nobody is watching.</h1>
+    <p class="hero-line" id="hero-line" aria-live="polite"></p>
     <p class="lede">
       A small trucking firm's month: documents arrive in a bucket, one broker payment
       covers eight loads at once minus a factoring fee, a fuel card statement carries
@@ -64,6 +66,16 @@
     </p>
 
     <div class="grid cards" id="stats"></div>
+
+    <div class="pane">
+      <h2>Where this close came from</h2>
+      <p class="sub tight">
+        The books on screen tie back to bytes, a build and a control flow. When
+        the mail came off the bucket, each object is listed with its sha256, so
+        the record can be checked against the objects rather than trusted.
+      </p>
+      <div class="kv" id="origin"></div>
+    </div>
 
     <div class="grid two">
       <div class="pane">
@@ -149,8 +161,9 @@
     <p class="sub">
       A haulier does not open a bookkeeping console on the first of the month, because a
       haulier is driving. So the last thing the close does is write the owner a letter and
-      put it where they already read their mail. This is the exact text that arrives.
-      Nothing here is phrased by a model: every figure came out of the close.
+      hand it to a delivery seam. This is the exact letter, and the pill on it says what
+      actually happened: delivered when a mail channel is configured, composed and filed
+      when none is. Nothing here is phrased by a model: every figure came out of the close.
     </p>
     <div class="draft" id="digest"></div>
 

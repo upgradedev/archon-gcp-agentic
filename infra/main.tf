@@ -97,6 +97,24 @@ variable "deletion_protection" {
   EOT
 }
 
+variable "agent_close" {
+  description = "1 routes the production close through the ADK agent; 0 is deterministic-only"
+  type        = string
+  default     = "1"
+}
+
+variable "model_location" {
+  description = "Vertex location for the genai client; 3.7-flash needs global"
+  type        = string
+  default     = "global"
+}
+
+variable "release" {
+  description = "short commit SHA of the image being deployed, shown on /api/health"
+  type        = string
+  default     = ""
+}
+
 variable "owner_email" {
   type        = string
   default     = ""
@@ -299,6 +317,34 @@ resource "google_cloud_run_v2_service" "archon" {
       env {
         name  = "ARCHON_EVENTS_CALLER"
         value = google_service_account.pusher.email
+      }
+      # The agent configuration is DECLARED here, not set by hand. It was
+      # first set with `gcloud run services update`, which terraform does not
+      # know about, so the next apply would have stripped it and silently
+      # turned the agent path off while the narration kept naming it.
+      env {
+        name  = "ARCHON_AGENT_CLOSE"
+        value = var.agent_close
+      }
+      env {
+        name  = "ARCHON_USE_GEMINI"
+        value = var.agent_close
+      }
+      env {
+        name  = "GOOGLE_GENAI_USE_VERTEXAI"
+        value = "TRUE"
+      }
+      # gemini-3.7-flash answers on the global endpoint and 404s on the
+      # regional ones, probed 2026-08-24 from this project. See agents.py.
+      env {
+        name  = "GOOGLE_CLOUD_LOCATION"
+        value = var.model_location
+      }
+      # Stamped into /api/health so a judge can tie the answering build to a
+      # commit. The deploy pipeline passes the short SHA it is deploying.
+      env {
+        name  = "ARCHON_RELEASE"
+        value = var.release
       }
     }
   }

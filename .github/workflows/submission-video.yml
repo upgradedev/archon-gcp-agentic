@@ -48,6 +48,7 @@ jobs:
     timeout-minutes: 30
     env:
       ARCHON_RELEASE_SHA: ${{ inputs.release_sha }}
+      ARCHON_APP_URL: https://archon-70489367760.us-central1.run.app/
       ARCHON_HOSTED_RUN_ID: ${{ inputs.hosted_run_id }}
       ARCHON_GOVERNED_RUN_ID: ${{ inputs.governed_run_id }}
     steps:
@@ -113,26 +114,29 @@ jobs:
           pip install -r requirements-dev.txt
           python -m playwright install --with-deps chromium
 
-      # Record against the artifact that actually ships, not a dev server.
-      - name: Start the shipped container
+      # Record the DEPLOYED service, and refuse to film the wrong build.
+      #
+      # This used to record a locally built container. That was defensible
+      # ("the artifact that ships") but it meant the pixels on film never came
+      # from the URL a judge opens, and the container had no Gemini identity,
+      # so nothing on screen could prove the agent claims. Now the take is the
+      # live service itself, gated first: the health endpoint must report this
+      # exact release and the adk-agent close path, or there is no recording.
+      - name: The live service is the release being filmed
         run: |
           set -euo pipefail
-          docker build -t archon:video .
-          docker run -d --name archon-video -p 8080:8080 archon:video
-          for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:8080/api/health >/dev/null && break
-            sleep 1
-          done
-          curl -sf http://127.0.0.1:8080/ | grep -q "closes the month while nobody is watching"
+          HEALTH="$(curl -sf "${ARCHON_APP_URL}api/health")"
+          echo "${HEALTH}"
+          RELEASE="$(echo "${HEALTH}" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("release") or "")')"
+          CLOSE_PATH="$(echo "${HEALTH}" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("close_path") or "")')"
+          test "${RELEASE}" = "${ARCHON_RELEASE_SHA:0:7}" || {
+            echo "::error::live release '${RELEASE}' is not '${ARCHON_RELEASE_SHA:0:7}'; deploy first, then record"; exit 1; }
+          test "${CLOSE_PATH}" = "adk-agent" || {
+            echo "::error::live close_path is '${CLOSE_PATH}', and the narration names the agent"; exit 1; }
+          curl -sf "${ARCHON_APP_URL}" | grep -q "closes the month while nobody is watching"
 
       - name: Record the judge's journey
-        env:
-          ARCHON_APP_URL: http://127.0.0.1:8080/
         run: python3 video/capture_production.py
-
-      - name: Stop the container
-        if: always()
-        run: docker rm -f archon-video || true
       - name: Compose and independently probe the final media
         run: python3 video/build-video.py
       - name: Validate the upload package

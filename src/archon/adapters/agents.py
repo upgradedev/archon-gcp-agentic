@@ -55,7 +55,13 @@ from ..runtime.mailbox import read_period
 
 #: Gemini model used unless one is injected. Overridable so a deployment can
 #: move without a code change.
-DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+#: Probed 2026-08-24 from this project: gemini-3.7-flash answers on the
+#: GLOBAL Vertex endpoint (HTTP 200, modelVersion gemini-3.7-flash) and 404s
+#: on us-central1, which is why the deployment sets GOOGLE_CLOUD_LOCATION=
+#: global. gemini-3-flash and gemini-3-pro-preview 404 even globally. Anyone
+#: changing this pin probes first; a model id nobody verified is an outage
+#: waiting for a judge.
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.7-flash")
 
 CLOSE_INSTRUCTION = """\
 You are Archon, the bookkeeper for a small trucking firm. You have been asked to
@@ -118,7 +124,10 @@ class CloseSession:
 
     def __init__(self, period: str, company: str | None = None,
                  store=None, clock: Clock | None = None,
-                 previous=None, narrator=None):
+                 previous=None, narrator=None,
+                 documents: list[Document] | None = None,
+                 raw: dict[str, str] | None = None,
+                 source: dict | None = None):
         self.period = period
         self.company = company
         self.store = store
@@ -129,8 +138,12 @@ class CloseSession:
         #: renders empty on the live route while it fills on the local one.
         self.previous = previous
         self.narrator = narrator
-        self.documents: list[Document] = []
-        self.raw: dict[str, str] = {}
+        #: Mail may be injected (the events path hands in what it read off
+        #: Cloud Storage); take_in_mail only reads the bundled corpus when
+        #: nothing was injected, and `source` says which happened.
+        self.documents: list[Document] = documents or []
+        self.raw: dict[str, str] = raw or {}
+        self.source = source
         self.result: CloseResult | None = None
         #: What the agent decided at step 5, and its verdict on the close.
         #: Empty until `decide_actions` is called, which is what makes the
@@ -310,6 +323,7 @@ class CloseSession:
             period=self.period, documents=self.documents, company=self.company,
             store=self.store, clock=self.clock, raw_texts=self.raw,
             previous=self.previous, narrator=self.narrator,
+            driver="adk-agent", source=self.source,
             decider=decider if choices is not None or verdict else None,
         )
 
@@ -350,7 +364,8 @@ def build_close_agent(session: CloseSession, model=None, name: str = "archon_clo
 def run_agent_close(period: str, company: str | None = None, model=None,
                     store=None, clock: Clock | None = None,
                     app_name: str = "archon", previous=None,
-                    narrator=None) -> tuple[CloseResult | None, str]:
+                    narrator=None, documents=None, raw=None,
+                    source=None) -> tuple[CloseResult | None, str]:
     """Let the ADK agent drive the close. Returns the result and its final word.
 
     This is the path the demo shows and the video records: one instruction in,
@@ -360,7 +375,8 @@ def run_agent_close(period: str, company: str | None = None, model=None,
     from google.genai import types
 
     session = CloseSession(period=period, company=company, store=store, clock=clock,
-                           previous=previous, narrator=narrator)
+                           previous=previous, narrator=narrator,
+                           documents=documents, raw=raw, source=source)
     agent = build_close_agent(session, model=model)
     runner = InMemoryRunner(agent=agent, app_name=app_name)
     user, session_id = "owner", f"close-{period}"

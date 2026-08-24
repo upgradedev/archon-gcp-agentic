@@ -190,7 +190,7 @@ def test_nothing_is_disabled_without_a_reason_and_nothing_renders_empty(page, ba
     expect(page.locator("#run")).to_be_enabled(timeout=30_000)
     assert page.locator("button:disabled").count() == 0
     for selector in ("#trail", "#stats", "#alloc", "#findings", "#drafts",
-                     "#digest", "#gates", "#trucks"):
+                     "#digest", "#gates", "#trucks", "#hero-line", "#origin"):
         assert page.locator(selector).inner_html().strip(), f"{selector} rendered empty"
 
 
@@ -408,3 +408,53 @@ def test_the_earliest_month_says_there_is_nothing_behind_it(page, base_url):
             f"{name} rendered empty for {earliest}"
 
     assert errors == []
+
+
+# ── the hero, the origin, and the replay ─────────────────────────────────────
+#
+# The first fold now answers "what happened and how much" in one line, and the
+# origin card ties the books to bytes, a driver, a model and a build. These are
+# the newest judge-facing claims, so they get browser assertions like the rest.
+
+def test_the_hero_line_tells_the_whole_story_in_one_sentence(page, base_url):
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    hero = page.locator("#hero-line")
+    expect(hero).to_be_visible()
+    expect(hero).to_contain_text("One payment.")
+    expect(hero).to_contain_text("$")
+
+
+def test_the_origin_card_names_the_mailbox_the_driver_and_the_run(page, base_url):
+    """Provenance, not decoration: a local run must say it read the bundled
+    sample and was driven deterministically, because that is the truth here."""
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    origin = page.locator("#origin")
+    expect(origin).to_be_visible()
+    expect(origin).to_contain_text("bundled synthetic sample")
+    expect(origin).to_contain_text("deterministic")
+    expect(origin).to_contain_text("Run")
+
+
+def test_replay_re_renders_without_re_executing_anything(page, base_url):
+    """The watchable version of the run must not masquerade as the production
+    trigger. The status line says so in as many words, and no network request
+    for a close leaves the page."""
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+    posts = []
+    page.on("request", lambda r: posts.append(r.url) if r.method == "POST" else None)
+
+    page.locator("#replay").click()
+
+    expect(page.locator("#trail .step")).to_have_count(11)
+    expect(page.locator("#status")).to_contain_text("nothing was re-executed")
+    assert posts == [], f"replay reached the server: {posts}"
+
+    delays = page.eval_on_selector_all(
+        "#trail .step", "els => els.map(e => getComputedStyle(e).animationDelay)")
+    assert len(set(delays)) >= 5, "the replayed trail lost its stagger"
