@@ -56,7 +56,9 @@ That sounds small. It is the reason a haulier's books never close. A broker does
 not pay per load. It pays once a fortnight, in a single bank credit, covering
 however many loads it feels like, minus a factoring fee charged on the whole
 batch, minus whatever it decided to hold back on individual loads. The bank shows
-one number and the books need nine. Matching software cannot do it, because
+one number, and the payment must be allocated across the eight loads it
+settles, with the batch fee accounted for separately. Matching software
+cannot do it, because
 matching asks "which document is this payment" and the honest answer is "eight of
 them, at amounts none of which equal the payment."
 
@@ -111,16 +113,20 @@ the one thing a person does, and it is deliberate: every step Archon takes can b
 re-run and produces the same books, but an email to a broker cannot be un-sent.
 
 Every figure above was computed by a deterministic ledger, never phrased by a
-model. Gemini reads documents and writes English; it is handed a fact sheet and is
-never in a position to introduce a number. An artifact nobody could read is
-reported as an exception and posted as nothing, and a gate fails the whole close if
-an unreadable document is ever given a figure, because that is the one failure that
-would not announce itself.
+model. Gemini's role is judgement and sequencing, not arithmetic: the ADK agent
+decides which tool to call and when the month is finished, weighs what each
+exception deserves and can withhold a close the gates passed; when the live
+narrator is enabled it also phrases the summary from a fact sheet it cannot add
+to. Parsing and every figure are deterministic, and a gate fails the whole close
+if an unreadable document is ever given a figure, because that is the one
+failure that would not announce itself. An artifact nobody could read is
+reported as an exception and posted as nothing.
 
 Built on Google ADK, Gemini 3.7 Flash, Cloud Run, Firestore, Cloud Storage and Pub/Sub. Take
-ADK away and there is no agent, only a function somebody has to remember to run.
-Take Firestore away and a container that scales to zero between months has nowhere
-to keep the trail.
+ADK away and the judgement goes with it: the trigger would still fire arithmetic,
+but nothing would weigh the exceptions, choose what each deserves, or withhold a
+close the gates passed. Take Firestore away and a container that scales to zero
+between months has nowhere to keep the trail.
 
 It is for owner-operator trucking firms running three to twelve trucks. It replaces
 the shoebox, and the bookkeeper who gets to it in April.
@@ -190,7 +196,7 @@ A broker does not pay per load. It pays once a fortnight, in a single bank
 credit, covering however many loads it feels like, minus a factoring fee charged
 on the whole batch, minus whatever it decided to hold back on individual loads.
 
-The bank shows one number. The books need nine.
+The bank shows one number. Eight loads and one batch fee have to come out of it.
 
 Matching software cannot do this. Matching asks "which document is this
 payment?" and the answer is "eight of them, at amounts none of which equal the
@@ -331,7 +337,7 @@ flowchart TB
         fs[("Firestore<br/>runs · closes · drafts · documents")]
         gem["Gemini<br/>reads documents, writes English"]
     end
-    owner(["the owner's inbox"])
+    owner(["the owner's close package,<br/>composed and filed"])
 
     gcs -->|object finalize| ea --> ps -->|nobody pressed anything| svc
     svc --> agent
@@ -475,11 +481,14 @@ is still unsent. If either half of that ever drifts, it goes red.
 
 ## What Google is doing here
 
-**Remove Google ADK and there is no agent.** The six tools in `archon/agents.py`
-are the close, one step each, and it is the ADK `Agent` that decides to call
-them and when the month is finished. Take it away and what is left is a function
-somebody has to remember to run, on a schedule somebody has to maintain, with a
-summary nobody wrote. The unattended part of the claim lives in that file.
+**Remove Google ADK and the judgement goes with it.** The tools in
+`archon/agents.py` are the close, one step each, and it is the ADK `Agent` that
+decides to call them, weighs each exception's disposition and can withhold a
+close every gate passed. To be precise about what remains: the bucket
+notification and Pub/Sub push still fire, and the deterministic engine can
+still compute books on a trigger. What disappears is everything agentic in
+between: nothing sequences the chore, judges the exceptions, or exercises the
+veto. Unattended arithmetic is not an agent.
 
 **Remove Firestore and the run has no memory.** A Cloud Run container that
 scales to zero between months has nowhere to keep the trail, the books or the
@@ -534,7 +543,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 472 | `python -m pytest` |
+| Tests, all offline | 479 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
