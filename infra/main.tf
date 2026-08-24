@@ -276,6 +276,11 @@ resource "google_cloud_run_v2_service" "archon" {
   deletion_protection = var.deletion_protection
 
   template {
+    # An agent-driven close on a thinking model runs for minutes. The default
+    # 300s was fine for the deterministic path; a request cut off mid-close
+    # turns into a Pub/Sub redelivery, so the ceiling is set above the close,
+    # not above the average request.
+    timeout = "600s"
     service_account = google_service_account.runtime.email
     timeout         = "120s"
 

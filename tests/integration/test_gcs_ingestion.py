@@ -253,3 +253,39 @@ def test_an_unreadable_bucket_is_acknowledged_and_named_not_retried_forever(
     assert response.status_code == 200, "a 500 here means redelivery until expiry"
     assert body["status"] == "error"
     assert "RuntimeError" in body["reason"]
+
+
+def test_a_redelivery_during_a_running_close_is_told_to_come_back(wired):
+    """503, not 200. A 200 acks work that has not finished; if the first
+    attempt then dies with its instance, the event is gone and the month never
+    closes. A 503 makes Pub/Sub retry until the marker says closed."""
+    store, _runs = wired
+    env = envelope(generation="777")
+    key = gcs.dedupe_key(env, PERIOD)
+    store.save_close(service.COMPANY, key, {"period": PERIOD, "status": "processing"})
+
+    response = _post(env)
+
+    assert response.status_code == 503
+    assert json.loads(response.body)["status"] == "in-progress"
+
+
+def test_the_blocking_close_runs_off_the_event_loop():
+    """The outage of 2026-08-24, asserted structurally. `/events` is an async
+    handler; a synchronous close inside it runs ON the loop, and a minutes-long
+    agent close starves every request on the instance, health included. Cloud
+    Run 504s them all and Pub/Sub answers with redeliveries. The handler must
+    hand both blocking calls to the threadpool."""
+    import inspect
+
+    body = inspect.getsource(service.events)
+
+    assert "run_in_threadpool" in body, "the close is back on the event loop"
+    # A synchronous call reads `gcs.read_gcs_period(...)` or `_close(period`;
+    # the threadpool form passes the callable as an argument instead. The
+    # pattern is deliberately narrow so `load_close(`/`save_close(` (fast
+    # store lookups) do not trip it.
+    for call in ("gcs.read_gcs_period(", "_close(period"):
+        direct = [line.strip() for line in body.splitlines()
+                  if call in line and "run_in_threadpool" not in line]
+        assert direct == [], f"called synchronously on the loop: {direct}"
