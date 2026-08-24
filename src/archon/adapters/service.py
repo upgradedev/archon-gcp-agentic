@@ -34,7 +34,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import PERIOD, __version__, paths
 from ..runtime.close import run_close
 from ..runtime.mailbox import available_periods, read_period
-from . import auth, headers
+from . import auth, gcs, headers
 from .store import LocalStore, get_store
 
 log = logging.getLogger("archon.service")
@@ -91,7 +91,7 @@ def _narrator():
         return None
 
 
-def _close(period: str, store=None) -> dict:
+def _close(period: str, store=None, documents=None, raw=None, source=None) -> dict:
     """Run one close and return it as the shape the page renders.
 
     `store` decides what the run is allowed to touch, and it is the whole of
@@ -99,10 +99,15 @@ def _close(period: str, store=None) -> dict:
     the trusted route hands in the durable one. The close itself cannot tell
     the difference and produces identical books either way.
     """
-    try:
-        documents, raw = read_period(period)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if documents is None:
+        try:
+            documents, raw = read_period(period)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if source is None:
+            source = {"mailbox": "bundled-sample",
+                      "detail": f"corpus/{period}, the synthetic month shipped "
+                                "with the repository"}
 
     target = store if store is not None else get_store()
     previous = _previous_statements(period)
@@ -118,6 +123,7 @@ def _close(period: str, store=None) -> dict:
             result, _final = run_agent_close(
                 period=period, company=COMPANY, store=target,
                 previous=previous, narrator=_narrator(),
+                documents=documents, raw=raw, source=source,
             )
             if result is not None:
                 payload = result.to_dict()
@@ -131,6 +137,7 @@ def _close(period: str, store=None) -> dict:
     result = run_close(
         period=period, documents=documents, company=COMPANY,
         store=target, narrator=_narrator(), raw_texts=raw, previous=previous,
+        source=source,
     )
     payload = result.to_dict()
     payload["driver"] = "deterministic"
@@ -196,6 +203,11 @@ def health() -> dict:
         # which path closes a month here, and which model it would reach for.
         "close_path": "adk-agent" if USE_AGENT else "deterministic",
         "model": _model_id() if (USE_AGENT or USE_GEMINI) else None,
+        # Which build answered. K_REVISION is stamped by Cloud Run itself;
+        # ARCHON_RELEASE is set at deploy time to the short commit, so a judge
+        # can tie this JSON to a commit without trusting our README.
+        "revision": os.getenv("K_REVISION"),
+        "release": os.getenv("ARCHON_RELEASE"),
         "events_auth": auth.posture(),
         "periods": available_periods(),
     }
@@ -273,12 +285,56 @@ async def events(request: Request) -> JSONResponse:
         return JSONResponse(
             {"status": "ignored", "reason": "no period in the event"}, status_code=200
         )
-    if period not in available_periods():
+
+    # One close per object generation. Pub/Sub is at-least-once, and without
+    # this a redelivered message re-runs the close and re-writes the record,
+    # which is wasteful at best and, with the agent on, costs a model run.
+    marker_key = gcs.dedupe_key(envelope, period)
+    if marker_key:
+        if get_store().load_close(COMPANY, marker_key):
+            return JSONResponse(
+                {"status": "duplicate", "reason":
+                 "this object generation already closed the period"},
+                status_code=200)
+        get_store().save_close(COMPANY, marker_key,
+                               {"period": period, "status": "processing"})
+
+    # The mail is the actual objects in the bucket the event names, not the
+    # bundled corpus. The event used to pick only the *period* and the close
+    # re-read the repository's own sample month, which meant the object a
+    # bookkeeper uploaded was never opened. If the bucket cannot be read the
+    # failure is acknowledged and named rather than retried forever: a push
+    # handler that 500s on a permanent error is redelivered until it expires.
+    bucket = _bucket_from_envelope(envelope)
+    documents = raw = source = None
+    if bucket:
+        try:
+            documents, raw, manifest = gcs.read_gcs_period(bucket, period)
+            if documents:
+                source = gcs.event_source(envelope, period, manifest)
+            else:
+                return JSONResponse(
+                    {"status": "ignored",
+                     "reason": f"no readable mail under gs://{bucket}/mail/{period}/"},
+                    status_code=200)
+        except Exception as exc:                       # noqa: BLE001 - push handler
+            log.error("gcs mailbox read failed for %s (%s: %s)",
+                      period, type(exc).__name__, exc)
+            return JSONResponse(
+                {"status": "error",
+                 "reason": f"could not read gs://{bucket}/mail/{period}/: "
+                           f"{type(exc).__name__}"},
+                status_code=200)
+    elif period not in available_periods():
         return JSONResponse(
             {"status": "ignored", "reason": f"no mail for {period}"}, status_code=200
         )
 
-    result = _close(period)
+    result = _close(period, documents=documents, raw=raw, source=source)
+    if marker_key:
+        get_store().save_close(COMPANY, marker_key,
+                               {"period": period, "status": "closed",
+                                "run_id": result["run_id"]})
     return JSONResponse(
         {
             "status": "closed",
@@ -290,6 +346,21 @@ async def events(request: Request) -> JSONResponse:
         },
         status_code=200,
     )
+
+
+def _bucket_from_envelope(envelope: dict) -> str | None:
+    """The bucket the event names, from attributes or the payload."""
+    message = envelope.get("message") or {}
+    attributes = message.get("attributes") or {}
+    if attributes.get("bucketId"):
+        return str(attributes["bucketId"])
+    if message.get("data"):
+        try:
+            payload = json.loads(base64.b64decode(message["data"]).decode("utf-8"))
+            return payload.get("bucket") or None
+        except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+            return None
+    return None
 
 
 def _period_from_envelope(envelope: dict) -> str | None:

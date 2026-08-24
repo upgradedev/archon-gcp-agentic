@@ -25,3 +25,8 @@ google-cloud-firestore>=2.19,<3
 # that configured an audience refuses every trigger, which is the correct
 # failure but a useless one.
 google-auth>=2.35,<3
+
+# Reading the month's mail off the bucket a notification names. The events
+# route downloads and hashes the exact objects; tests inject a fake client so
+# the suite never needs this installed.
+google-cloud-storage>=2.18,<4

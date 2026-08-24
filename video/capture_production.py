@@ -2,8 +2,9 @@
 
 The choreography is not invented here. It is the sequence already asserted at
 both viewports by `tests/e2e/test_browser_journey.py`, which runs on every push:
-open the page, press the one button, watch eleven steps land, read the owner's
-letter, see the five counterparty letters marked filed rather than sent. The
+open the page, read the origin receipts, replay the recorded run, watch eleven
+steps land, read the owner's letter, see the five counterparty letters marked
+filed rather than sent. The
 video shows exactly what that test proves, so the cut cannot drift away from the
 product without CI going red first.
 
@@ -13,9 +14,10 @@ no JavaScript toolchain at all. Playwright's Python binding records video just
 as well, it is already a dependency because the browser journey uses it, and one
 language means one set of versions to keep honest.
 
-It records against the built container over localhost. A public URL is not
-required for this challenge, and recording the artifact that actually ships is
-more honest than recording a dev server.
+It records the DEPLOYED service. The workflow refuses to film until the live
+health endpoint reports the exact release being recorded and the adk-agent
+close path, so the pixels on film come from the URL a judge opens, showing the
+run that production actually persisted, provenance card included.
 
     ARCHON_VIDEO_ROOT=/tmp/video ARCHON_RELEASE_SHA=<40 hex> \\
         python video/capture_production.py
@@ -121,7 +123,7 @@ def main() -> int:
         #: visitor does. Getting this wrong does not produce a bad take, it
         #: produces a timeout, which is the failure mode to prefer.
         PANEL_OF = {
-            "#trail": "overview", "#stats": "overview",
+            "#trail": "overview", "#stats": "overview", "#origin": "overview",
             "#register": "register", "#alloc": "alloc", "#findings": "findings",
             "#digest": "letters", "#drafts": "letters",
             "#trends": "trends", "#trucks": "trucks", "#gates": "checks",
@@ -144,23 +146,20 @@ def main() -> int:
         #    replayed the last close, so the letter is there before any press.
         hold("surface", lambda: scroll_to("#digest"))
 
-        # 3. Nobody presses anything. For a judge watching, one press stands in
-        #    for the object landing in the bucket: a file arriving is not
-        #    watchable, and pretending otherwise would be a staged shot.
-        def press():
-            # Back to Overview before the press, not after. The trail's stagger
-            # is a CSS animation that starts when the steps enter the DOM, so a
-            # run begun on another tab has already played by the time the tab
-            # opens, and the one thing this video exists to show is gone.
-            page.locator('.tab[data-panel="overview"]').click()
-            page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
-            page.wait_for_timeout(600)
-            page.locator("#run").click()
+        # 3. Nobody presses anything, and nothing on film pretends otherwise.
+        #    The proof of the trigger is the origin card: the gs:// object and
+        #    generation that fired, the Pub/Sub message that delivered it, the
+        #    agent that drove the close, the model, and the build. This beat
+        #    used to stage a button press as a stand-in; now it shows the
+        #    receipts of the run that actually happened unattended.
+        hold("trigger", lambda: scroll_to("#origin"))
 
-        hold("trigger", press)
-
-        # 4. The chore, running. Eleven steps, landing one at a time.
+        # 4. The chore, running. Eleven steps, landing one at a time. Replay
+        #    re-renders the persisted run's trail (the button says so on the
+        #    page): nothing re-executes, which also means the film never waits
+        #    on a live model round-trip mid-beat.
         def watch():
+            page.locator("#replay").click()
             scroll_to("#trail")
             page.wait_for_function(
                 "() => document.querySelectorAll('#trail .step').length === 11",

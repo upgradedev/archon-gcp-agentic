@@ -23,6 +23,7 @@ const title = (s) => { const w = words(s); return w.charAt(0).toUpperCase() + w.
 
 let period = "2026-07";
 let last = null;
+let health = null;
 
 // ── the shell ────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,8 @@ async function close() {
 }
 
 function render(d) {
+  renderHero(d);
+  renderOrigin(d);
   renderTrail(d.journal);
   renderStats(d);
   renderExpenseChart(d.statements);
@@ -175,6 +178,57 @@ function renderMileChart(s) {
     { label: "Margin a mile", value: margin, tone: margin >= 0 ? "primary" : "err",
       display: num(margin, 3) },
   ]);
+}
+
+// The whole story in one line: one payment, how many jobs it settled, and
+// the money that was quietly going missing. Every figure is the close's own.
+function renderHero(d) {
+  const first = (d.allocations && d.allocations[0]) || null;
+  const parts = [];
+  if (first) parts.push(`One payment. ${first.lines.length} loads.`);
+  if (d.leakage > 0) parts.push(`${usd(d.leakage)} was quietly leaking.`);
+  else if (d.outstanding > 0) parts.push(`${usd(d.outstanding)} invoiced and unpaid.`);
+  else parts.push("Nothing was leaking.");
+  $("hero-line").textContent = parts.join(" ");
+}
+
+// The evidence a judge checks before believing a number: which bytes, which
+// control flow, which model, which build. Absences are stated, not padded.
+function renderOrigin(d) {
+  const rows = [];
+  const src = d.source;
+  if (src && src.mailbox === "gcs") {
+    rows.push(["Mail read", `gs://${src.bucket}/mail/${src.period}/ · ` +
+      `${src.objects_read} object(s), sha256 recorded per object` +
+      (src.objects_skipped ? `, ${src.objects_skipped} skipped` : "")]);
+    if (src.trigger_object) rows.push(["Triggered by",
+      `${src.trigger_object} @ generation ${src.trigger_generation || "?"}` +
+      (src.message_id ? ` · Pub/Sub message ${src.message_id}` : "")]);
+    if (src.manifest && src.manifest[0]) rows.push(["First object hash",
+      `${src.manifest[0].sha256.slice(0, 16)}… (${src.manifest[0].object})`]);
+  } else if (src && src.mailbox === "bundled-sample") {
+    rows.push(["Mail read", "the bundled synthetic sample month, shipped with the "
+      + "repository and labelled as such"]);
+  } else {
+    rows.push(["Mail read", "recorded before provenance existed; run the trigger "
+      + "again to stamp it"]);
+  }
+  rows.push(["Close driven by", d.driver
+    ? (d.driver === "adk-agent" ? "the Google ADK agent choosing the tool calls"
+                                : "the deterministic orchestrator")
+    : "recorded before the driver stamp existed"]);
+  if (health) {
+    rows.push(["This deployment", `${health.close_path} close path · model ` +
+      `${health.model || "none configured"}`]);
+    if (health.release || health.revision) rows.push(["Build",
+      `${health.release ? "commit " + health.release : ""}` +
+      `${health.release && health.revision ? " · " : ""}` +
+      `${health.revision || ""}`]);
+  }
+  rows.push(["Run", `${d.run_id} · ${title(d.outcome)}`]);
+  $("origin").innerHTML = rows.map(([k, v]) =>
+    `<div class="kv-row"><span class="kv-k">${esc(k)}</span>
+     <span class="kv-v">${esc(v)}</span></div>`).join("");
 }
 
 // ── the run trail ────────────────────────────────────────────────────────────
@@ -446,6 +500,15 @@ function renderTrends(comparison, line) {
 $("run").addEventListener("click", close);
 $("raw").addEventListener("click", () => window.open(`/api/close/${period}`, "_blank"));
 
+// Replays the rendering of the close already on screen. No server call: the
+// run happened (and persisted) once; this makes it watchable again without
+// pretending the production trigger fired.
+$("replay").addEventListener("click", () => {
+  if (!last) return;
+  render(last);
+  $("status").textContent = `replaying run ${last.run_id} · nothing was re-executed`;
+});
+
 // Switching month is a read, not a run: it shows the close already on file.
 $("period").addEventListener("change", () => {
   period = $("period").value;
@@ -469,6 +532,9 @@ function loadStored(note) {
 
 // Which months have mail waiting. Rendered newest first, because the month an
 // owner wants is nearly always the one that just ended.
+fetch("/api/health").then((r) => r.ok ? r.json() : null)
+  .then((h) => { health = h; if (last) renderOrigin(last); }).catch(() => {});
+
 fetch("/api/periods").then((r) => r.ok ? r.json() : null).then((d) => {
   if (!d || !d.periods || !d.periods.length) return;
   period = d.default && d.periods.includes(d.default) ? d.default : d.periods[0];

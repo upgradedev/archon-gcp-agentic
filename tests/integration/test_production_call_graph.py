@@ -125,17 +125,24 @@ def test_health_names_the_model_the_agent_would_actually_call(monkeypatch):
 def test_the_model_is_one_this_project_can_actually_reach():
     """A model id nobody verified is an outage waiting for the judge.
 
-    Every `gemini-3*` and `gemini-3.5*` candidate returns 404 from this
-    project's Vertex endpoint; the 2.5 family returns 200. So the pin stays on
-    a family that exists, and this test is where anyone raising it has to
-    re-check availability first rather than trusting a version number.
+    This test did its job once already: it blocked a blind upgrade until the
+    endpoint was probed, and the probe then overturned the premise it was
+    written on. The 2026-08-23 probe hit only us-central1, where every 3.x
+    404s. The 2026-08-24 probe of the GLOBAL endpoint got HTTP 200 and
+    `modelVersion: gemini-3.7-flash` from this very project, which is why the
+    pin moved and why the deployment sets GOOGLE_CLOUD_LOCATION=global.
+    gemini-3-flash and gemini-3-pro-preview 404 even globally.
+
+    Anyone moving the pin again: probe first, then update BOTH this test and
+    the location note in agents.py, because a model that answers on one
+    endpoint and not another is exactly how yesterday's wrong conclusion
+    happened.
     """
     from archon.adapters.agents import DEFAULT_MODEL
 
-    assert DEFAULT_MODEL.startswith("gemini-"), DEFAULT_MODEL
-    assert not DEFAULT_MODEL.startswith("gemini-3"), (
-        f"{DEFAULT_MODEL} is not available in this project; probe the endpoint "
-        "before changing this pin"
+    assert DEFAULT_MODEL == "gemini-3.7-flash", (
+        f"the pin moved to {DEFAULT_MODEL!r} - probe the global endpoint from "
+        "this project and update this test with the evidence"
     )
 
 

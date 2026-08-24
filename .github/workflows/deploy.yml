@@ -133,7 +133,7 @@ jobs:
             -var "project_id=${PROJECT_ID}" \
             -var "region=${REGION}" \
             -var "service_name=${SERVICE}" \
-            -var "image=gcr.io/${PROJECT_ID}/${SERVICE}:${{ steps.target.outputs.short }}"
+            -var "image=gcr.io/${PROJECT_ID}/${SERVICE}:${{ steps.target.outputs.short }}"             -var "release=${{ steps.target.outputs.short }}"
 
       # A deploy that reports success without opening the page is a deploy that
       # has proved nothing. `curl --fail` plus an explicit grep, because a 404

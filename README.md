@@ -73,17 +73,23 @@ that do not add up, writes
 the corrective letters, checks its own books against five gates, and marks the
 period closed with a trail in Firestore you can walk back through.
 
-Then it emails the owner. That last step matters more than it looks. A haulier
-does not open a bookkeeping console on the first of the month, because a haulier
-is driving. If the answer only exists on a page we built, the agent worked all
-night for nobody. So the month arrives where they already read their mail: what
-the firm made, what is at stake and of what kind, and what Archon already did
-about it.
+Then it writes the owner their month-end letter and hands it to a delivery
+seam, with a receipt that says what actually happened: delivered when a mail
+channel is configured, composed and filed when none is, and the demo runs with
+none so that no credential sits in a public repository. The letter matters more
+than it looks. A haulier does not open a bookkeeping console on the first of
+the month, because a haulier is driving. The letter is the month in the shape
+they would read it: what the firm made, what is at stake and of what kind, and
+what Archon already did about it.
 
-**This product does not make anyone money.** It does not win work, raise rates or
-cut costs. It removes the hours a month-end takes, and it catches the small
-things that leak away when nobody has those hours. Being precise about that is
-the difference between a tool and a pitch.
+**What the buyer gets, said precisely.** Archon does not win work or raise
+rates. It gives back the hours a month-end takes, catches the money that leaks
+when nobody has those hours, and turns "I think we are fine" into figures with
+sources attached. On the bundled synthetic month that is 612.85 of quiet
+leakage caught and a close that runs unattended instead of eating an evening;
+both figures are labelled, measured, and reproducible by pressing the button.
+Being precise about which value is which is the difference between a tool and
+a pitch.
 
 On the July it ships with: 23,005.00 billed over 10,810 miles against 21,010.76
 spent, a margin of 0.184 a mile. The five letters it wrote break into three
@@ -111,7 +117,7 @@ reported as an exception and posted as nothing, and a gate fails the whole close
 an unreadable document is ever given a figure, because that is the one failure that
 would not announce itself.
 
-Built on Google ADK, Gemini, Cloud Run, Firestore, Cloud Storage and Pub/Sub. Take
+Built on Google ADK, Gemini 3.7 Flash, Cloud Run, Firestore, Cloud Storage and Pub/Sub. Take
 ADK away and there is no agent, only a function somebody has to remember to run.
 Take Firestore away and a container that scales to zero between months has nowhere
 to keep the trail.
@@ -120,6 +126,33 @@ It is for owner-operator trucking firms running three to twelve trucks. It repla
 the shoebox, and the bookkeeper who gets to it in April.
 
 ---
+
+## Who buys this, and what it replaces
+
+*The market sentence: Archon reconciles one payout across all the jobs it
+settles, so a small business can close the month without reopening every
+invoice. Trucking is the first installed pack, not the product's edges.*
+
+- **Beachhead**: owner-operator trucking firms running 3 to 12 trucks. Concrete,
+  underserved, and the many-to-one payment problem is their daily shape: one
+  broker remittance settles many loads, minus a batch fee, minus per-load
+  holdbacks.
+- **User, buyer, payer**: the owner, who today does this on evenings, or the
+  firm's outside bookkeeper. The budget it comes from is what the bookkeeper's
+  reconciliation hours cost, or the owner's own unpaid admin time.
+- **What it replaces**: the shoebox, the spreadsheet, and the April
+  reconciliation, where a year of quiet short-pays surfaces at once.
+- **Expansion, honestly labelled**: the close engine (allocation, register,
+  gates, drafts) has no trucking in it; the trucking vocabulary lives at the
+  edges, in the extractor and the statement labels. Any business paid in
+  consolidated payouts has this month: agencies paid per project by platforms,
+  trades paid on consolidated invoices, consultants on retainers plus
+  pass-through expenses. **One pack is implemented and demonstrated. The others
+  are architecture, not claims**: no second pack ships in this entry, and no
+  screenshot pretends one does.
+
+All money figures in this README are from the bundled synthetic month and are
+labelled as such; no real firm's books appear anywhere in this repository.
 
 ## The chore
 
@@ -138,8 +171,9 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
 8. checks its own work against five gates
 9. writes the month-end summary from a fact sheet it is not allowed to add to
 10. marks the period closed with a trail you can walk back through
-11. **emails the owner their month-end letter**, because a haulier does not open a
-    bookkeeping console on the first of the month, they are driving
+11. **writes the owner their month-end letter and hands it to the delivery
+    seam**, recording delivered or filed on the receipt, because a haulier does
+    not open a bookkeeping console on the first of the month, they are driving
 
 Nobody is asked anything at any point. The one thing a person does is press send
 on the letters that leave for a third party.
@@ -500,7 +534,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 455 | `python -m pytest` |
+| Tests, all offline | 470 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -580,6 +614,18 @@ An object landed in a bucket. Cloud Storage published an object-finalize
 notification, Pub/Sub pushed it to `/events` with an OIDC token, and Cloud Run
 closed the month. Nobody pressed anything, and nobody was watching.
 
+**And the close reads the actual objects.** `/events` downloads every object
+under `mail/<period>/` in the bucket the event names, hashes each one, dedupes
+identical bytes, and builds the month from what it read. The persisted record
+carries the manifest: object, generation, size, sha256, plus the Pub/Sub
+message id that delivered the trigger, and the page's origin card shows it.
+Upload a different remittance and the books change, which is the definition of
+the ingestion being real. (It was not always: this route used to take only the
+period out of the event and re-read the bundled corpus, so the uploaded object
+was never opened. That is fixed, and a test named for the defect keeps it
+fixed.) A duplicate Pub/Sub delivery of the same object generation is
+acknowledged as a duplicate and does not re-run the close.
+
 Three requests hit that one route, and together they are the whole argument:
 
 ```
@@ -645,6 +691,27 @@ gh workflow run Deploy -f mode=plan
 Terraform state lives in a versioned bucket in the project it describes. It was
 a local file, which is precisely what stopped this being automatable: a pipeline
 cannot apply a plan it cannot read.
+
+## Every claim, and where its evidence lives
+
+Present-tense claims resolve to code, a test, or a live probe. If a row's
+evidence does not hold, the claim comes out of this README rather than the
+evidence being argued with.
+
+| Claim | Evidence in this repo | Check it live |
+|---|---|---|
+| An object landing closes the month, nobody pressing anything | `infra/main.tf` (`google_storage_notification`, topic, push subscription), `service.py:/events` | `gcloud storage cp` a corpus file, then the log query above |
+| The close reads the uploaded bytes, not a bundled copy | `adapters/gcs.py`, `test_gcs_ingestion.py::test_a_different_object_produces_a_different_close` | origin card on the page; `source.manifest[].sha256` in `GET /api/close/2026-07` |
+| Duplicate Pub/Sub delivery is safe | `gcs.dedupe_key`, `test_the_same_object_generation_closes_the_period_exactly_once` | re-`cp` the same file: response says `duplicate` |
+| A Google ADK agent drives the production close | `agents.py:run_agent_close`, `test_production_call_graph.py` | `GET /api/health` → `close_path: adk-agent`; a fresh `POST /api/close/2026-07` → `driver: adk-agent` |
+| The model is Gemini 3.7 Flash on the global endpoint | `agents.py:DEFAULT_MODEL` and its probe note | `GET /api/health` → `model` |
+| No figure is phrased by a model | `domain/` imports no SDK; narrator gets a fact sheet only | compare `POST` twice: figures identical to the cent |
+| The identity closes: landed = lines − fee | `allocation.py`, browser test on `#alloc` | Allocation tab, "identity closes, residual 0.00" |
+| Letters to counterparties are never sent | `test_every_draft_is_filed_and_never_sent`, no send path in `drafts.py` | Letters tab: every draft pilled "filed, not sent" |
+| The owner letter's delivery status is told, not assumed | `delivery.py` receipt, `test_the_default_deliverer_composes_and_sends_nothing` | Letters tab pill: "delivered" only when a channel is configured |
+| The books persist with an 11-step trail | Firestore adapter tests | `GET /api/close/2026-07` from a cold browser |
+| Which build is answering | `service.py:health` | `GET /api/health` → `release`, `revision` |
+| CI, security scan, readiness gate green on the release | `.github/workflows/` | the badges and runs on the repo |
 
 ## Pre-existing components
 

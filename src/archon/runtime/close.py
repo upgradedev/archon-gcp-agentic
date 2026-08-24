@@ -107,6 +107,13 @@ class CloseResult:
     digest: Digest | None = None
     receipt: Receipt | None = None
     stored: dict = field(default_factory=dict)
+    #: Which control flow produced this close, and from what source material.
+    #: `driver` is "deterministic" or "adk-agent". `source` is present only
+    #: when the mail came off Cloud Storage: bucket, object, generation, the
+    #: Pub/Sub message id and a per-object sha256 manifest, so a judge can tie
+    #: the books on screen to the exact bytes that produced them.
+    driver: str = "deterministic"
+    source: dict | None = None
 
     @property
     def closed(self) -> bool:
@@ -140,6 +147,8 @@ class CloseResult:
             "run_id": self.run_id,
             "period": self.period,
             "company": self.company,
+            "driver": self.driver,
+            "source": self.source,
             "outcome": self.outcome,
             "summary": self.summary,
             "statements": _plain(self.statements),
@@ -209,7 +218,9 @@ def run_close(period: str,
               deliverer: Deliverer | None = None,
               owner_email: str | None = None,
               decider: Decider | None = None,
-              previous: Statements | None = None) -> CloseResult:
+              previous: Statements | None = None,
+              driver: str = "deterministic",
+              source: dict | None = None) -> CloseResult:
     """Close one period. Returns even when it fails; read `outcome`.
 
     Raising on a bad month would be the wrong shape. A close that hits a
@@ -231,8 +242,10 @@ def run_close(period: str,
             by_type[doc.doc_type.value] = by_type.get(doc.doc_type.value, 0) + 1
         for name, text in (raw_texts or {}).items():
             store.put_document(name, text)
+        origin = (f" from gs://{source['bucket']}/mail/{period}/"
+                  if source and source.get("bucket") else "")
         step.note(
-            f"{len(documents)} artifacts: "
+            f"{len(documents)} artifacts{origin}: "
             + ", ".join(f"{n.replace('_', ' ')} x{c}" for n, c in sorted(by_type.items())),
             documents=len(documents), **by_type,
         )
@@ -347,19 +360,22 @@ def run_close(period: str,
             facts += "\n\nAGAINST THE MONTH BEFORE\n  " + trends_mod.narrate(comparison)
         deterministic = narrate(statements, findings, gates, filed)
         summary = deterministic
-        source = "deterministic"
+        # Named phrased_by, NOT source: `source` is the run_close parameter
+        # carrying mail provenance, and this local used to shadow it, which
+        # put the string "deterministic" into the persisted source field.
+        phrased_by = "deterministic"
         if narrator is not None:
             try:
                 phrased = narrator(facts)
                 if phrased and phrased.strip():
-                    summary, source = phrased.strip(), "gemini"
+                    summary, phrased_by = phrased.strip(), "gemini"
             except Exception as exc:  # a model failure must not fail a close
                 step.note(f"narrator unavailable ({type(exc).__name__}), used the "
                           f"deterministic summary")
         step.note(
             f"summary written from a {len(facts.splitlines())}-line fact sheet "
-            f"({source}); no figure was phrased by a model",
-            fact_lines=len(facts.splitlines()), source=source,
+            f"({phrased_by}); no figure was phrased by a model",
+            fact_lines=len(facts.splitlines()), source=phrased_by,
         )
 
     # 9. File. The period is recorded closed, or recorded blocked and why.
@@ -374,7 +390,7 @@ def run_close(period: str,
             gates=gates, drafts=filed, summary=summary, facts=facts,
             journal=run, ledger=ledger, decisions=decisions,
             outcome_reason=outcome_reason, register=open_items,
-            comparison=comparison,
+            comparison=comparison, driver=driver, source=source,
         )
         stored["close"] = store.save_close(company, period, result.to_dict())
         stored["drafts"] = store.save_drafts(run.run_id, filed)
