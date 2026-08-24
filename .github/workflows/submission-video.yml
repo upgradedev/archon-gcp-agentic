@@ -133,7 +133,11 @@ jobs:
             echo "::error::live release '${RELEASE}' is not '${ARCHON_RELEASE_SHA:0:7}'; deploy first, then record"; exit 1; }
           test "${CLOSE_PATH}" = "adk-agent" || {
             echo "::error::live close_path is '${CLOSE_PATH}', and the narration names the agent"; exit 1; }
-          curl -sf "${ARCHON_APP_URL}" | grep -q "closes the month while nobody is watching"
+          # Buffered, not piped: `grep -q` closes the pipe on first match,
+          # curl takes SIGPIPE (exit 23) and pipefail fails a preflight whose
+          # every check had already passed. Same trap family as the CI tee.
+          curl -sf "${ARCHON_APP_URL}" -o /tmp/page.html
+          grep -q "closes the month while nobody is watching" /tmp/page.html
 
       - name: Record the judge's journey
         run: python3 video/capture_production.py
