@@ -30,6 +30,7 @@ import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from .. import PERIOD, __version__, paths
 from ..runtime.close import run_close
@@ -291,11 +292,23 @@ async def events(request: Request) -> JSONResponse:
     # which is wasteful at best and, with the agent on, costs a model run.
     marker_key = gcs.dedupe_key(envelope, period)
     if marker_key:
-        if get_store().load_close(COMPANY, marker_key):
+        marker = get_store().load_close(COMPANY, marker_key)
+        if marker and marker.get("status") == "closed":
             return JSONResponse(
                 {"status": "duplicate", "reason":
                  "this object generation already closed the period"},
                 status_code=200)
+        if marker:
+            # A redelivery while the first attempt is still running. A 200
+            # here would ack work that has not finished; a 503 makes Pub/Sub
+            # come back, by which time the marker is either closed (duplicate)
+            # or still processing (come back again). If the first attempt died
+            # with the instance, the retries land here until the message
+            # expires, each one answered in milliseconds.
+            return JSONResponse(
+                {"status": "in-progress", "reason":
+                 "this object generation is being closed right now"},
+                status_code=503)
         get_store().save_close(COMPANY, marker_key,
                                {"period": period, "status": "processing"})
 
@@ -309,7 +322,8 @@ async def events(request: Request) -> JSONResponse:
     documents = raw = source = None
     if bucket:
         try:
-            documents, raw, manifest = gcs.read_gcs_period(bucket, period)
+            documents, raw, manifest = await run_in_threadpool(
+                gcs.read_gcs_period, bucket, period)
             if documents:
                 source = gcs.event_source(envelope, period, manifest)
             else:
@@ -330,7 +344,15 @@ async def events(request: Request) -> JSONResponse:
             {"status": "ignored", "reason": f"no mail for {period}"}, status_code=200
         )
 
-    result = _close(period, documents=documents, raw=raw, source=source)
+    # In the threadpool, deliberately. This handler is `async def`, so a
+    # synchronous close here runs ON the event loop, and with the agent on a
+    # thinking model that is minutes of blocking: every request on the
+    # instance, /api/health included, starves behind it, Cloud Run times them
+    # all out at once, and Pub/Sub answers the 504s with redeliveries. That is
+    # not a theory: it took the deployed service down for half an hour on
+    # 2026-08-24 and the fix was this line.
+    result = await run_in_threadpool(
+        _close, period, documents=documents, raw=raw, source=source)
     if marker_key:
         get_store().save_close(COMPANY, marker_key,
                                {"period": period, "status": "closed",
