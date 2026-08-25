@@ -5,6 +5,25 @@ description = "An agent that closes a small haulier's month unattended."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 
+# Declared here as well as in requirements.txt, and the two are asserted
+# identical by a test rather than kept in step by memory.
+#
+# This list being ABSENT is what broke the platform deploy: a
+# `[project]` table makes this file the dependency manifest, an absent
+# `dependencies` array reads as "this package needs nothing", and
+# requirements.txt is then never consulted. The build reports success
+# because there was nothing to install, and the function dies on its
+# first third-party import with ModuleNotFoundError: fastapi.
+dependencies = [
+    "google-adk>=2.3,<3",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32,<1",
+    "google-cloud-firestore>=2.19,<2.29",
+    "google-api-core<2.35",
+    "google-auth>=2.35,<3",
+    "google-cloud-storage>=2.18,<4",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
