@@ -114,32 +114,66 @@ def test_the_python_pin_is_a_version_the_project_supports():
     assert 'requires-python = ">=3.11"' in pyproject
 
 
-def test_no_javascript_build_step_is_ever_asked_for():
-    """The failure this closes, verbatim from the platform log:
+def test_nothing_in_this_repository_justifies_a_javascript_build():
+    """The failure that started this, verbatim from the platform log:
 
         sh: line 1: vite: command not found
         Error: Command "vite build" exited with 127
 
-    The repository was fine. The PROJECT carried a framework preset from its
-    first import, so the platform installed the Python dependencies correctly
-    and then tried to run a JavaScript bundler that this repository has never
-    contained: no package.json, no node_modules, no vite.
+    The repository was never the cause. The PROJECT carried a framework preset
+    from its first import, so the platform installed the Python dependencies
+    correctly and then ran a JavaScript bundler against a tree that has never
+    contained one. A preset survives every push, which is why three commits
+    changed nothing.
 
-    `framework: null` selects "Other" and `buildCommand: ""` runs nothing, and
-    both override the dashboard rather than merely suggesting to it. There is
-    nothing to build here: the page is hand-written HTML and CSS served
-    straight from `web/`, which is the whole reason the content security
-    policy can refuse inline script and style.
+    I first answered that with `framework: null` and `buildCommand: ""` in
+    vercel.json, which override the dashboard. That was right for the stale
+    project and WRONG once it was deleted: `null` selects "Other", and this
+    platform ships a FastAPI preset that a fresh import detects from
+    `fastapi` in requirements.txt. Forcing "Other" risks suppressing the
+    detection that is now working in our favour, so both overrides are gone
+    and auto-detection is left alone.
+
+    What remains asserted is the premise underneath all of it. If a
+    package.json ever appears, whoever adds it should meet this test and
+    reconsider, rather than silently contradicting the CSP that refuses
+    inline script and style precisely because the page is hand-written.
+    """
+    assert not (ROOT / "package.json").exists()
+    assert not (ROOT / "node_modules").exists()
+    for name in ("vite.config.js", "vite.config.ts", "webpack.config.js",
+                 "rollup.config.js", "next.config.js"):
+        assert not (ROOT / name).exists(), f"{name} would justify a build step"
+
+
+def test_the_runtime_files_the_app_reads_are_not_excluded_from_the_bundle():
+    """`excludeFiles` trims the function, and trimming the wrong directory is
+    a deploy that builds cleanly and 500s on the first request.
+
+    `corpus/` is the bundled month the demo closes and `web/` is the page
+    itself, both read off disk at request time. Tests, the video pipeline,
+    terraform and CI scripts are not reachable at runtime and only cost bundle
+    space against the size limit.
     """
     import json
 
     config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+    excluded = config["functions"]["service/main.py"]["excludeFiles"]
 
-    assert config["framework"] is None, "a framework preset re-introduces a bundler step"
-    assert config["buildCommand"] == "", "there is no build step in a hand-written page"
+    for needed in ("corpus", "web", "src"):
+        assert needed not in excluded, (
+            f"{needed}/ is read at request time; excluding it deploys a 500"
+        )
+    for waste in ("tests/**", "video/**", "infra/**"):
+        assert waste in excluded
 
-    # And the premise: nothing here is a JavaScript project.
-    assert not (ROOT / "package.json").exists()
-    assert not (ROOT / "node_modules").exists()
-    for name in ("vite.config.js", "vite.config.ts", "webpack.config.js"):
-        assert not (ROOT / name).exists(), f"{name} would justify a build step"
+
+def test_the_declared_python_version_is_one_the_platform_offers():
+    """3.12, 3.13 and 3.14 are the available versions, 3.12 the default. An
+    unsupported pin is silently ignored, which is worse than a failure: the
+    build runs on a version nobody chose."""
+    pinned = (ROOT / ".python-version").read_text(encoding="utf-8").strip()
+
+    assert pinned in ("3.12", "3.13", "3.14"), (
+        f"{pinned} is not offered by the platform runtime"
+    )

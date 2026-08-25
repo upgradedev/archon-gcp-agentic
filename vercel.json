@@ -1,12 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
 
-  "framework": null,
-  "buildCommand": "",
-
   "functions": {
     "service/main.py": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "excludeFiles": "{tests/**,video/**,infra/**,scripts/**,.github/**,.zap/**,**/__pycache__/**,**/*.pyc}"
     }
   }
 }
