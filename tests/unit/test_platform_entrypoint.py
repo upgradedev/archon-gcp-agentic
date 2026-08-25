@@ -112,3 +112,34 @@ def test_the_python_pin_is_a_version_the_project_supports():
     major, minor = (int(part) for part in pinned.split("."))
     assert (major, minor) >= (3, 11), "pyproject requires >= 3.11"
     assert 'requires-python = ">=3.11"' in pyproject
+
+
+def test_no_javascript_build_step_is_ever_asked_for():
+    """The failure this closes, verbatim from the platform log:
+
+        sh: line 1: vite: command not found
+        Error: Command "vite build" exited with 127
+
+    The repository was fine. The PROJECT carried a framework preset from its
+    first import, so the platform installed the Python dependencies correctly
+    and then tried to run a JavaScript bundler that this repository has never
+    contained: no package.json, no node_modules, no vite.
+
+    `framework: null` selects "Other" and `buildCommand: ""` runs nothing, and
+    both override the dashboard rather than merely suggesting to it. There is
+    nothing to build here: the page is hand-written HTML and CSS served
+    straight from `web/`, which is the whole reason the content security
+    policy can refuse inline script and style.
+    """
+    import json
+
+    config = json.loads((ROOT / "vercel.json").read_text(encoding="utf-8"))
+
+    assert config["framework"] is None, "a framework preset re-introduces a bundler step"
+    assert config["buildCommand"] == "", "there is no build step in a hand-written page"
+
+    # And the premise: nothing here is a JavaScript project.
+    assert not (ROOT / "package.json").exists()
+    assert not (ROOT / "node_modules").exists()
+    for name in ("vite.config.js", "vite.config.ts", "webpack.config.js"):
+        assert not (ROOT / name).exists(), f"{name} would justify a build step"
