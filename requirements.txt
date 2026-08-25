@@ -24,6 +24,10 @@ uvicorn[standard]>=0.32,<1
 # with INVALID_ARGUMENT: Illegal string in database. 2.28.1 is the last good one.
 # Lift the pin only after proving the adapter job green on the newer client.
 google-cloud-firestore>=2.19,<2.29
+# api-core 2.35.0 shipped the same day and is the layer that quotes resource
+# paths; with it, even firestore 2.28.1 sends the encoded database id. Both
+# pins fall together or not at all, proven against the emulator job.
+google-api-core<2.35
 
 # Verifying the OIDC token Pub/Sub puts on /events. Without it a deployment
 # that configured an audience refuses every trigger, which is the correct
