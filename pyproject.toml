@@ -15,6 +15,27 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# ── Vercel ───────────────────────────────────────────────────────────────────
+#
+# Vercel auto-detects a FastAPI `app` only at the repository root, in `src/` or
+# in `app/`, under one of six filenames. This package lives at
+# `src/archon/adapters/service.py`, which matches none of them, so the
+# entrypoint is named explicitly. It points at the shim in `service/main.py`,
+# which puts `src` on the path and re-exports the SAME app object the container
+# serves. There is no second application; a test asserts the identity.
+[tool.vercel]
+entrypoint = "service.main:app"
+
+# `app.mount("/static", StaticFiles(directory=WEB_ROOT))` makes Vercel promote
+# `web/` to the CDN and, by default, DROP it from the function bundle. That
+# would be silently half-broken here: `/static/*` would serve from the CDN
+# while `GET /` returns 500, because the index route reads
+# `WEB_ROOT / "index.html"` off disk at request time rather than being a mount.
+# Keeping the directory in the bundle costs a few kilobytes and removes the
+# failure entirely.
+[tool.vercel.fastapi.static]
+exclude = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
