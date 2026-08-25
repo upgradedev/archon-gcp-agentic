@@ -50,12 +50,19 @@ def facts_sheet(statements: Statements, findings: list[Finding],
         f"  net cash                {statements.net_cash:>14,.2f}",
         f"  receivables             {statements.accounts_receivable:>14,.2f}",
         f"  payables                {statements.accounts_payable:>14,.2f}",
-        "",
-        "OPERATIONS",
-        f"  miles run               {statements.total_miles:>14,.2f}",
-        f"  revenue per mile        {_or_dash(statements.revenue_per_mile)}",
-        f"  cost per mile           {_or_dash(statements.cost_per_mile)}",
     ]
+
+    # The operations lens is a haulage lens. A business with no mileage in its
+    # month has no miles run, which is not the same fact as zero miles run, so
+    # the block is omitted rather than filled with a figure that reads false.
+    if statements.total_miles is not None:
+        lines += [
+            "",
+            "OPERATIONS",
+            f"  miles run               {statements.total_miles:>14,.2f}",
+            f"  revenue per mile        {_or_dash(statements.revenue_per_mile)}",
+            f"  cost per mile           {_or_dash(statements.cost_per_mile)}",
+        ]
 
     if statements.per_truck:
         lines.append("")
@@ -107,8 +114,10 @@ def narrate(statements: Statements, findings: list[Finding],
     at_stake = round(sum(f.amount for f in errors), 2)
 
     profit_word = "made" if statements.net_profit >= 0 else "lost"
+    on_miles = (f" on {statements.total_miles:,.0f} miles"
+                if statements.total_miles is not None else "")
     sentences = [
-        f"{statements.period} closed on {statements.total_miles:,.0f} miles, "
+        f"{statements.period} closed{on_miles}, "
         f"{statements.revenue:,.2f} billed and {statements.operating_expenses:,.2f} spent, "
         f"so the firm {profit_word} {abs(statements.net_profit):,.2f}."
     ]
