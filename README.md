@@ -9,7 +9,7 @@ below is real. It is a submission gate, not a build gate: it fetches the live
 judge URL and refuses to pass while that URL is a placeholder. The CI badge
 covers the secret scan, the build and the tests.*
 
-> **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner wakes up to a closed month in their inbox instead of a shoebox they will get to in April.**
+> **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April.**
 
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
@@ -135,27 +135,38 @@ the shoebox, and the bookkeeper who gets to it in April.
 
 ## Who buys this, and what it replaces
 
-*The market sentence: Archon reconciles one payout across all the jobs it
-settles, so a small business can close the month without reopening every
-invoice. Trucking is the first installed pack, not the product's edges.*
+**The buyer, named: the owner of a trucking firm running 3 to 12 trucks.** Not
+"small businesses". That owner signs the bookkeeper's invoice today, which is
+what makes them the payer and not merely the user.
 
-- **Beachhead**: owner-operator trucking firms running 3 to 12 trucks. Concrete,
-  underserved, and the many-to-one payment problem is their daily shape: one
-  broker remittance settles many loads, minus a batch fee, minus per-load
-  holdbacks.
-- **User, buyer, payer**: the owner, who today does this on evenings, or the
-  firm's outside bookkeeper. The budget it comes from is what the bookkeeper's
-  reconciliation hours cost, or the owner's own unpaid admin time.
+- **Why this segment**: the many-to-one payment problem is their daily shape.
+  One broker remittance settles many loads, minus a batch fee, minus per-load
+  holdbacks. A one-truck operator does not have enough loads for the problem to
+  bite; above about twelve, a firm hires someone whose job this is.
 - **What it replaces**: the shoebox, the spreadsheet, and the April
-  reconciliation, where a year of quiet short-pays surfaces at once.
-- **Expansion, honestly labelled**: the close engine (allocation, register,
-  gates, drafts) has no trucking in it; the trucking vocabulary lives at the
-  edges, in the extractor and the statement labels. Any business paid in
-  consolidated payouts has this month: agencies paid per project by platforms,
-  trades paid on consolidated invoices, consultants on retainers plus
-  pass-through expenses. **One pack is implemented and demonstrated. The others
-  are architecture, not claims**: no second pack ships in this entry, and no
-  screenshot pretends one does.
+  reconciliation where a year of quiet short-pays surfaces at once.
+
+### The arithmetic, so it is not a sentence
+
+| | | |
+|---|---|---|
+| **How many** | Filter the FMCSA Motor Carrier Census on `NBR_POWER_UNIT` between 3 and 12 | The census is public and downloadable from the [DOT open data portal](https://catalog.data.gov/dataset/motor-carrier-registrations-census-files); a reviewer opens it and counts rather than taking our word. The published distribution has **91.5% of carriers operating ten or fewer trucks** and about **1.16 million single-truck operators**, so the 3-to-12 band is what remains of the small-carrier mass after the one and two truck operators, and it is in the hundreds of thousands |
+| **What one pays today** | **400 to 500 dollars a month** for outsourced bookkeeping at this fleet size | [Remote Books Online, trucking and transportation](https://www.remotebooksonline.com/blog/what-is-the-average-cost-of-bookkeeping-services-for-trucking-transportation): solo operators pay 150 to 250, and "larger fleets or multi-state operations may see costs upward of 400-500/month". Call it **6,000 dollars a year** at the top of that band |
+| **The row** | **1,667 customers x 6,000 dollars = 10.0 million dollars** | The count needed is a low four-figure number against a segment in the hundreds of thousands, so the row closes on well under one percent of the register |
+
+The number that would sink this is the price, not the count, and it is anchored
+to what these firms already spend rather than to what we would like to charge.
+
+**On breadth, stated once and then left alone.** The close engine's arithmetic
+is not trucking: `allocate_all` divides one settlement across the obligations it
+covers, less a fee charged once, and the residual identity is
+`landed == lines - fee` with no haulage in it, asserted by
+`test_the_allocation_arithmetic_is_not_about_trucking`. The engine's *names* are
+trucking throughout, and so are `DocType`, the chart of accounts and every
+`Statements` field that reaches the JSON. So the honest statement is: the
+arithmetic generalises and is proven to; the vocabulary does not, and no second
+pack ships in this entry. This paragraph is the whole claim, and it is below the
+fold on purpose.
 
 All money figures in this README are from the bundled synthetic month and are
 labelled as such; no real firm's books appear anywhere in this repository.
@@ -543,7 +554,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 479 | `python -m pytest` |
+| Tests, all offline | 483 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
