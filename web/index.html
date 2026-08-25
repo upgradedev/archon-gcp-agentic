@@ -9,50 +9,66 @@
 <script src="/static/app.js" defer></script>
 </head>
 <body>
-<div class="app">
+<div class="shell" id="shell">
 
-<header class="appbar">
+<!-- ── the sidebar: one product, ten rooms ─────────────────────────────── -->
+<aside class="side" id="side">
   <div class="brand">
     <div class="mark" aria-hidden="true"></div>
-    <b>ARCHON</b>
-    <span class="tag">GCP &middot; Agentic</span>
+    <div class="brand-t"><b>ARCHON</b><span class="brand-s">Freight close &amp; dispute</span></div>
   </div>
-  <div class="appbar-r">
-    <span class="field">
-      <span class="field-k">Books</span>
-      <span class="field-v" id="company">Bell Ridge Haulage</span>
-    </span>
-    <label class="field">
-      <span class="field-k">Period</span>
-      <select id="period" aria-label="Accounting period"></select>
-    </label>
-    <button id="run">Close the month</button>
-    <button class="ghost" id="replay">Replay the run</button>
-    <button class="ghost" id="raw">JSON</button>
+
+  <nav class="nav" id="tabs" aria-label="Sections">
+    <div class="nav-h">Overview</div>
+    <button class="tab on" data-panel="overview"><span class="nav-i" aria-hidden="true">◈</span><span class="nav-t">Dashboard</span></button>
+    <div class="nav-h">Operations</div>
+    <button class="tab" data-panel="runner"><span class="nav-i" aria-hidden="true">▶</span><span class="nav-t">Close runner</span></button>
+    <button class="tab" data-panel="mailbox"><span class="nav-i" aria-hidden="true">▤</span><span class="nav-t">Mailbox</span></button>
+    <div class="nav-h">Money</div>
+    <button class="tab" data-panel="alloc"><span class="nav-i" aria-hidden="true">⇄</span><span class="nav-t">Reconciliation</span></button>
+    <button class="tab" data-panel="register"><span class="nav-i" aria-hidden="true">◔</span><span class="nav-t">Open items</span></button>
+    <button class="tab" data-panel="findings"><span class="nav-i" aria-hidden="true">⚠</span><span class="nav-t">Exceptions</span></button>
+    <button class="tab" data-panel="letters"><span class="nav-i" aria-hidden="true">✉</span><span class="nav-t">Letters</span></button>
+    <div class="nav-h">Insight</div>
+    <button class="tab" data-panel="trends"><span class="nav-i" aria-hidden="true">↗</span><span class="nav-t">Trends</span></button>
+    <button class="tab" data-panel="trucks"><span class="nav-i" aria-hidden="true">▣</span><span class="nav-t">Fleet</span></button>
+    <div class="nav-h">Trust</div>
+    <button class="tab" data-panel="checks"><span class="nav-i" aria-hidden="true">✓</span><span class="nav-t">Checks</span></button>
+  </nav>
+
+  <div class="side-foot">
+    <span class="field-k">Books</span>
+    <span class="field-v" id="company">Bell Ridge Haulage</span>
+    <a class="side-link" href="https://github.com/upgradedev/archon-gcp-agentic">Source</a>
   </div>
+</aside>
+
+<!-- ── the working column ──────────────────────────────────────────────── -->
+<div class="main-col">
+
+<header class="topbar">
+  <button class="icon-btn" id="side-toggle" aria-label="Toggle the sidebar" title="Toggle the sidebar">☰</button>
+  <label class="field slim">
+    <span class="field-k">Period</span>
+    <select id="period" aria-label="Accounting period"></select>
+  </label>
+  <span class="live-badge" id="live-badge" title="What this deployment runs">
+    <span class="dot" id="dot" aria-hidden="true"></span>
+    <span id="live-badge-text">connecting…</span>
+  </span>
+  <span class="top-spacer"></span>
+  <button id="run">Close the month</button>
+  <button class="ghost" id="replay">Replay the run</button>
+  <button class="ghost" id="raw">JSON</button>
 </header>
 
-<div class="statusbar">
-  <span class="dot" id="dot" aria-hidden="true"></span>
-  <span class="dim" id="status">Documents are waiting.</span>
-</div>
-
-<nav class="tabs" id="tabs" aria-label="Sections">
-  <button class="tab on" data-panel="overview">Overview</button>
-  <button class="tab" data-panel="register">Open items</button>
-  <button class="tab" data-panel="alloc">Allocation</button>
-  <button class="tab" data-panel="findings">Exceptions</button>
-  <button class="tab" data-panel="letters">Letters</button>
-  <button class="tab" data-panel="trends">Trends</button>
-  <button class="tab" data-panel="trucks">Fleet</button>
-  <button class="tab" data-panel="checks">Checks</button>
-</nav>
+<div class="statusbar"><span class="dim" id="status">Documents are waiting.</span></div>
 
 <div id="error" class="err-box hidden"></div>
 
 <main id="out">
 
-  <!-- Overview -->
+  <!-- ── Dashboard ─────────────────────────────────────────────────────── -->
   <section class="panel" id="panel-overview">
     <h1>It closes the month while nobody is watching.</h1>
     <p class="hero-line" id="hero-line" aria-live="polite"></p>
@@ -63,63 +79,94 @@
       <span class="chip">deterministic ledger</span><span class="chip-sep">→</span>
       <span class="chip">Firestore trail</span>
     </p>
-    <p class="lede">
-      A small trucking firm's month: documents arrive in a bucket, one broker payment
-      covers eight loads at once minus a factoring fee, a fuel card statement carries
-      fourteen fills, and one scan nobody can read. Archon posts the books, splits the
-      remittance back across the loads it settles, finds what is missing, writes the
-      letters that fix it, checks its own work and files the month. Every tile below
-      opens the ledger behind it.
-    </p>
 
     <div class="grid cards" id="stats"></div>
 
-    <div class="pane">
-      <h2>Where this close came from</h2>
-      <p class="sub tight">
-        The books on screen tie back to bytes, a build and a control flow. When
-        the mail came off the bucket, each object is listed with its sha256, so
-        the record can be checked against the objects rather than trusted.
-      </p>
-      <div class="kv" id="origin"></div>
-    </div>
-
     <div class="grid two">
+      <div class="pane">
+        <h2>One payment, proven to the cent</h2>
+        <p class="sub tight">
+          The identity the whole product rests on: what landed in the bank equals
+          what the remittance lines pay, less the fee charged once on the batch.
+        </p>
+        <div id="chart-waterfall"></div>
+      </div>
       <div class="pane">
         <h2>Where the money went</h2>
         <p class="sub tight">Operating cost by category, largest first.</p>
         <div id="chart-expense"></div>
       </div>
-      <div class="pane">
-        <h2>Earned and spent, per mile</h2>
-        <p class="sub tight">
-          The only ratio that decides whether a haulier survives. The gap is the margin.
-        </p>
-        <div id="chart-mile"></div>
-      </div>
     </div>
 
-    <div class="pane">
-      <h2>What it did, step by step</h2>
-      <p class="sub">
-        Eleven steps, no prompts, no approvals. This trail is written as the run happens
-        and persisted with the books, so the owner can retrace a close they were not
-        present for.
-      </p>
+    <div class="grid two spaced">
+      <div class="pane">
+        <h2>Earned and spent, per mile</h2>
+        <p class="sub tight">The ratio that decides whether a haulier survives.</p>
+        <div id="chart-mile"></div>
+      </div>
+      <div class="pane">
+        <h2>Where this close came from</h2>
+        <p class="sub tight">
+          Books tie back to bytes, a build and a control flow, or they are trusted
+          on faith. These are the receipts.
+        </p>
+        <div class="kv" id="origin"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Close runner ──────────────────────────────────────────────────── -->
+  <section class="panel hidden" id="panel-runner">
+    <h2>The autonomous close</h2>
+    <p class="sub">
+      Eleven steps, no prompts, no approvals. The trail is written as the run
+      happens and persisted with the books, so the owner can retrace a close they
+      were not present for. Replay re-renders the recorded run without executing
+      anything; the button runs a fresh close through the agent, which takes a
+      few minutes on a thinking model.
+    </p>
+    <div class="phases" id="phases" aria-label="The close, in five phases"></div>
+    <div class="grid cards slim-cards" id="run-stats"></div>
+    <div class="pane spaced">
+      <h2>Step by step, as it happened</h2>
       <div class="trail" id="trail"></div>
     </div>
   </section>
 
-  <!-- Open items -->
+  <!-- ── Mailbox ───────────────────────────────────────────────────────── -->
+  <section class="panel hidden" id="panel-mailbox">
+    <h2>The mailbox this close was built from</h2>
+    <p class="sub">
+      Every object the close read, with its size, generation and sha256, and every
+      object it refused, with the reason. Hash an object yourself and match the
+      books to the bytes; that is what this table is for. When the mail is the
+      bundled synthetic sample, it says so here instead of dressing up.
+    </p>
+    <div class="scroll"><table class="tbl" id="mailbox"></table></div>
+  </section>
+
+  <!-- ── Reconciliation ────────────────────────────────────────────────── -->
+  <section class="panel hidden" id="panel-alloc">
+    <h2>One payment, split back across the loads it settles</h2>
+    <p class="sub">
+      This is the step that makes a haulier's month closeable, and it is not
+      matching. The broker sent one credit covering several loads, minus a fee
+      charged once on the batch. The books need each load settled at what it was
+      actually paid, and the identity below has to close: what landed equals what
+      the lines pay, less the fee.
+    </p>
+    <div class="scroll"><table class="tbl" id="alloc"></table></div>
+  </section>
+
+  <!-- ── Open items ────────────────────────────────────────────────────── -->
   <section class="panel hidden" id="panel-register">
     <h2>Who owes whom</h2>
     <p class="sub">
-      The register an owner actually opens, because it answers the two questions that
-      decide whether payroll clears: who has not paid me, and who have I not paid. A
-      load paid short leaves the difference open rather than counting as settled, which
-      is the case a single receivables total hides. Age is measured to the end of the
-      period being closed, never to today, so re-running an old month gives the same
-      answer.
+      The register an owner actually opens, because it answers the two questions
+      that decide whether payroll clears: who has not paid me, and who have I not
+      paid. A load paid short leaves the difference open rather than counting as
+      settled. Age is measured to the end of the period being closed, never to
+      today, so re-running an old month gives the same answer.
     </p>
     <div class="grid cards" id="register-totals"></div>
     <div class="grid two spaced">
@@ -135,25 +182,14 @@
     <div class="scroll spaced"><table class="tbl" id="register"></table></div>
   </section>
 
-  <!-- Allocation -->
-  <section class="panel hidden" id="panel-alloc">
-    <h2>One payment, split back across the loads it settles</h2>
-    <p class="sub">
-      This is the step that makes a haulier's month closeable, and it is not matching.
-      The broker sent one credit covering several loads, minus a fee charged once on the
-      batch. The books need each load settled at what it was actually paid, and the
-      identity below has to close: what landed equals what the lines pay, less the fee.
-    </p>
-    <div class="scroll"><table class="tbl" id="alloc"></table></div>
-  </section>
-
-  <!-- Exceptions -->
+  <!-- ── Exceptions ────────────────────────────────────────────────────── -->
   <section class="panel hidden" id="panel-findings">
     <h2>What does not add up</h2>
     <p class="sub">
-      Nine detectors, worst first by severity then by money. Every threshold is learned
-      from this firm's own books: a charge is an outlier because it is far above what this
-      firm normally pays that supplier, not because it crossed a figure someone wrote down.
+      Nine detectors, worst first by severity then by money. Every threshold is
+      learned from this firm's own books: a charge is an outlier because it is far
+      above what this firm normally pays that supplier, not because it crossed a
+      figure someone wrote down.
     </p>
     <div class="pane">
       <h2>By kind</h2>
@@ -162,52 +198,51 @@
     <div class="scroll spaced"><table class="tbl" id="findings"></table></div>
   </section>
 
-  <!-- Letters -->
+  <!-- ── Letters ───────────────────────────────────────────────────────── -->
   <section class="panel hidden" id="panel-letters">
     <h2>The owner's close package, composed and filed</h2>
     <p class="sub">
-      A haulier does not open a bookkeeping console on the first of the month, because a
-      haulier is driving. So the last thing the close does is write the owner a letter and
-      hand it to a delivery seam. This is the exact letter, and the pill on it says what
-      actually happened: delivered when a mail channel is configured, composed and filed
-      when none is. Nothing here is phrased by a model: every figure came out of the close.
+      A haulier does not open a bookkeeping console on the first of the month,
+      because a haulier is driving. So the last thing the close does is write the
+      owner a letter and hand it to a delivery seam. This is the exact letter, and
+      the pill on it says what actually happened: delivered when a mail channel is
+      configured, composed and filed when none is. Nothing here is phrased by a
+      model: every figure came out of the close.
     </p>
     <div class="draft" id="digest"></div>
 
-    <h2 class="spaced">The letters it wrote to everyone else</h2>
+    <h2 class="spaced">Each dispute, next to the letter it produced</h2>
     <div class="gate-note">
       <b>Filed, not sent. This is the one human gate in the product.</b>
-      There are two outward edges and they have different rules. The letter above goes to the
-      owner: their own books arriving at them, delivered without being asked for, because
-      that is the point of doing the work overnight. The letters below go to brokers and
-      suppliers, and they stop here. An email to a broker cannot be un-sent, so an unattended
-      run does not get to send one. Every draft below is written, costed and filed; a person
-      presses send.
+      The letters below go to brokers and suppliers, and they stop here. An email
+      to a broker cannot be un-sent, so an unattended run does not get to send
+      one. Every draft is written, costed and filed; a person presses send.
     </div>
-    <div class="grid" id="drafts"></div>
+    <div id="drafts"></div>
   </section>
 
-  <!-- Trends -->
+  <!-- ── Trends ────────────────────────────────────────────────────────── -->
   <section class="panel hidden" id="panel-trends">
     <h2>Against the month before</h2>
     <p class="sub" id="trend-line"></p>
     <div class="pane" id="chart-trend-pane">
       <h2>Side by side</h2>
       <p class="sub tight">
-        Each pair is the earlier month then this one. Direction is a rule, not a sign:
-        fuel rising is worse, revenue rising is better.
+        Each pair is the earlier month then this one. Direction is a rule, not a
+        sign: fuel rising is worse, revenue rising is better.
       </p>
       <div id="chart-trend"></div>
     </div>
     <div class="scroll spaced"><table class="tbl" id="trends"></table></div>
   </section>
 
-  <!-- Fleet -->
+  <!-- ── Fleet ─────────────────────────────────────────────────────────── -->
   <section class="panel hidden" id="panel-trucks">
     <h2>Per truck</h2>
     <p class="sub">
       Direct cost is fuel and maintenance, the two an owner can act on per truck.
-      Insurance and driver pay stay at firm level: apportioning them would invent a figure.
+      Insurance and driver pay stay at firm level: apportioning them would invent
+      a figure.
     </p>
     <div class="pane">
       <h2>Margin a mile, by truck</h2>
@@ -216,12 +251,13 @@
     <div class="scroll spaced"><table class="tbl" id="trucks"></table></div>
   </section>
 
-  <!-- Checks -->
+  <!-- ── Checks ────────────────────────────────────────────────────────── -->
   <section class="panel hidden" id="panel-checks">
     <h2>The close checked its own work</h2>
     <p class="sub">
-      Five gates run before Archon will call a month closed. A failure blocks the close and
-      names the gate rather than filing a confident report nobody checked.
+      Five gates run before Archon will call a month closed. A failure blocks the
+      close and names the gate rather than filing a confident report nobody
+      checked.
     </p>
     <div class="scroll"><table class="tbl" id="gates"></table></div>
     <div class="pane spaced">
@@ -238,6 +274,7 @@
   <a href="https://github.com/upgradedev/archon-gcp-agentic">Source</a>.
 </footer>
 
+</div>
 </div>
 
 </body>

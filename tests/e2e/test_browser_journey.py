@@ -190,7 +190,8 @@ def test_nothing_is_disabled_without_a_reason_and_nothing_renders_empty(page, ba
     expect(page.locator("#run")).to_be_enabled(timeout=30_000)
     assert page.locator("button:disabled").count() == 0
     for selector in ("#trail", "#stats", "#alloc", "#findings", "#drafts",
-                     "#digest", "#gates", "#trucks", "#hero-line", "#origin"):
+                     "#digest", "#gates", "#trucks", "#hero-line", "#origin",
+                     "#mailbox", "#phases", "#chart-waterfall", "#run-stats"):
         assert page.locator(selector).inner_html().strip(), f"{selector} rendered empty"
 
 
@@ -313,7 +314,8 @@ def test_a_visitor_who_asks_for_less_motion_gets_none(still_page, base_url):
 
 #: Every tab, and the landmark that proves its panel actually rendered.
 PANELS = [
-    ("overview", "#stats"), ("register", "#register"), ("alloc", "#alloc"),
+    ("overview", "#stats"), ("runner", "#trail"), ("mailbox", "#mailbox"),
+    ("alloc", "#alloc"), ("register", "#register"),
     ("findings", "#findings"), ("letters", "#drafts"), ("trends", "#trends"),
     ("trucks", "#trucks"), ("checks", "#gates"),
 ]

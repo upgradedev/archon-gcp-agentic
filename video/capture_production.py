@@ -123,7 +123,7 @@ def main() -> int:
         #: visitor does. Getting this wrong does not produce a bad take, it
         #: produces a timeout, which is the failure mode to prefer.
         PANEL_OF = {
-            "#trail": "overview", "#stats": "overview", "#origin": "overview",
+            "#trail": "runner", "#stats": "overview", "#origin": "overview",
             "#register": "register", "#alloc": "alloc", "#findings": "findings",
             "#digest": "letters", "#drafts": "letters",
             "#trends": "trends", "#trucks": "trucks", "#gates": "checks",
