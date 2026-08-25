@@ -62,14 +62,20 @@ except Exception:                                    # noqa: BLE001 - see below
     # already see. The container does NOT use this module at all: the
     # Dockerfile starts `archon.adapters.service:app` directly, so this
     # fallback cannot mask a problem in production.
-    from fastapi import FastAPI
-    from fastapi.responses import PlainTextResponse
-
+    #
+    # **Standard library only, and that is the whole lesson.** The first
+    # version of this handler built a FastAPI app to report the failure, and
+    # the failure it needed to report was `ModuleNotFoundError: fastapi`. It
+    # raised inside its own except block, the platform logged both tracebacks
+    # and served neither, and the diagnosis was invisible for exactly the case
+    # it was written for. A diagnostic that depends on the thing that broke is
+    # not a diagnostic. This is a bare ASGI callable: no framework, no import
+    # that can fail, nothing to install.
     _FAILURE = traceback.format_exc()
     _CONTEXT = "\n".join([
         f"entrypoint   {_HERE}",
         f"project root {_ROOT}",
-        f"src on path  {(_ROOT / 'src').is_dir()}",
+        f"src present  {(_ROOT / 'src').is_dir()}",
         f"corpus       {(_ROOT / 'corpus').is_dir()}",
         f"web          {(_ROOT / 'web').is_dir()}",
         f"python       {sys.version.split()[0]}",
@@ -77,14 +83,15 @@ except Exception:                                    # noqa: BLE001 - see below
         "root entries " + ", ".join(sorted(p.name for p in _ROOT.iterdir())[:30]),
     ])
 
-    app = FastAPI(title="Archon (failed to start)")
-
-    @app.get("/{path:path}")
-    def _why_it_failed(path: str) -> PlainTextResponse:
-        return PlainTextResponse(
-            "Archon could not import on this platform.\n\n"
-            f"{_FAILURE}\n{_CONTEXT}\n",
-            status_code=500,
-        )
+    async def app(scope, receive, send):  # noqa: ANN001, ANN201  (raw ASGI)
+        """Serve the traceback, in about twenty lines of standard library."""
+        if scope["type"] != "http":
+            return
+        body = ("Archon could not import on this platform.\n\n"
+                f"{_FAILURE}\n{_CONTEXT}\n").encode()
+        await send({"type": "http.response.start", "status": 500,
+                    "headers": [(b"content-type", b"text/plain; charset=utf-8"),
+                                (b"cache-control", b"no-store")]})
+        await send({"type": "http.response.body", "body": body})
 
 __all__ = ["app"]

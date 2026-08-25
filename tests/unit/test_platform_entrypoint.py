@@ -206,12 +206,76 @@ def test_a_failed_import_reports_why_instead_of_dying_silently():
 
     assert hasattr(module, "app"), "a failed import must still export an app to serve"
 
-    from fastapi.testclient import TestClient
+    # Driven as a raw ASGI callable, deliberately, because that is what it is.
+    # Using a framework test client here would hide the property that matters.
+    import asyncio
 
-    response = TestClient(module.app, raise_server_exceptions=False).get("/api/health")
+    sent: list = []
 
-    assert response.status_code == 500
-    assert "could not import" in response.text
-    assert "no_such_module" in response.text, "the traceback is the whole point"
-    assert "project root" in response.text and "root entries" in response.text
+    async def drive():
+        await module.app(
+            {"type": "http", "method": "GET", "path": "/api/health"},
+            None, lambda message: _collect(message),
+        )
+
+    async def _collect(message):
+        sent.append(message)
+
+    asyncio.run(drive())
+
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    body = b"".join(m.get("body", b"") for m in sent
+                    if m["type"] == "http.response.body").decode()
+
+    assert start["status"] == 500
+    assert "could not import" in body
+    assert "no_such_module" in body, "the traceback is the whole point"
+    assert "project root" in body and "root entries" in body
     assert namespace is not None
+
+
+def test_the_failure_handler_imports_nothing_that_could_be_missing():
+    """The first version of that handler built a FastAPI app to report the
+    failure, and the failure it had to report was `No module named 'fastapi'`.
+    It raised inside its own except block and the diagnosis never reached the
+    page, for exactly the case it existed to cover.
+
+    So the except branch is standard library only, asserted by reading it.
+    """
+    source = (ROOT / "service" / "main.py").read_text(encoding="utf-8")
+    branch = source.split("except Exception:")[1]
+
+    for forbidden in ("fastapi", "starlette", "pydantic", "uvicorn", "archon"):
+        assert f"import {forbidden}" not in branch and f"from {forbidden}" not in branch, (
+            f"the failure handler imports {forbidden}, which may be the thing "
+            "that is missing when it runs"
+        )
+
+
+def test_the_two_dependency_lists_say_the_same_thing():
+    """The defect that produced `ModuleNotFoundError: fastapi` in production.
+
+    A `[project]` table makes pyproject.toml the dependency manifest. With no
+    `dependencies` array it reads as "this package needs nothing", the
+    platform installs nothing, requirements.txt is never consulted, and the
+    build reports success because there was genuinely nothing to install. The
+    function then dies on its first third-party import.
+
+    Both lists now exist, so both can drift. This is the thing that stops it.
+    """
+    import tomllib
+
+    declared = tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["dependencies"]
+    pinned = [ln.strip() for ln
+              in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+              if ln.strip() and not ln.lstrip().startswith("#")]
+
+    assert declared, "an empty dependencies array installs nothing, silently"
+    assert sorted(declared) == sorted(pinned), (
+        "pyproject and requirements.txt disagree. "
+        f"only in pyproject: {sorted(set(declared) - set(pinned))}; "
+        f"only in requirements: {sorted(set(pinned) - set(declared))}"
+    )
+    assert any(d.startswith("fastapi") for d in declared)
