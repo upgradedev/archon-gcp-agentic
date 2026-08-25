@@ -473,6 +473,39 @@ def find_unreadable(documents: list[Document]) -> list[Finding]:
     ]
 
 
+def find_unrecognised(documents: list[Document]) -> list[Finding]:
+    """Artifacts that were read perfectly and matched no document family.
+
+    This is the quieter twin of `find_unreadable`, and it was missing. An
+    UNREADABLE document already produced a finding; an UNKNOWN one produced
+    nothing at all. `Ledger._post_unknown` posts no entry, so the artifact
+    left no trace anywhere: not in the books, not in the exceptions, not in
+    the owner's letter. Three invoices in a format the extractor has never
+    seen would close a month at zero revenue and report "every gate passed".
+
+    That is the exact failure this product exists to prevent, so it is an
+    ERROR rather than a warning: a month is not closeable while documents the
+    owner sent are unaccounted for. It is deliberately NOT actionable, because
+    there is no letter to write; the fix is a parser, not a dispute.
+    """
+    return [
+        Finding(
+            kind=ExceptionKind.UNRECOGNISED_DOCUMENT,
+            severity="error",
+            reference=doc.source_file or "unrecognised",
+            amount=0.0,
+            message=(
+                f"{doc.source_file} was read but matched no document family, so "
+                f"nothing was posted from it. Archon will not guess what kind of "
+                f"document it is."
+            ),
+            source_file=doc.source_file,
+        )
+        for doc in documents
+        if doc.doc_type == DocType.UNKNOWN
+    ]
+
+
 #: Severity order used to rank the list the owner actually reads.
 _SEVERITY_RANK = {"error": 0, "warning": 1, "info": 2}
 
@@ -494,6 +527,7 @@ def find_all(documents: list[Document], results: list[AllocationResult],
         + find_tax_inconsistencies(documents)
         + find_out_of_period(documents, period)
         + find_unreadable(documents)
+        + find_unrecognised(documents)
     )
     findings.sort(key=lambda f: (_SEVERITY_RANK.get(f.severity, 9), -f.amount))
     return findings

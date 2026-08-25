@@ -51,11 +51,11 @@ def test_every_journal_entry_balances(documents):
     assert close(documents).ledger.all_entries_balanced()
 
 
-def test_all_five_gates_pass_on_the_bundled_month(documents):
+def test_all_six_gates_pass_on_the_bundled_month(documents):
     result = close(documents)
 
     assert all(gate.passed for gate in result.gates)
-    assert len(result.gates) == 5
+    assert len(result.gates) == 6
 
 
 def test_the_month_reads_like_a_real_thin_margin_haulier(documents):
@@ -105,10 +105,21 @@ def test_the_load_paid_from_a_month_we_have_no_confirmation_for_is_flagged(docum
 
 def test_every_detector_fires_on_the_bundled_month(documents):
     """The corpus was built to contain one instance of each defect, so a
-    detector that stops working shows up here rather than in a demo."""
+    detector that stops working shows up here rather than in a demo.
+
+    One kind is deliberately absent and must stay absent. UNRECOGNISED_DOCUMENT
+    fires when an artifact reads fine and matches no document family, which is
+    a gap in OUR parser, not a defect in the firm's books. It also fails G6 and
+    blocks the close, so seeding one into the bundled month would ship a demo
+    that refuses to close. It is covered by its own tests instead.
+    """
     kinds = {finding.kind for finding in close(documents).findings}
 
-    assert kinds == set(ExceptionKind)
+    assert kinds == set(ExceptionKind) - {ExceptionKind.UNRECOGNISED_DOCUMENT}
+    assert ExceptionKind.UNRECOGNISED_DOCUMENT not in kinds, (
+        "an unrecognised document reached the bundled month; it would block the "
+        "close and take the demo down"
+    )
 
 
 def test_the_errors_are_the_ones_worth_money(documents):

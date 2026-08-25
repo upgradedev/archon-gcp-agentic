@@ -233,6 +233,10 @@ class ExceptionKind(str, Enum):
     LOAD_UNPAID = "load_unpaid"
     OUT_OF_PERIOD = "out_of_period"
     UNREADABLE_DOCUMENT = "unreadable_document"
+    #: Text came through fine; no rule recognised what KIND of document
+    #: it is. Different failure from UNREADABLE and a more dangerous one,
+    #: because the document looks healthy and posts nothing.
+    UNRECOGNISED_DOCUMENT = "unrecognised_document"
     REMITTANCE_UNRECONCILED = "remittance_unreconciled"
 
 
