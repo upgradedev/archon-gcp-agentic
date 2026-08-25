@@ -146,6 +146,40 @@ what makes them the payer and not merely the user.
 - **What it replaces**: the shoebox, the spreadsheet, and the April
   reconciliation where a year of quiet short-pays surfaces at once.
 
+### It reads an invoice now, and refuses the documents that only look like one
+
+Asked whether a non-haulage business could drop its own files in, the honest
+answer was no, and the close said nothing: two consulting invoices came back
+unrecognised, posted nothing, and the month closed at zero revenue reporting
+every gate passed. Both halves are fixed. G6 blocks a month with an
+unrecognised document in it, and `SALES_INVOICE` and `PURCHASE_INVOICE` are now
+real families with real postings: Dr Receivable, Cr Revenue, Cr VAT payable,
+and its mirror.
+
+The parser reads `5,890.00` and `5.890,00` through one function rather than
+two, because two locale parsers sharing call sites is how the same string
+becomes two different amounts. Field spellings go through an alias table where
+a **disagreement returns nothing**: an invoice stating `Total Due 7,303.60` and
+`Grand Total 9,999.99` leaves the total empty rather than picking whichever the
+table listed first, and the derivation that would otherwise fill it back in is
+blocked across a contradiction.
+
+What it refuses is as deliberate as what it reads. A credit note, a proforma, a
+quotation, a purchase order and a statement of account all carry an invoice's
+vocabulary, and every detector in this product is sign-naive, so a credit note
+booked as a purchase invoice would overstate the expense and then hide from
+every check that would have caught it. They are recognised precisely well
+enough to be refused. So is `03/04/2026`: two real readings thirty days apart,
+which is a period boundary and an ageing bucket, so the document carries no
+date rather than a coin flip. And prose that merely mentions an invoice is
+evidence, never a candidate: a cover note reading "please find the invoice
+attached" stays unrecognised instead of becoming an invoice for the sentence.
+
+**The haulage corpus is untouched, structurally.** Every bundled artifact
+carries a `Document Type:` line and is decided by the declared-label lookup,
+which none of the invoice machinery can reach, and a test asserts that so the
+guarantee cannot rot as the keyword table grows.
+
 ### The arithmetic, so it is not a sentence
 
 | | | |
@@ -555,7 +589,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 487 | `python -m pytest` |
+| Tests, all offline | 522 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

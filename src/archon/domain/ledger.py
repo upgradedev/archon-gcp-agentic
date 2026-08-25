@@ -172,6 +172,41 @@ class Ledger:
             entry.lines.append(_dr(Account.FUEL_TAX_RECEIVABLE, tax))
         entry.lines.append(_cr(Account.ACCOUNTS_PAYABLE, gross))
 
+    def _post_sales_invoice(self, doc: Document, entry: JournalEntry) -> None:
+        """Revenue the firm is owed, plus the VAT it now owes the state.
+
+        Dr Accounts Receivable, Cr Revenue, Cr VAT Payable. The VAT is a
+        liability from the moment the invoice is issued, not when it is paid,
+        which is why it is a separate credit rather than being folded into
+        revenue: netting them here would overstate the P&L by the VAT rate and
+        lose the figure the return is built from.
+        """
+        net = doc.net_amount or 0.0
+        tax = doc.tax_amount or 0.0
+        gross = doc.gross_amount or round(net + tax, 2)
+        entry.memo = (f"Sales invoice {doc.reference or ''} "
+                      f"to {doc.counterparty or 'a customer'}").strip()
+        entry.lines = [_dr(Account.ACCOUNTS_RECEIVABLE, gross),
+                       _cr(Account.REVENUE_INVOICED, net)]
+        if tax:
+            entry.lines.append(_cr(Account.VAT_PAYABLE, tax))
+
+    def _post_purchase_invoice(self, doc: Document, entry: JournalEntry) -> None:
+        """A cost the firm owes, plus the VAT it may reclaim.
+
+        Dr Operating Expense, Dr VAT Receivable, Cr Accounts Payable. The
+        mirror of the sales case, and kept separate for the same reason.
+        """
+        net = doc.net_amount or 0.0
+        tax = doc.tax_amount or 0.0
+        gross = doc.gross_amount or round(net + tax, 2)
+        entry.memo = (f"Purchase invoice {doc.reference or ''} "
+                      f"from {doc.counterparty or 'a supplier'}").strip()
+        entry.lines = [_dr(Account.OPERATING_EXPENSE, net)]
+        if tax:
+            entry.lines.append(_dr(Account.VAT_RECEIVABLE, tax))
+        entry.lines.append(_cr(Account.ACCOUNTS_PAYABLE, gross))
+
     def _post_toll_invoice(self, doc: Document, entry: JournalEntry) -> None:
         self._post_simple_expense(doc, entry, *_SIMPLE_EXPENSES[DocType.TOLL_INVOICE])
 
@@ -207,7 +242,8 @@ class Ledger:
 
         linehaul = credit_balance(Account.REVENUE_LINEHAUL)
         accessorial = credit_balance(Account.REVENUE_ACCESSORIAL)
-        revenue = round(linehaul + accessorial, 2)
+        invoiced = credit_balance(Account.REVENUE_INVOICED)
+        revenue = round(linehaul + accessorial + invoiced, 2)
 
         fuel = debit_balance(Account.FUEL_EXPENSE)
         tolls = debit_balance(Account.TOLLS_EXPENSE)
@@ -215,11 +251,20 @@ class Ledger:
         insurance = debit_balance(Account.INSURANCE_EXPENSE)
         driver_pay = debit_balance(Account.DRIVER_PAY_EXPENSE)
         factoring = debit_balance(Account.FACTORING_FEE)
-        opex = round(fuel + tolls + maintenance + insurance + driver_pay + factoring, 2)
+        operating = debit_balance(Account.OPERATING_EXPENSE)
+        opex = round(fuel + tolls + maintenance + insurance + driver_pay
+                     + factoring + operating, 2)
 
         cash_in, cash_out = balances.get(Account.BANK, (0.0, 0.0))
-        miles = round(sum(d.miles or 0.0 for d in self.documents
-                          if d.doc_type == DocType.LOAD_CONFIRMATION), 2)
+        # None, not 0.0, when nothing in the month has a mileage. A hauler that
+        # ran no miles and a consultancy that has no trucks are different
+        # facts, and 0 says the first. The digest's opening sentence and the
+        # per-mile panes read this field, so a zero here is a lie in the first
+        # line the owner reads.
+        mileage_docs = [d for d in self.documents
+                        if d.doc_type == DocType.LOAD_CONFIRMATION]
+        miles = (round(sum(d.miles or 0.0 for d in mileage_docs), 2)
+                 if mileage_docs else None)
 
         notes = []
         if factoring:

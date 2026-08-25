@@ -28,6 +28,12 @@ class DocType(str, Enum):
     INSURANCE_INVOICE = "insurance_invoice"
     DRIVER_SETTLEMENT = "driver_settlement"      # pay per mile, minus deductions
     BANK_TRANSACTION = "bank_transaction"
+    #: The two families every business has and a haulier's document set did
+    #: not cover. Added because the honest answer to "will my own invoices
+    #: work?" was no, and the close said nothing. A sales invoice is revenue
+    #: the firm is owed; a purchase invoice is a cost the firm owes.
+    SALES_INVOICE = "sales_invoice"
+    PURCHASE_INVOICE = "purchase_invoice"
     UNREADABLE = "unreadable"                    # arrived, could not be read
     UNKNOWN = "unknown"
 
@@ -37,6 +43,10 @@ class Account(str, Enum):
 
     REVENUE_LINEHAUL = "Revenue - Linehaul"
     REVENUE_ACCESSORIAL = "Revenue - Accessorial"
+    #: Invoiced revenue that is not freight. A sales invoice posts here rather
+    #: than to linehaul, because calling a consulting fee "linehaul" would put
+    #: a lie in the chart of accounts to save adding a line to it.
+    REVENUE_INVOICED = "Revenue - Invoiced"
     FACTORING_FEE = "Factoring Fee"
     FUEL_EXPENSE = "Fuel"
     TOLLS_EXPENSE = "Tolls"
@@ -49,10 +59,18 @@ class Account(str, Enum):
     DRIVER_PAY_PAYABLE = "Driver Pay Payable"
     TAX_WITHHELD_PAYABLE = "Withheld Tax Payable"
     FUEL_TAX_RECEIVABLE = "Fuel Tax Receivable"
+    #: VAT is a liability on what you invoice and an asset on what you are
+    #: billed. Both sides are kept because netting them at posting time loses
+    #: the audit trail the return is built from.
+    VAT_PAYABLE = "VAT Payable"
+    VAT_RECEIVABLE = "VAT Receivable"
+    #: Costs invoiced to the firm that are not one of the haulage categories.
+    OPERATING_EXPENSE = "Operating Expense"
 
 
 #: Accounts that belong on the profit and loss.
-REVENUE_ACCOUNTS = (Account.REVENUE_LINEHAUL, Account.REVENUE_ACCESSORIAL)
+REVENUE_ACCOUNTS = (Account.REVENUE_LINEHAUL, Account.REVENUE_ACCESSORIAL,
+                    Account.REVENUE_INVOICED)
 EXPENSE_ACCOUNTS = (
     Account.FACTORING_FEE,
     Account.FUEL_EXPENSE,
@@ -60,6 +78,7 @@ EXPENSE_ACCOUNTS = (
     Account.MAINTENANCE_EXPENSE,
     Account.INSURANCE_EXPENSE,
     Account.DRIVER_PAY_EXPENSE,
+    Account.OPERATING_EXPENSE,
 )
 
 
@@ -339,7 +358,9 @@ class Statements:
     net_cash: float
     accounts_receivable: float
     accounts_payable: float
-    total_miles: float
+    #: None when the month contains nothing with a mileage. See the note
+    #: in Ledger.statements: 0 and "not applicable" are different facts.
+    total_miles: float | None
     cost_per_mile: float | None
     revenue_per_mile: float | None
     per_truck: dict = field(default_factory=dict)
