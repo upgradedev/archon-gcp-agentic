@@ -146,6 +146,33 @@ def g5_unreadable_left_unposted(ledger) -> ValidationResult:
     )
 
 
+def g6_every_document_was_accounted_for(ledger) -> ValidationResult:
+    """No artifact the owner sent went unrecognised and therefore unposted.
+
+    G5 covers the document that could not be READ. This covers the one that
+    read perfectly and matched no family: `Ledger._post_unknown` posts nothing,
+    so before this gate existed such a document left no trace in the books, no
+    exception and no line in the owner's letter. Feeding a month of documents
+    the extractor had never seen closed at zero revenue and reported every gate
+    passed, which is precisely the silent corruption this product claims to
+    prevent.
+
+    Blocking rather than warning, because "I did not understand two of your
+    documents" is not a closeable month. The remedy is a parser for that
+    document family, not a letter to anybody.
+    """
+    rule = "G6: every document was recognised and accounted for"
+    unknown = ledger.documents_of(DocType.UNKNOWN)
+    if not unknown:
+        return _skipped(rule, "every document matched a known family")
+    names = sorted({d.source_file or "?" for d in unknown})
+    return ValidationResult(
+        rule, False, "error",
+        f"{len(unknown)} document(s) matched no known family and posted nothing: "
+        + ", ".join(names[:3]) + ("" if len(names) <= 3 else f", and {len(names) - 3} more"),
+    )
+
+
 def validate(ledger, results: list[AllocationResult]) -> list[ValidationResult]:
     """Run every gate over a closed month. Pure, deterministic, no model call."""
     return [
@@ -154,6 +181,7 @@ def validate(ledger, results: list[AllocationResult]) -> list[ValidationResult]:
         g3_bank_movement_agrees(ledger, ledger.documents),
         g4_no_double_posting(ledger),
         g5_unreadable_left_unposted(ledger),
+        g6_every_document_was_accounted_for(ledger),
     ]
 
 
