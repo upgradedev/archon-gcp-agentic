@@ -177,3 +177,41 @@ def test_the_declared_python_version_is_one_the_platform_offers():
     assert pinned in ("3.12", "3.13", "3.14"), (
         f"{pinned} is not offered by the platform runtime"
     )
+
+
+def test_a_failed_import_reports_why_instead_of_dying_silently():
+    """The afternoon this cost.
+
+    The function crashed on every path including a static file, and the only
+    thing the platform said was FUNCTION_INVOCATION_FAILED. The app imported
+    cleanly on the build machine and inside the container, so nothing local
+    reproduced it and there was nothing to read but a request id.
+
+    An import failure now serves its own traceback. Simulated here by pointing
+    the shim at a package that cannot exist, because the real one imports
+    fine and a test that cannot trigger the branch proves nothing about it.
+    """
+    import importlib.util
+
+    source = (ROOT / "service" / "main.py").read_text(encoding="utf-8")
+    broken = source.replace("from archon.adapters.service import app",
+                            "from archon.adapters.no_such_module import app")
+    assert broken != source, "the import line moved; this test no longer arms the branch"
+
+    namespace: dict = {"__file__": str(ROOT / "service" / "main.py")}
+    spec = importlib.util.spec_from_loader("broken_shim", loader=None)
+    module = importlib.util.module_from_spec(spec)
+    module.__file__ = str(ROOT / "service" / "main.py")
+    exec(compile(broken, "service/main.py", "exec"), module.__dict__)  # noqa: S102
+
+    assert hasattr(module, "app"), "a failed import must still export an app to serve"
+
+    from fastapi.testclient import TestClient
+
+    response = TestClient(module.app, raise_server_exceptions=False).get("/api/health")
+
+    assert response.status_code == 500
+    assert "could not import" in response.text
+    assert "no_such_module" in response.text, "the traceback is the whole point"
+    assert "project root" in response.text and "root entries" in response.text
+    assert namespace is not None
