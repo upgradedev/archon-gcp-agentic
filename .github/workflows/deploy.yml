@@ -149,9 +149,9 @@ jobs:
                --retry-all-errors "${URL}/" -o page.html
           grep -q "closes the month while nobody is watching" page.html
 
-          # The console, not just the old page: eight sections and a switcher.
+          # The console, not just the old page: ten sections and a switcher.
           TABS="$(grep -oE 'data-panel="[a-z]+"' page.html | sort -u | wc -l)"
-          [ "${TABS}" -eq 8 ] || { echo "::error::expected 8 sections, found ${TABS}"; exit 1; }
+          [ "${TABS}" -eq 10 ] || { echo "::error::expected 10 sections, found ${TABS}"; exit 1; }
           grep -q 'id="period"' page.html
 
           # The data plane, not a cached shell.

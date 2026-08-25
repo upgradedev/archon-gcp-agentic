@@ -49,7 +49,8 @@ async function close() {
   btn.disabled = true;
   btn.textContent = "Closing…";
   $("dot").className = "dot working";
-  $("status").textContent = "the agent is working";
+  $("status").textContent = "the agent is working; a fresh close through the model takes a few minutes";
+  renderPhases(last ? last.journal : {steps: []}, true);
   $("error").classList.add("hidden");
   try {
     const res = await fetch(`/api/close/${period}`, { method: "POST" });
@@ -73,6 +74,10 @@ function render(d) {
   renderHero(d);
   renderOrigin(d);
   renderTrail(d.journal);
+  renderPhases(d.journal, false);
+  renderRunStats(d);
+  renderWaterfall(d.allocations);
+  renderMailbox(d.source);
   renderStats(d);
   renderExpenseChart(d.statements);
   renderMileChart(d.statements);
@@ -81,7 +86,7 @@ function render(d) {
   renderTrends(d.comparison, d.trend_summary);
   renderFindings(d.findings);
   renderDigest(d.digest, d.receipt);
-  renderDrafts(d.drafts);
+  renderDrafts(d.drafts, d.findings);
   renderGates(d.gates);
   renderTrucks(d.statements.per_truck);
   renderProvenance(d);
@@ -231,6 +236,105 @@ function renderOrigin(d) {
      <span class="kv-v">${esc(v)}</span></div>`).join("");
 }
 
+// The identity, drawn: what the lines pay, the fee taken once, what landed.
+// Real close data only; when a batch does not reconcile the residual is shown
+// in red instead of the chart pretending.
+function renderWaterfall(allocations) {
+  const a = (allocations && allocations[0]) || null;
+  if (!a) {
+    $("chart-waterfall").innerHTML =
+      `<p class="sub tight">No consolidated payment this month.</p>`;
+    return;
+  }
+  const linesPay = a.lines.reduce((t, l) => t + (l.paid || 0), 0);
+  const rows = [
+    { label: `${a.lines.length} lines pay`, value: linesPay, tone: "primary",
+      display: usd(linesPay) },
+    { label: "factoring fee", value: -a.factoring_fee, tone: "warn",
+      display: `− ${usd(a.factoring_fee)}` },
+    { label: "landed in bank", value: a.remittance_total, tone: "ok",
+      display: usd(a.remittance_total) },
+  ];
+  const residual = `<div class="legend">
+      <span class="pill ${a.reconciles ? "ok" : "err"}">${a.reconciles
+        ? "identity closes, residual 0.00"
+        : `residual ${usd(a.residual)}`}</span>
+      <span>${esc(a.remittance_ref)} from ${esc(a.broker)}</span>
+    </div>`;
+  $("chart-waterfall").innerHTML = bars(rows) + residual;
+}
+
+// Eleven steps, five phases: what a visitor reads before the detail.
+const PHASES = [
+  ["Ingest", ["intake"]],
+  ["Ledger", ["post", "allocate"]],
+  ["Validate & judge", ["reconcile", "triage", "decide"]],
+  ["Letters", ["draft"]],
+  ["File & report", ["verify", "report", "file", "notify"]],
+];
+
+function renderPhases(journal, running) {
+  const status = new Map(journal.steps.map((s) => [s.name, s.status]));
+  $("phases").className = `phases${running ? " running" : ""}`;
+  $("phases").innerHTML = PHASES.map(([label, names]) => {
+    const states = names.map((n) => status.get(n)).filter(Boolean);
+    const bad = states.some((x) => x === "failed");
+    const blocked = states.some((x) => x === "blocked");
+    const cls = bad ? "bad" : (states.length ? "done" : "");
+    return `<div class="phase ${cls}"><span class="phase-dot"></span>
+      <span class="phase-t"><span class="phase-k">${esc(label)}</span>
+      <span class="phase-s">${states.length} step${states.length === 1 ? "" : "s"}${
+        bad ? " · failed" : (blocked ? " · blocked" : "")}</span></span></div>`;
+  }).join("");
+}
+
+function renderRunStats(d) {
+  const total = d.journal.steps.reduce((t, s) => t + (s.duration_ms || 0), 0);
+  const docs = d.source && d.source.objects_read != null
+    ? d.source.objects_read
+    : (d.journal.steps[0] && d.journal.steps[0].detail.match(/^(\d+)/) || [])[1];
+  $("run-stats").innerHTML = [
+    ["Documents read", docs ?? "–"],
+    ["Steps", String(d.journal.steps.length)],
+    ["Exceptions", String(d.findings.length)],
+    ["Letters filed", String(d.drafts.length)],
+    ["Engine time", `${num(total)} ms`],
+    ["Run", d.run_id],
+  ].map(([k, v]) => `<div class="card flat"><span class="k">${esc(k)}</span>
+    <span class="v num">${esc(v)}</span></div>`).join("");
+}
+
+// The mailbox table: read objects with their hashes, refused objects with
+// their reasons, or an honest note that this close used the bundled sample.
+function renderMailbox(src) {
+  if (!src || src.mailbox !== "gcs") {
+    $("mailbox").innerHTML = `<thead><tr><th>Mailbox</th></tr></thead><tbody>
+      <tr><td class="muted">${src && src.mailbox === "bundled-sample"
+        ? "This close read the bundled synthetic sample month shipped with the " +
+          "repository, and is labelled as such. Drop objects into the bucket " +
+          "and the next event-driven close will list them here with hashes."
+        : "This record predates mailbox provenance; trigger a close to stamp it."}
+      </td></tr></tbody>`;
+    return;
+  }
+  const read = (src.manifest || []).map((m) => `<tr>
+      <td class="mono">${esc(m.object)}</td>
+      <td class="r num">${num(m.bytes)}</td>
+      <td class="mono">${esc(m.generation || "–")}</td>
+      <td class="mono">${esc((m.sha256 || "").slice(0, 20))}…</td>
+      <td><span class="pill ok">read</span></td>
+    </tr>`).join("");
+  const skipped = (src.skipped || []).map((k) => `<tr>
+      <td class="mono">${esc(k.object)}</td>
+      <td class="r">–</td><td>–</td><td class="muted">${esc(k.reason)}</td>
+      <td><span class="pill warn">skipped</span></td>
+    </tr>`).join("");
+  $("mailbox").innerHTML = `<thead><tr>
+      <th>Object</th><th class="r">Bytes</th><th>Generation</th>
+      <th>sha256 / reason</th><th>Status</th>
+    </tr></thead><tbody>${read}${skipped}</tbody>`;
+}
+
 // ── the run trail ────────────────────────────────────────────────────────────
 
 // Steps land one at a time. The delay is presentation only: the run already
@@ -267,16 +371,19 @@ function renderStats(d) {
      `${num(s.revenue_per_mile, 3)} earned, ${num(s.cost_per_mile, 3)} spent`],
     ["trucks", "Miles run", num(s.total_miles),
      `${Object.keys(s.per_truck).length} trucks`],
-    ["findings", "Exceptions", String(d.findings.length), `${errs} of them errors`],
-    ["letters", "Leaking away", usd(d.leakage), "money nobody would have caught"],
+    ["findings", "Exceptions", String(d.findings.length), `${errs} of them errors`,
+     errs ? [`${errs} error${errs > 1 ? "s" : ""}`, "err"] : null],
+    ["letters", "Leaking away", usd(d.leakage), "money nobody would have caught",
+     d.drafts.length ? [`${d.drafts.length} letters ready`, "warn"] : null],
     ["register", "Invoiced, unpaid", usd(d.outstanding), "owed already, now chased"],
     ["checks", "Close", title(d.outcome),
      `${d.gates.filter((g) => g.passed).length}/${d.gates.length} gates passed`],
   ];
-  $("stats").innerHTML = cards.map(([go, k, v, sub]) =>
+  $("stats").innerHTML = cards.map(([go, k, v, sub, badge]) =>
     `<button class="card" data-goto="${esc(go)}">
        <span class="k">${esc(k)}</span><span class="v num">${esc(v)}</span>
        <span class="s">${esc(sub)}</span><span class="go">Open the ledger →</span>
+       ${badge ? `<span class="badge ${esc(badge[1])}">${esc(badge[0])}</span>` : ""}
      </button>`).join("");
   $("stats").querySelectorAll("[data-goto]").forEach((el) =>
     el.addEventListener("click", () => show(el.dataset.goto)));
@@ -346,12 +453,27 @@ function renderDigest(digest, receipt) {
     <pre>${esc(digest.body)}</pre>`;
 }
 
-function renderDrafts(list) {
-  $("drafts").innerHTML = list.map((d) => `<div class="draft">
-    <h3>${esc(d.subject)} <span class="pill warn">filed, not sent</span></h3>
-    <div class="to">${esc(words(d.kind))} · to ${esc(d.recipient)} · ${usd(d.amount)}</div>
-    <pre>${esc(d.body)}</pre>
-  </div>`).join("");
+// Each letter is shown beside the discrepancy that produced it, matched on
+// the reference the detector reported. A letter with no visible cause is a
+// letter the owner has to take on trust.
+function renderDrafts(list, findings) {
+  const byRef = new Map((findings || []).map((f) => [f.reference, f]));
+  $("drafts").innerHTML = list.map((d) => {
+    const f = byRef.get(d.reference);
+    const cause = f ? `<div class="dispute">
+        <h4>${esc(words(f.kind))} · ${esc(f.reference)}</h4>
+        <div class="d-amount num">${f.amount ? usd(f.amount) : "–"}</div>
+        <div class="d-msg">${esc(f.message)}</div>
+      </div>` : `<div class="dispute">
+        <h4>no single finding</h4>
+        <div class="d-msg">This letter summarises more than one line of the books.</div>
+      </div>`;
+    return `<div class="dispute-pair">${cause}<div class="draft">
+      <h3>${esc(d.subject)} <span class="pill warn">filed, not sent</span></h3>
+      <div class="to">${esc(words(d.kind))} · to ${esc(d.recipient)} · ${usd(d.amount)}</div>
+      <pre>${esc(d.body)}</pre>
+    </div></div>`;
+  }).join("");
 }
 
 function renderGates(list) {
@@ -533,7 +655,22 @@ function loadStored(note) {
 // Which months have mail waiting. Rendered newest first, because the month an
 // owner wants is nearly always the one that just ended.
 fetch("/api/health").then((r) => r.ok ? r.json() : null)
-  .then((h) => { health = h; if (last) renderOrigin(last); }).catch(() => {});
+  .then((h) => {
+    health = h;
+    if (h) {
+      $("live-badge-text").textContent = h.close_path === "adk-agent"
+        ? `${h.model || "Gemini"} · ADK agent active`
+        : "deterministic engine";
+      if (h.release) $("live-badge").title =
+        `commit ${h.release}${h.revision ? " · " + h.revision : ""}`;
+    } else {
+      $("live-badge-text").textContent = "offline";
+    }
+    if (last) renderOrigin(last);
+  }).catch(() => { $("live-badge-text").textContent = "offline"; });
+
+$("side-toggle").addEventListener("click", () =>
+  $("shell").classList.toggle("side-collapsed"));
 
 fetch("/api/periods").then((r) => r.ok ? r.json() : null).then((d) => {
   if (!d || !d.periods || !d.periods.length) return;
