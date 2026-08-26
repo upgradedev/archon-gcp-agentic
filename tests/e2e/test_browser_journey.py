@@ -460,3 +460,50 @@ def test_replay_re_renders_without_re_executing_anything(page, base_url):
     delays = page.eval_on_selector_all(
         "#trail .step", "els => els.map(e => getComputedStyle(e).animationDelay)")
     assert len(set(delays)) >= 5, "the replayed trail lost its stagger"
+
+
+@pytest.mark.parametrize("width", [1920, 1280, 1100, 900, 375])
+def test_a_tile_badge_never_lands_on_top_of_its_own_label(browser, base_url, width):
+    """Caught on film, which is the worst place to catch anything.
+
+    `.card .badge` was `position: absolute; top: 13px; right: 14px`, so it was
+    out of flow and free to sit ON a long label rather than beside it. On the
+    author's machine "LEAKING AWAY" cleared "5 letters ready" by 6.5px at 1920
+    and nothing looked wrong. On the Linux runner that records the demo the
+    glyphs are wider, the clearance went negative, and the badge printed across
+    the last letters of the word — on the money-found tile, at 1920x1080, in
+    the video a judge watches.
+
+    Exactly the fragility that produced the 4px sideways scroll: a layout that
+    depends on the font the machine happens to resolve. The structural fix is
+    the badge being in flow, and this asserts the property rather than the
+    clearance, so it holds at any width and in any font.
+
+    1920 is here because that is the capture width; the rest are widths the
+    grid reflows at, where the cards are narrowest and a collision is likeliest.
+    """
+    context = browser.new_context(viewport={"width": width, "height": 900})
+    page = context.new_page()
+    try:
+        page.goto(base_url, wait_until="networkidle")
+        expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+
+        collisions = page.eval_on_selector_all(
+            ".card",
+            """cards => cards.flatMap(card => {
+                 const k = card.querySelector('.k'), b = card.querySelector('.badge');
+                 if (!k || !b) return [];
+                 const kr = k.getBoundingClientRect(), br = b.getBoundingClientRect();
+                 const x = Math.min(kr.right, br.right) - Math.max(kr.left, br.left);
+                 const y = Math.min(kr.bottom, br.bottom) - Math.max(kr.top, br.top);
+                 return (x > 0.5 && y > 0.5)
+                   ? [{label: k.textContent.trim(), badge: b.textContent.trim(),
+                       overlap: Math.round(x)}]
+                   : [];
+               })""")
+
+        assert collisions == [], (
+            f"at {width}px a badge is printed over its own label: {collisions}"
+        )
+    finally:
+        context.close()

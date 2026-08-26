@@ -180,8 +180,21 @@
   .card .v.id { font-size: 14px; font-weight: 600; letter-spacing: 0; margin-top: 9px; }
   .card .s { font-size: 12.5px; color: var(--text-2); margin-top: 4px; }
   .card .go { font-size: 11.5px; color: var(--text-3); margin-top: 10px; font-weight: 600; }
+  /* The badge used to be `position: absolute; top: 13px; right: 14px`, which
+     takes it out of flow and lets it sit ON TOP of a long label instead of
+     beside it. On this machine "LEAKING AWAY" cleared "5 letters ready" by
+     6.5px at 1920; on the Linux runner that films the demo it did not, and
+     the badge landed across the last letters of the word. Same font-metric
+     fragility as the run-id overflow, one layer up.
+     In flow, with the label free to shrink, they cannot collide at any width
+     or in any font. */
+  .card-h {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px; width: 100%;
+  }
+  .card-h .k { min-width: 0; }
   .card .badge {
-    position: absolute; top: 13px; right: 14px;
+    flex: none; white-space: nowrap;
     font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
     padding: 3px 9px; border-radius: var(--r-pill); border: 1px solid currentColor;
   }

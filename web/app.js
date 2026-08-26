@@ -392,9 +392,10 @@ function renderStats(d) {
   ];
   $("stats").innerHTML = cards.map(([go, k, v, sub, badge]) =>
     `<button class="card" data-goto="${esc(go)}">
-       <span class="k">${esc(k)}</span><span class="v num">${esc(v)}</span>
+       <span class="card-h"><span class="k">${esc(k)}</span>${
+         badge ? `<span class="badge ${esc(badge[1])}">${esc(badge[0])}</span>` : ""}</span>
+       <span class="v num">${esc(v)}</span>
        <span class="s">${esc(sub)}</span><span class="go">Open the ledger →</span>
-       ${badge ? `<span class="badge ${esc(badge[1])}">${esc(badge[0])}</span>` : ""}
      </button>`).join("");
   $("stats").querySelectorAll("[data-goto]").forEach((el) =>
     el.addEventListener("click", () => show(el.dataset.goto)));
