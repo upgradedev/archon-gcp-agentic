@@ -310,9 +310,9 @@ function renderRunStats(d) {
     ["Exceptions", String(d.findings.length)],
     ["Letters filed", String(d.drafts.length)],
     ["Engine time", `${num(total)} ms`],
-    ["Run", d.run_id],
-  ].map(([k, v]) => `<div class="card flat"><span class="k">${esc(k)}</span>
-    <span class="v num">${esc(v)}</span></div>`).join("");
+    ["Run", d.run_id, "id"],
+  ].map(([k, v, kind]) => `<div class="card flat"><span class="k">${esc(k)}</span>
+    <span class="v ${kind || "num"}">${esc(v)}</span></div>`).join("");
 }
 
 // The mailbox table: read objects with their hashes, refused objects with

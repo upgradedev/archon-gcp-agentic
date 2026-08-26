@@ -167,7 +167,17 @@
   .card .k {
     font-size: 11.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3);
   }
-  .card .v { font-size: 26px; font-weight: 680; margin-top: 7px; letter-spacing: -0.02em; }
+  /* A grid item's default `min-width: auto` refuses to shrink below its
+     min-content width, and a run id is one unbreakable token. Rendered at
+     26px it is wider than the 150px column, so the card overflowed the
+     grid, the grid overflowed the panel and the page scrolled sideways.
+     How far past the edge it landed depended on the font the machine
+     happened to have, which is why it passed here and failed in CI. */
+  .card { min-width: 0; }
+  .card .v { font-size: 26px; font-weight: 680; margin-top: 7px; letter-spacing: -0.02em;
+             overflow-wrap: anywhere; }
+  /* An identifier is not a measurement and should not be typeset as one. */
+  .card .v.id { font-size: 14px; font-weight: 600; letter-spacing: 0; margin-top: 9px; }
   .card .s { font-size: 12.5px; color: var(--text-2); margin-top: 4px; }
   .card .go { font-size: 11.5px; color: var(--text-3); margin-top: 10px; font-weight: 600; }
   .card .badge {
