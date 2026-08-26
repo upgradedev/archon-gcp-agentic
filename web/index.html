@@ -18,22 +18,22 @@
     <div class="brand-t"><b>ARCHON</b><span class="brand-s">Freight close &amp; dispute</span></div>
   </div>
 
-  <nav class="nav" id="tabs" aria-label="Sections">
-    <div class="nav-h">Overview</div>
-    <button class="tab on" data-panel="overview"><span class="nav-i" aria-hidden="true">◈</span><span class="nav-t">Dashboard</span></button>
-    <div class="nav-h">Operations</div>
-    <button class="tab" data-panel="runner"><span class="nav-i" aria-hidden="true">▶</span><span class="nav-t">Close runner</span></button>
-    <button class="tab" data-panel="mailbox"><span class="nav-i" aria-hidden="true">▤</span><span class="nav-t">Mailbox</span></button>
-    <div class="nav-h">Money</div>
-    <button class="tab" data-panel="alloc"><span class="nav-i" aria-hidden="true">⇄</span><span class="nav-t">Reconciliation</span></button>
-    <button class="tab" data-panel="register"><span class="nav-i" aria-hidden="true">◔</span><span class="nav-t">Open items</span></button>
-    <button class="tab" data-panel="findings"><span class="nav-i" aria-hidden="true">⚠</span><span class="nav-t">Exceptions</span></button>
-    <button class="tab" data-panel="letters"><span class="nav-i" aria-hidden="true">✉</span><span class="nav-t">Letters</span></button>
-    <div class="nav-h">Insight</div>
-    <button class="tab" data-panel="trends"><span class="nav-i" aria-hidden="true">↗</span><span class="nav-t">Trends</span></button>
-    <button class="tab" data-panel="trucks"><span class="nav-i" aria-hidden="true">▣</span><span class="nav-t">Fleet</span></button>
-    <div class="nav-h">Trust</div>
-    <button class="tab" data-panel="checks"><span class="nav-i" aria-hidden="true">✓</span><span class="nav-t">Checks</span></button>
+  <nav class="nav" id="tabs" aria-label="Explore Archon">
+    <div class="nav-h">Start here</div>
+    <button class="tab on" data-panel="overview"><span class="nav-i" aria-hidden="true">◈</span><span class="nav-t">What Archon does</span></button>
+    <div class="nav-h">How it works</div>
+    <button class="tab" data-panel="runner"><span class="nav-i" aria-hidden="true">▶</span><span class="nav-t">Watch the agent</span></button>
+    <button class="tab" data-panel="mailbox"><span class="nav-i" aria-hidden="true">▤</span><span class="nav-t">Documents read</span></button>
+    <div class="nav-h">Business outcome</div>
+    <button class="tab" data-panel="alloc"><span class="nav-i" aria-hidden="true">⇄</span><span class="nav-t">Payment matched</span></button>
+    <button class="tab" data-panel="register"><span class="nav-i" aria-hidden="true">◔</span><span class="nav-t">Money still owed</span></button>
+    <button class="tab" data-panel="findings"><span class="nav-i" aria-hidden="true">!</span><span class="nav-t">What needs attention</span></button>
+    <button class="tab" data-panel="letters"><span class="nav-i" aria-hidden="true">✉</span><span class="nav-t">Letters to review</span></button>
+    <div class="nav-h">Business insight</div>
+    <button class="tab" data-panel="trends"><span class="nav-i" aria-hidden="true">↗</span><span class="nav-t">Month over month</span></button>
+    <button class="tab" data-panel="trucks"><span class="nav-i" aria-hidden="true">▣</span><span class="nav-t">Truck performance</span></button>
+    <div class="nav-h">Proof &amp; audit</div>
+    <button class="tab" data-panel="checks"><span class="nav-i" aria-hidden="true">✓</span><span class="nav-t">Checks &amp; evidence</span></button>
   </nav>
 
   <div class="side-foot">
@@ -57,9 +57,9 @@
     <span id="live-badge-text">connecting…</span>
   </span>
   <span class="top-spacer"></span>
-  <button id="run">Close the month</button>
-  <button class="ghost" id="replay">Replay the run</button>
-  <button class="ghost" id="raw">JSON</button>
+  <button id="run" title="Run a fresh close through the agent">Run fresh close</button>
+  <button class="ghost" id="replay" title="Re-render the saved run without executing it">Replay saved run</button>
+  <button class="ghost" id="raw" title="Open the technical API response">View JSON</button>
 </header>
 
 <div class="statusbar"><span class="dim" id="status">Documents are waiting.</span></div>
@@ -70,17 +70,53 @@
 
   <!-- ── Dashboard ─────────────────────────────────────────────────────── -->
   <section class="panel" id="panel-overview">
-    <h1>It closes the month while nobody is watching.</h1>
-    <p class="hero-line" id="hero-line" aria-live="polite"></p>
-    <p class="chips" aria-label="How a close happens">
-      <span class="chip">Cloud Storage drop</span><span class="chip-sep">→</span>
-      <span class="chip">Pub/Sub push, OIDC</span><span class="chip-sep">→</span>
-      <span class="chip">ADK agent · Gemini</span><span class="chip-sep">→</span>
-      <span class="chip">deterministic ledger</span><span class="chip-sep">→</span>
-      <span class="chip">Firestore trail</span>
-    </p>
+    <div class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Autonomous month-end close for owner-operated trucking firms</p>
+        <h1>Drop in a month of documents.<br>Get reconciled books and letters ready to review.</h1>
+        <p class="hero-dek">Archon reads invoices, receipts and broker remittances; closes the ledger; catches missing money and unusual spend; then prepares the owner&apos;s report and corrective letters.</p>
+        <div class="hero-actions">
+          <button id="hero-run">Watch Archon close July</button>
+          <span class="hero-context">Runs a fresh close on synthetic Bell Ridge Haulage data</span>
+        </div>
+        <p class="hero-line" id="hero-line" aria-live="polite">Loading the latest close…</p>
+      </div>
+      <aside class="hero-result" aria-label="What you get">
+        <p class="eyebrow">What you get</p>
+        <ul class="result-list">
+          <li><b>Closed books</b><span>Revenue, costs, profit and per-truck performance</span></li>
+          <li><b>Money found</b><span>Short payments, unpaid invoices and undocumented spend</span></li>
+          <li><b>Action package</b><span>Owner digest plus broker and supplier letters</span></li>
+        </ul>
+      </aside>
+    </div>
 
+    <div class="how-strip" aria-label="How Archon works">
+      <div class="how-step"><span class="step-no">1</span><span><b>Documents arrive</b><small>Receipts, invoices and remittances land in the mailbox.</small></span></div>
+      <div class="how-arrow" aria-hidden="true">→</div>
+      <div class="how-step"><span class="step-no">2</span><span><b>The agent closes and checks</b><small>Gemini chooses the workflow; deterministic code does every calculation.</small></span></div>
+      <div class="how-arrow" aria-hidden="true">→</div>
+      <div class="how-step"><span class="step-no">3</span><span><b>The owner reviews</b><small>Books are filed automatically. External letters wait for human approval.</small></span></div>
+    </div>
+
+    <div class="approval-note">
+      <span class="approval-mark" aria-hidden="true">✓</span>
+      <span><b>Human control stays where it matters.</b> Archon drafts and files every broker or supplier letter, but never sends one without approval.</span>
+      <button class="text-action" data-show-panel="letters">See the approval boundary →</button>
+    </div>
+
+    <div class="section-heading">
+      <div><p class="eyebrow">Latest close outcome</p><h2>What Archon found and finished</h2></div>
+      <p>Every figure below opens the ledger it came from.</p>
+    </div>
     <div class="grid cards" id="stats"></div>
+
+    <div class="proof-strip" aria-label="Why the result is trustworthy">
+      <span><b>Agentic control</b> ADK + Gemini</span>
+      <span><b>Exact arithmetic</b> deterministic ledger</span>
+      <span><b>Self-checked</b> six close gates</span>
+      <span><b>Auditable</b> source hashes + Firestore trail</span>
+    </div>
 
     <div class="grid two">
       <div class="pane">

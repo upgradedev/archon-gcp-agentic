@@ -44,12 +44,24 @@ document.querySelectorAll(".tab").forEach((tab) =>
 
 // ── the close ────────────────────────────────────────────────────────────────
 
+function setRunControls(state) {
+  const header = $("run");
+  const hero = $("hero-run");
+  const labels = {
+    ready: ["Run fresh close", "Watch Archon close July"],
+    running: ["Agent is closing…", "Archon is closing the books…"],
+    complete: ["Run another fresh close", "Watch the close again"],
+    failed: ["Try fresh close again", "Try the close again"],
+  };
+  [header.textContent, hero.textContent] = labels[state];
+  header.disabled = state === "running";
+  hero.disabled = state === "running";
+}
+
 async function close() {
-  const btn = $("run");
-  btn.disabled = true;
-  btn.textContent = "Closing…";
+  setRunControls("running");
   $("dot").className = "dot working";
-  $("status").textContent = "the agent is working; a fresh close through the model takes a few minutes";
+  $("status").textContent = "Archon is reading the documents, closing the ledger and checking its work. This can take a few minutes.";
   renderPhases(last ? last.journal : {steps: []}, true);
   $("error").classList.add("hidden");
   try {
@@ -57,16 +69,15 @@ async function close() {
     if (!res.ok) throw new Error(`the close returned ${res.status}`);
     last = await res.json();
     render(last);
-    btn.textContent = "Close it again";
+    setRunControls("complete");
     $("dot").className = `dot ${last.outcome === "closed" ? "ok" : "err"}`;
-    $("status").textContent = `run ${last.run_id} · ${last.outcome}`;
+    $("status").textContent = `Close complete · ${last.outcome} · Review what needs attention or inspect the letters ready for approval.`;
   } catch (err) {
     $("error").textContent = `Could not close the month: ${err.message}`;
     $("error").classList.remove("hidden");
     $("dot").className = "dot err";
-    btn.textContent = "Try again";
-  } finally {
-    btn.disabled = false;
+    $("status").textContent = "The close did not finish. No books or letters were filed from this attempt.";
+    setRunControls("failed");
   }
 }
 
@@ -619,7 +630,15 @@ function renderTrends(comparison, line) {
 
 // ── wiring ───────────────────────────────────────────────────────────────────
 
-$("run").addEventListener("click", close);
+function runAndFollow() {
+  show("runner");
+  close();
+}
+
+$("run").addEventListener("click", runAndFollow);
+$("hero-run").addEventListener("click", runAndFollow);
+document.querySelectorAll("[data-show-panel]").forEach((control) =>
+  control.addEventListener("click", () => show(control.dataset.showPanel)));
 $("raw").addEventListener("click", () => window.open(`/api/close/${period}`, "_blank"));
 
 // Replays the rendering of the close already on screen. No server call: the
@@ -644,10 +663,11 @@ function loadStored(note) {
       if (!d) return;
       last = d;
       render(d);
+      setRunControls("complete");
       $("dot").className = `dot ${d.outcome === "closed" ? "ok" : "err"}`;
       $("status").textContent = note
-        ? `${note} · last run ${d.run_id} · ${d.outcome}`
-        : `last run ${d.run_id} · ${d.outcome}. Press the button to watch it run again.`;
+        ? `${note} · saved close ${d.run_id} · ${d.outcome}`
+        : `Latest saved close loaded · ${d.outcome}. Watch it run again or explore the outcome below.`;
     })
     .catch(() => {});
 }
