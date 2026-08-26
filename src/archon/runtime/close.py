@@ -3,7 +3,7 @@
 This is the whole product in one function. A month of mail goes in. Eleven
 steps later the books are posted, the remittance is split across the loads it
 settles, the exceptions are triaged worst-first, the corrective documents are
-written and filed, the close has checked its own work against five gates, the
+written and filed, the close has checked its own work against six gates, the
 period is marked closed with a trail you can walk back through, and the owner
 has a letter about it wherever they read their mail.
 
@@ -289,7 +289,7 @@ def run_close(period: str,
             owed_to_us=open_items.owed_to_us, owed_by_us=open_items.owed_by_us,
         )
 
-    # 5. Triage. Nine detectors, ranked worst-first by severity then money.
+    # 5. Triage. Ten detectors, ranked worst-first by severity then money.
     with run.step("triage", "Find what is missing or does not add up") as step:
         findings = exceptions_mod.find_all(documents, results, period)
         errors = [f for f in findings if f.severity == "error"]

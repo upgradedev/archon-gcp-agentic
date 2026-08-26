@@ -391,7 +391,7 @@ flowchart TB
     subgraph core["archon.domain · pure, no SDK, no network"]
         ledger["ledger<br/>double-entry"]
         alloc["allocation<br/>one payment, many loads"]
-        exc["exceptions<br/>nine detectors"]
+        exc["exceptions<br/>ten detectors"]
         val["validation<br/>six gates"]
         draft["drafts<br/>corrective letters"]
     end
@@ -589,7 +589,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 534 | `python -m pytest` |
+| Tests, all offline | 535 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -781,7 +781,7 @@ require the disclosure.
 | The shape of the offline-first agent layer, and the injectable-model pattern | the same build | rewritten for this domain |
 
 Everything else in this repository was written for this entry: the trucking
-domain model, the ledger, the allocation engine, all nine detectors, the five
+domain model, the ledger, the allocation engine, all ten detectors, the six
 gates, the drafts, the run journal, the close orchestrator, the service, the
 page, the corpus and the tests.
 

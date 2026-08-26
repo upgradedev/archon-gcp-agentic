@@ -687,28 +687,38 @@ function clearStale(line) {
   setRunControls("ready");
 }
 
+// Three places on this page claim what the deployment runs: the live badge, the
+// proof strip and the second how-step. They say it from one source, /api/health,
+// because three independently-written claims are three chances to be wrong.
+//
+// When health cannot be reached the claim is WITHDRAWN rather than left
+// standing. The static HTML has to ship some default, and its default is the
+// optimistic one; a check that fails silently and leaves "ADK + Gemini" on
+// screen is the same defect as never checking, only harder to notice.
+function showDeployment(h) {
+  const agent = h && h.close_path === "adk-agent";
+  const model = (h && h.model) || "Gemini";
+  $("live-badge-text").textContent = !h ? "offline"
+    : agent ? `${model} · ADK agent active` : "deterministic engine";
+  $("proof-agent").textContent = !h ? "unavailable"
+    : agent ? `ADK + ${model}` : "deterministic engine";
+  $("how-agent").textContent = !h
+    ? "This page could not reach the service to ask what it runs."
+    : agent
+      ? "Gemini chooses the workflow; deterministic code does every calculation."
+      : "The workflow is fixed and every calculation is deterministic; no model is in this deployment.";
+}
+
 // Which months have mail waiting. Rendered newest first, because the month an
 // owner wants is nearly always the one that just ended.
 fetch("/api/health").then((r) => r.ok ? r.json() : null)
   .then((h) => {
     health = h;
-    if (h) {
-      $("live-badge-text").textContent = h.close_path === "adk-agent"
-        ? `${h.model || "Gemini"} · ADK agent active`
-        : "deterministic engine";
-      const agent = h.close_path === "adk-agent";
-      $("proof-agent").textContent = agent
-        ? `ADK + ${h.model || "Gemini"}` : "deterministic engine";
-      $("how-agent").textContent = agent
-        ? "Gemini chooses the workflow; deterministic code does every calculation."
-        : "The workflow is fixed and every calculation is deterministic; no model is in this deployment.";
-      if (h.release) $("live-badge").title =
-        `commit ${h.release}${h.revision ? " · " + h.revision : ""}`;
-    } else {
-      $("live-badge-text").textContent = "offline";
-    }
+    showDeployment(h);
+    if (h && h.release) $("live-badge").title =
+      `commit ${h.release}${h.revision ? " · " + h.revision : ""}`;
     if (last) renderOrigin(last);
-  }).catch(() => { $("live-badge-text").textContent = "offline"; });
+  }).catch(() => showDeployment(null));
 
 $("side-toggle").addEventListener("click", () =>
   $("shell").classList.toggle("side-collapsed"));

@@ -1,7 +1,7 @@
 """What the month got wrong, found deterministically.
 
 Everyone extracts what you have. The useful question is what you do not have,
-and what you have that contradicts itself. Nine detectors run over the posted
+and what you have that contradicts itself. Ten detectors run over the posted
 month, and each one is pure: same documents in, same findings out, no model
 call anywhere in this file.
 
