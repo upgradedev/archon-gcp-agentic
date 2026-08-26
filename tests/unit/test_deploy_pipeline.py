@@ -314,3 +314,46 @@ def test_cloud_run_keeps_the_ceiling_an_agent_close_needs():
         "minutes and a shorter ceiling turns one into a redelivery loop"
     )
     assert '"120s"' not in template.split("scaling")[0]
+
+
+def test_both_deploy_paths_pass_terraform_the_same_variables():
+    """`variable "release"` defaults to "", so omitting it does not fail an
+    apply — it silently sets ARCHON_RELEASE to nothing, and /api/health stops
+    naming the build it is running. The workflow passed it; `scripts/deploy.sh`
+    never did. Whoever reached for the script to reconcile drift would have
+    blanked the stamp the video pipeline checks before it records.
+
+    A default that turns an omission into a wrong value rather than an error is
+    the whole reason this needs a test: nothing else can notice.
+    """
+    import re
+
+    script = (ROOT / "scripts" / "deploy.sh").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8")
+
+    def passed(text):
+        return {m.group(1) for m in re.finditer(r'-var "(\w+)=', text)}
+
+    from_script = passed(script)
+    from_workflow = passed(workflow)
+
+    assert "release" in from_script, (
+        "scripts/deploy.sh does not pass -var release, so an apply through it "
+        "blanks ARCHON_RELEASE on the live service"
+    )
+    assert from_workflow <= from_script, (
+        "the workflow passes variables the script does not, so the two paths "
+        f"deploy differently: {sorted(from_workflow - from_script)}"
+    )
+
+
+def test_the_release_stamp_and_the_image_tag_cannot_disagree():
+    """They are the same commit or the page lies about what it is running.
+    Derived from one shell variable so they cannot drift apart."""
+    script = (ROOT / "scripts" / "deploy.sh").read_text(encoding="utf-8")
+
+    assert 'RELEASE="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"' in script
+    assert 'IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:${RELEASE}"' in script
+    assert 'rev-parse --short HEAD)"\n' not in script.split("IMAGE=")[1][:120], (
+        "the image tag computes its own SHA again instead of reusing RELEASE"
+    )

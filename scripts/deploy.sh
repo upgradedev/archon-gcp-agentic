@@ -27,7 +27,11 @@ SERVICE="${SERVICE:-archon}"
 OWNER_EMAIL="${ARCHON_OWNER_EMAIL:-}"
 ACTION="${1:-apply}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+# One source for the SHA. It tags the image AND stamps /api/health, and the
+# two have to agree: a page whose release does not match the image it is
+# running is worse than no stamp, because it is confidently wrong.
+RELEASE="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:${RELEASE}"
 
 echo "==> project ${PROJECT_ID}, region ${REGION}, image ${IMAGE}"
 gcloud config set project "${PROJECT_ID}" >/dev/null
@@ -44,6 +48,7 @@ if [[ "${ACTION}" == "destroy" ]]; then
     -var "region=${REGION}" \
     -var "service_name=${SERVICE}" \
     -var "image=${IMAGE}" \
+    -var "release=${RELEASE}" \
     -var "owner_email=${OWNER_EMAIL}"
   echo "==> torn down"
   exit 0
@@ -64,6 +69,7 @@ terraform -chdir="${REPO_ROOT}/infra" apply -auto-approve \
   -var "region=${REGION}" \
   -var "service_name=${SERVICE}" \
   -var "image=${IMAGE}" \
+  -var "release=${RELEASE}" \
   -var "owner_email=${OWNER_EMAIL}"
 
 SERVICE_URL="$(terraform -chdir="${REPO_ROOT}/infra" output -raw service_url)"
