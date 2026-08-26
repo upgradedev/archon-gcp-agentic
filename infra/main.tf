@@ -280,9 +280,8 @@ resource "google_cloud_run_v2_service" "archon" {
     # 300s was fine for the deterministic path; a request cut off mid-close
     # turns into a Pub/Sub redelivery, so the ceiling is set above the close,
     # not above the average request.
-    timeout = "600s"
+    timeout         = "600s"
     service_account = google_service_account.runtime.email
-    timeout         = "120s"
 
     # Scale to zero between months. That is the whole cost argument, and in
     # the v2 resource it belongs inside the template, not beside it.

@@ -246,3 +246,71 @@ def test_no_shell_line_carries_a_two_character_backslash_n(path):
     offenders = [line.strip() for line in text.splitlines() if "\n" in line]
 
     assert offenders == [], f"{path} has a literal backslash-n: {offenders}"
+
+
+def test_no_terraform_block_sets_the_same_argument_twice():
+    """The defect this closes made the whole deployment pipeline unrunnable for
+    three days, and nothing said so.
+
+    `f868b19` raised Cloud Run's request ceiling to 600s because an agent close
+    on a thinking model runs for minutes and a request cut off at 120s comes
+    back as a Pub/Sub redelivery. It added `timeout = "600s"` to the template
+    block and left the existing `timeout = "120s"` sitting three lines below
+    it. Two arguments of the same name in one block is an HCL parse error, so
+    from that commit terraform could not `init`, `plan` or `validate`, let
+    alone apply, and the commit message went on claiming "the request timeout
+    is now declared at 600s in terraform".
+
+    Nothing caught it because nothing here runs terraform: it is not installed
+    on the author's machine, the CD workflow dies eight seconds earlier on
+    unset repository variables, and `infra/cloudbuild.yaml` refuses the
+    production project by design. The file was the one artifact in this
+    repository with no gate in front of it.
+
+    A brace-depth scan is enough for this class and needs no HCL parser, which
+    is the point: it runs in the offline suite on every push, where terraform
+    never will.
+    """
+    import re
+
+    for path in sorted((ROOT / "infra").glob("*.tf")):
+        seen: list[dict[str, int]] = [{}]
+        for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            line = raw.split("#", 1)[0].split("//", 1)[0].strip()
+            if not line:
+                continue
+
+            argument = re.match(r'^([A-Za-z_][\w-]*)\s*=\s*[^=]', line)
+            if argument and seen:
+                name = argument.group(1)
+                first = seen[-1].get(name)
+                assert first is None, (
+                    f"{path.name} sets `{name}` twice in the same block, at lines "
+                    f"{first} and {number}. Terraform refuses to parse the file, so "
+                    f"every plan and apply fails before it reads a single resource."
+                )
+                seen[-1][name] = number
+
+            # Depth last, so an argument is credited to the block it sits in.
+            for _ in range(line.count("{") - line.count("}")):
+                seen.append({})
+            for _ in range(line.count("}") - line.count("{")):
+                if len(seen) > 1:
+                    seen.pop()
+
+
+def test_cloud_run_keeps_the_ceiling_an_agent_close_needs():
+    """The other half of the same defect. Fixing the duplicate meant deleting
+    one of two lines, and deleting the wrong one is a green deploy that
+    reintroduces the outage: an agent close runs past 120s, Cloud Run cuts the
+    request, Pub/Sub reads the 504 as failure and redelivers, and the instance
+    wedges. The live service already carries 600.
+    """
+    template = (ROOT / "infra" / "main.tf").read_text(encoding="utf-8")
+    template = template.split('resource "google_cloud_run_v2_service"')[1]
+
+    assert 'timeout         = "600s"' in template or 'timeout = "600s"' in template, (
+        "the Cloud Run request timeout is no longer 600s; an agent close needs "
+        "minutes and a shorter ceiling turns one into a redelivery loop"
+    )
+    assert '"120s"' not in template.split("scaling")[0]
