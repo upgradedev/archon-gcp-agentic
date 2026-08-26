@@ -468,7 +468,12 @@
   @media (max-width: 520px) {
     .topbar .live-badge { order: 3; }
     .top-spacer { display: none; }
-    #run, #replay, #raw { display: none; }
+    /* The primary action survives every width. Hiding it on a phone hid
+       the one thing the page is for, and the journey is tested at 375.
+       Replay and the raw JSON are secondary and stay out of the way;
+       the topbar wraps, so #run takes its own full-width row. */
+    #replay, #raw { display: none; }
+    #run { width: 100%; }
     .hero-actions { align-items: stretch; flex-direction: column; width: 100%; }
     #hero-run { width: 100%; }
     .hero-context { max-width: none; }

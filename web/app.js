@@ -657,19 +657,34 @@ $("period").addEventListener("change", () => {
 });
 
 function loadStored(note) {
+  if (note) clearStale(`loading ${period}…`);
   return fetch(`/api/close/${period}`)
     .then((r) => r.ok ? r.json() : null)
     .then((d) => {
-      if (!d) return;
+      if (!d) return clearStale(`No close on file for ${period} yet.`);
       last = d;
       render(d);
-      setRunControls("complete");
+      setRunControls("ready");
       $("dot").className = `dot ${d.outcome === "closed" ? "ok" : "err"}`;
       $("status").textContent = note
         ? `${note} · saved close ${d.run_id} · ${d.outcome}`
-        : `Latest saved close loaded · ${d.outcome}. Watch it run again or explore the outcome below.`;
+        : `Showing the last run · ${d.run_id} · ${d.outcome}. Press Run fresh close to watch a new one, or explore the outcome below.`;
     })
-    .catch(() => {});
+    .catch(() => clearStale("Could not reach the close on file."));
+}
+
+// A month with nothing on file has to look like a month with nothing on file.
+// Leaving the previous period's trail and tiles up would label July's figures
+// as August, which is worse than an empty page because it reads as an answer.
+function clearStale(line) {
+  last = null;
+  $("hero-line").textContent = line;
+  $("status").textContent = line;
+  ["stats", "trail", "run-stats", "mailbox"].forEach((id) => {
+    const node = $(id);
+    if (node) node.innerHTML = "";
+  });
+  setRunControls("ready");
 }
 
 // Which months have mail waiting. Rendered newest first, because the month an
@@ -681,6 +696,12 @@ fetch("/api/health").then((r) => r.ok ? r.json() : null)
       $("live-badge-text").textContent = h.close_path === "adk-agent"
         ? `${h.model || "Gemini"} · ADK agent active`
         : "deterministic engine";
+      const agent = h.close_path === "adk-agent";
+      $("proof-agent").textContent = agent
+        ? `ADK + ${h.model || "Gemini"}` : "deterministic engine";
+      $("how-agent").textContent = agent
+        ? "Gemini chooses the workflow; deterministic code does every calculation."
+        : "The workflow is fixed and every calculation is deterministic; no model is in this deployment.";
       if (h.release) $("live-badge").title =
         `commit ${h.release}${h.revision ? " · " + h.revision : ""}`;
     } else {

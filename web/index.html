@@ -72,9 +72,9 @@
   <section class="panel" id="panel-overview">
     <div class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Autonomous month-end close for owner-operated trucking firms</p>
-        <h1>Drop in a month of documents.<br>Get reconciled books and letters ready to review.</h1>
-        <p class="hero-dek">Archon reads invoices, receipts and broker remittances; closes the ledger; catches missing money and unusual spend; then prepares the owner&apos;s report and corrective letters.</p>
+        <p class="eyebrow">Autonomous month-end close for owner-operated trucking firms running 3 to 12 trucks</p>
+        <h1>It closes the month while nobody is watching.</h1>
+        <p class="hero-dek">Drop in a month of documents and get back reconciled books and letters ready to review. Archon reads invoices, receipts and broker remittances; closes the ledger; catches missing money and unusual spend; then prepares the owner&apos;s report and corrective letters.</p>
         <div class="hero-actions">
           <button id="hero-run">Watch Archon close July</button>
           <span class="hero-context">Runs a fresh close on synthetic Bell Ridge Haulage data</span>
@@ -92,11 +92,11 @@
     </div>
 
     <div class="how-strip" aria-label="How Archon works">
-      <div class="how-step"><span class="step-no">1</span><span><b>Documents arrive</b><small>Receipts, invoices and remittances land in the mailbox.</small></span></div>
+      <div class="how-step"><span class="step-no">1</span><span><b>Documents arrive</b><small>Receipts, invoices and remittances land in Cloud Storage. Pub/Sub pushes the event and the close starts itself. Nobody presses anything.</small></span></div>
       <div class="how-arrow" aria-hidden="true">→</div>
-      <div class="how-step"><span class="step-no">2</span><span><b>The agent closes and checks</b><small>Gemini chooses the workflow; deterministic code does every calculation.</small></span></div>
+      <div class="how-step"><span class="step-no">2</span><span><b>The agent closes and checks</b><small id="how-agent">Gemini chooses the workflow; deterministic code does every calculation.</small></span></div>
       <div class="how-arrow" aria-hidden="true">→</div>
-      <div class="how-step"><span class="step-no">3</span><span><b>The owner reviews</b><small>Books are filed automatically. External letters wait for human approval.</small></span></div>
+      <div class="how-step"><span class="step-no">3</span><span><b>The owner reviews</b><small>The books close and the whole trail is recorded. External letters wait for human approval.</small></span></div>
     </div>
 
     <div class="approval-note">
@@ -112,10 +112,10 @@
     <div class="grid cards" id="stats"></div>
 
     <div class="proof-strip" aria-label="Why the result is trustworthy">
-      <span><b>Agentic control</b> ADK + Gemini</span>
+      <span><b>Agentic control</b> <span id="proof-agent">ADK + Gemini</span></span>
       <span><b>Exact arithmetic</b> deterministic ledger</span>
       <span><b>Self-checked</b> six close gates</span>
-      <span><b>Auditable</b> source hashes + Firestore trail</span>
+      <span><b>Auditable</b> source hashes + run id + step-by-step trail</span>
     </div>
 
     <div class="grid two">
@@ -155,7 +155,7 @@
   <section class="panel hidden" id="panel-runner">
     <h2>The autonomous close</h2>
     <p class="sub">
-      Eleven steps, no prompts, no approvals. The trail is written as the run
+      Eleven steps, start to finish, with nobody in the loop. The trail is written as the run
       happens and persisted with the books, so the owner can retrace a close they
       were not present for. Replay re-renders the recorded run without executing
       anything; the button runs a fresh close through the agent, which takes a
@@ -222,7 +222,7 @@
   <section class="panel hidden" id="panel-findings">
     <h2>What does not add up</h2>
     <p class="sub">
-      Nine detectors, worst first by severity then by money. Every threshold is
+      Ten detectors, worst first by severity then by money. Every threshold is
       learned from this firm's own books: a charge is an outlier because it is far
       above what this firm normally pays that supplier, not because it crossed a
       figure someone wrote down.
