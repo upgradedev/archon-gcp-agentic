@@ -138,7 +138,7 @@ _BUILDERS = {
 
 
 def draft_for(finding: Finding, company: str = "Accounts",
-              currency: str = DEFAULT_CURRENCY) -> Draft | None:
+              currency: str | None = None) -> Draft | None:
     """The corrective document for one finding, or None if there is no honest one."""
     kind = DRAFT_FOR_FINDING.get(finding.kind)
     if kind is None:
@@ -147,11 +147,15 @@ def draft_for(finding: Finding, company: str = "Accounts",
         # Nothing to ask for. A zero-amount dispute wastes the recipient's time
         # and burns the owner's credibility with a counterparty they depend on.
         return None
-    return _BUILDERS[kind](finding, company, currency)
+    # The finding knows its own currency, so a caller holding nothing else
+    # still writes the letter in the right one. An explicit argument wins,
+    # for the caller that knows the month and not the document.
+    return _BUILDERS[kind](finding, company,
+                           currency or finding.currency or DEFAULT_CURRENCY)
 
 
 def draft_all(findings: list[Finding], company: str = "Accounts",
-              currency: str = DEFAULT_CURRENCY) -> list[Draft]:
+              currency: str | None = None) -> list[Draft]:
     """Draft a corrective document for every finding that warrants one."""
     drafts = [draft_for(f, company, currency) for f in findings]
     return [d for d in drafts if d is not None]
@@ -204,7 +208,7 @@ def recoverable(drafts: list[Draft]) -> float:
 
 
 def draft_for_decisions(decisions, company: str = "Accounts",
-                        currency: str = DEFAULT_CURRENCY) -> list[Draft]:
+                        currency: str | None = None) -> list[Draft]:
     """Write a letter for every finding that was decided to warrant one.
 
     The decisions come from `policy.apply_choices`, which has already overruled

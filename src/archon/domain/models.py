@@ -276,6 +276,13 @@ class Finding:
     message: str
     counterparty: str | None = None   # who a corrective document would go to
     source_file: str | None = None
+    #: The currency the amount is in. A finding travels to a letter, and the
+    #: letter has to name the right one: a euro payable chased as "USD
+    #: 7,303.60" is a figure that is right on a document that is wrong, and a
+    #: supplier reads the document. Defaulted rather than required because G7
+    #: refuses a month that mixes currencies, so a finding without one is in a
+    #: month that has exactly one.
+    currency: str = "USD"
     likely_cause: str | None = None
     suggested_action: str | None = None
     confidence: float | None = None

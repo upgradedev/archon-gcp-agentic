@@ -96,6 +96,7 @@ def find_payments_without_documents(documents: list[Document]) -> list[Finding]:
                 ),
                 counterparty=doc.counterparty,
                 source_file=doc.source_file,
+                currency=doc.currency or "USD",
             )
         )
     return findings
@@ -302,6 +303,7 @@ def find_duplicate_charges(documents: list[Document]) -> list[Finding]:
                         ),
                         counterparty=charge.document.counterparty,
                         source_file=charge.document.source_file,
+                        currency=charge.document.currency or "USD",
                     )
                 )
                 break
@@ -346,6 +348,7 @@ def find_amount_outliers(documents: list[Document]) -> list[Finding]:
                     ),
                     counterparty=charge.document.counterparty,
                     source_file=charge.document.source_file,
+                    currency=charge.document.currency or "USD",
                 )
             )
     return findings
@@ -392,6 +395,7 @@ def find_tax_inconsistencies(documents: list[Document]) -> list[Finding]:
                     f"{drift:,.2f} difference."
                 ),
                 source_file=doc.source_file,
+                currency=doc.currency or "USD",
             )
         )
     return findings
@@ -429,6 +433,7 @@ def find_out_of_period(documents: list[Document], period: str) -> list[Finding]:
                     f"the period {period} being closed."
                 ),
                 source_file=doc.source_file,
+                currency=doc.currency or "USD",
             )
         )
     return findings
@@ -453,6 +458,7 @@ def find_unreadable(documents: list[Document]) -> list[Finding]:
                 f"and was left unposted rather than estimated."
             ),
             source_file=doc.source_file,
+            currency=doc.currency or "USD",
         )
         for doc in documents
         if doc.doc_type == DocType.UNREADABLE
@@ -486,6 +492,7 @@ def find_unrecognised(documents: list[Document]) -> list[Finding]:
                 f"document it is."
             ),
             source_file=doc.source_file,
+            currency=doc.currency or "USD",
         )
         for doc in documents
         if doc.doc_type == DocType.UNKNOWN
