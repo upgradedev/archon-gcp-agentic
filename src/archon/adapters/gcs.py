@@ -31,7 +31,7 @@ import hashlib
 import logging
 
 from ..domain.extract import extract_document
-from ..domain.models import Document
+from ..domain.models import DocType, Document
 
 log = logging.getLogger("archon.gcs")
 
@@ -69,31 +69,58 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
         if not name:                                   # the prefix placeholder
             continue
         if not name.endswith(".txt"):
-            skipped.append({"object": blob.name, "reason": "not text"})
+            skipped.append({"object": blob.name, "reason": "not text",
+                            "blocking": True})
             continue
         if (blob.size or 0) > MAX_OBJECT_BYTES:
             skipped.append({"object": blob.name, "reason":
-                            f"{blob.size} bytes is over the {MAX_OBJECT_BYTES} cap"})
+                            f"{blob.size} bytes is over the {MAX_OBJECT_BYTES} cap",
+                            "blocking": True})
             continue
 
         data = blob.download_as_bytes()
         digest = hashlib.sha256(data).hexdigest()
         if digest in seen_hashes:
+            # The one skip that is NOT an unaccounted artifact: these exact
+            # bytes are already in the books under another name, so the month
+            # is complete without it and blocking here would refuse a month
+            # over a file someone forwarded twice.
             skipped.append({"object": blob.name, "reason":
-                            f"identical bytes already read as {seen_hashes[digest]}"})
+                            f"identical bytes already read as {seen_hashes[digest]}",
+                            "blocking": False})
             continue
         seen_hashes[digest] = name
 
         try:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
-            skipped.append({"object": blob.name, "reason": "not utf-8"})
+            skipped.append({"object": blob.name, "reason": "not utf-8",
+                            "blocking": True})
             continue
 
         read.append({"object": blob.name, "generation": str(blob.generation or ""),
                      "bytes": len(data), "sha256": digest})
         raw[name] = text
         documents.append(extract_document(text, source_file=name, period=period))
+
+    # An object that was skipped before it could become a Document is invisible
+    # to every gate: G6 counts documents that matched no family, and something
+    # that never reached the extractor never became a document at all. So a
+    # month could report "every gate passed" with a remittance in the bucket
+    # that nobody read, which is the exact silent corruption this product
+    # exists to prevent.
+    #
+    # Each blocking skip becomes an UNKNOWN document carrying its reason. It
+    # posts nothing -- `Ledger._post_unknown` sees to that -- and G6 refuses the
+    # month and names the file. The owner is told which object and why.
+    for entry in skipped:
+        if not entry.get("blocking"):
+            continue
+        documents.append(Document(
+            doc_type=DocType.UNKNOWN, period=period,
+            source_file=entry["object"][len(prefix):] or entry["object"],
+            failure_reason=f"not read from the mailbox: {entry['reason']}",
+        ))
 
     manifest = {"bucket": bucket_name, "prefix": prefix,
                 "read": read, "skipped": skipped}
