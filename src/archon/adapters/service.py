@@ -285,6 +285,13 @@ def periods() -> dict:
     return {"periods": available_periods(), "default": PERIOD}
 
 
+#: The deterministic close a cold container serves until a real one is filed.
+#: One per period per process, and never invalidated: a stored close is
+#: returned before this is consulted, so the only thing this can go stale
+#: against is itself.
+_COLD_START_CLOSES: dict[str, dict] = {}
+
+
 @app.post("/api/close/{period}")
 def close_period(period: str, request: Request) -> dict:
     """Close a period now. This is what the button on the page calls.
@@ -333,7 +340,25 @@ def read_close(period: str) -> dict:
     stored = get_store().load_close(COMPANY, period)
     if stored:
         return stored
-    return _close(period, store=LocalStore(), public=True, allow_model=False)
+
+    # Computed once per process per period. The page fires this route on every
+    # load, so on a cold container a refresh loop recomputed the whole month
+    # every time: no model and no mail any more, but still a full close per
+    # request, from a route nothing rate limits and nothing should, because
+    # rate limiting a page load breaks the page.
+    #
+    # The answer is deterministic and the mail it reads is bundled with the
+    # image, so the second caller can have the first caller's copy. It is not
+    # invalidated because nothing it depends on can change inside one process:
+    # a real close arriving in the durable store is returned above, before this
+    # is ever reached.
+    cached = _COLD_START_CLOSES.get(period)
+    if cached is not None:
+        return cached
+
+    payload = _close(period, store=LocalStore(), public=True, allow_model=False)
+    _COLD_START_CLOSES[period] = payload
+    return payload
 
 
 @app.post("/events")

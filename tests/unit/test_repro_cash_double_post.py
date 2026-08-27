@@ -1,4 +1,4 @@
-"""Repro for audit finding 1.1: one cash event, posted twice.
+"""Audit finding 1.1, fixed and kept fixed: one cash event, counted once.
 
 The month below is the smallest one that can hold the claim:
 
@@ -83,17 +83,30 @@ def test_cash_in_never_exceeds_what_the_month_earned():
     assert s.cash_in <= s.revenue, books(result)
 
 
-def test_the_close_reports_itself_healthy_either_way():
-    """The silent half of the claim: nothing in the run objects.
+def test_the_close_reports_itself_healthy_on_books_that_are_right():
+    """The silent half of the old claim: nothing in the run objected.
 
-    This passes on the current code and must keep passing once the double
-    posting is fixed -- correct books close too. It is here so the failure
-    output above cannot be read as "the gates would have caught it".
+    While the receipt was posted on top of its own remittance, every gate
+    still passed and the month still closed. That silence was the worst part
+    of the finding: the double posting did not raise an exception or fail a
+    gate, it filed a confident report nobody had reason to check. The three
+    assertions above are what failed while the defect stood, and this one is
+    here so their failure could never be waved off with "the gates would have
+    caught it" -- they would not have.
+
+    Two things keep it from happening again. A bank line that
+    `matching_remittance` resolves to a remittance already in the period
+    posts nothing at all, which is the cure; and G3 excludes that same line
+    from the movement it observes, which is the backstop that would notice if
+    it ever posted again. Before, books and bank statement committed the same
+    error, so the drift G3 measures was always zero. Here the gate agrees on
+    books that are genuinely right rather than on two errors that matched.
     """
     result = close_it()
 
     assert result.outcome == "closed", books(result)
-    assert len(result.gates) == 6
-    assert [g.passed for g in result.gates] == [True] * 6, books(result)
-    g4 = next(g for g in result.gates if g.rule.startswith("G4"))
-    assert g4.passed, g4.message
+    assert len(result.gates) == 7, books(result)
+    assert [g.passed for g in result.gates] == [True] * 7, books(result)
+    for rule in ("G3", "G4"):
+        gate = next(g for g in result.gates if g.rule.startswith(rule))
+        assert gate.passed, gate.message

@@ -16,7 +16,11 @@ Two scenarios, both from text:
     * `test_minimal_month_*` writes a three-document month from scratch, so the
       arithmetic is small enough to read.
 
-The refutation failed. Both double the cash, and every gate still passes.
+The refutation failed. Both doubled the cash, and every gate still passed, so
+the finding stood. `ledger.matching_remittance` closed it: a bank line that is
+the arrival of a remittance already in the period posts nothing, and G3 leaves
+it out of the observed sum it checks the books against. These tests are what
+hold that in place.
 """
 from __future__ import annotations
 
@@ -125,8 +129,9 @@ def test_the_deposit_line_parses_into_the_document_the_ledger_acts_on():
 
     It does. The shipped extractor turns an ordinary deposit line into a
     BANK_TRANSACTION with direction 'in', which is the exact branch
-    `Ledger._post_bank_transaction` posts Dr Bank / Cr AR from. This passes:
-    the input the other agent hand-built is the input the parser produces.
+    `Ledger._post_bank_transaction` used to post Dr Bank / Cr AR from without
+    once asking whether that money had already arrived. This passes: the input
+    the other agent hand-built is the input the parser produces.
     """
     doc = extract_document(DEPOSIT_LINE, source_file="bank-2026-07-24-7.txt",
                            period=PERIOD)
@@ -169,27 +174,56 @@ def test_bundled_month_receivables_do_not_go_negative(bundled):
     assert result.statements.accounts_receivable >= 0.0, books(result)
 
 
-def test_bundled_month_stays_silent_about_it(bundled):
-    """The half of the claim that makes it dangerous: nothing objects.
+def test_bundled_month_passes_its_gates_without_double_counting(bundled):
+    """The half of the claim that made it dangerous: nothing objected.
 
-    CURRENT BEHAVIOUR ONLY -- this is a snapshot, not an invariant. It passes
-    today and SHOULD fail once the double count is fixed, because any real fix
-    raises a finding or fails a gate on the duplicated cash event. Delete it
-    with the fix; do not widen a gate to keep it green.
+    A clean close is only worth anything if it is clean for a reason. When the
+    deposit line doubled the cash, this month still reported every gate passed,
+    and that silence was not luck. `g3_bank_movement_agrees` rebuilt its
+    "observed" figure by adding the remittance total to every bank line, the
+    deposit included, which is the same double count the ledger had just made:
+    booked and observed committed one error each and the drift between them was
+    always zero. G4 was no help either, because it keys on `source_doc`
+    filenames and a remittance advice and the bank credit for it are two files.
 
-    It is here so the failures above cannot be waved off as "the gates would
-    have caught it". They do not: G3 agrees with itself because
-    `validation.py:87-92` double counts exactly the way the ledger does, and G4
-    keys on `source_doc` filenames, which differ.
+    The gates pass today for the opposite reason, and this test pins down which
+    one. `_post_bank_transaction` posts no lines at all when
+    `matching_remittance` ties an inbound line to a remittance already in the
+    period, and G3 drops that same line out of observed, so the bank movement
+    the close reports does not move at all when a bookkeeper forwards the
+    statement as well as the advice. Two errors cancelling would not survive
+    that comparison; one honest figure does.
     """
+    _docs, before = close_mailbox(bundled)
+    g3_before = next(g for g in before.gates if g.rule.startswith("G3"))
+
     (bundled / PERIOD / "bank-2026-07-24-7.txt").write_text(DEPOSIT_LINE,
                                                             encoding="utf-8")
     _docs, result = close_mailbox(bundled)
 
     assert result.outcome == "closed", books(result)
-    assert [g.passed for g in result.gates] == [True] * 6, books(result)
+    # Deliberately not a gate count. Gates get added for unrelated reasons and
+    # this test's claim is that none of them object, however many there are.
+    assert all(g.passed for g in result.gates), books(result)
+
+    # The deposit still produces an entry, so the trail shows the document was
+    # seen and read rather than quietly dropped, but the entry carries no lines
+    # and names the remittance that already brought the money in.
+    seen = [e for e in result.ledger.entries
+            if e.source_doc == "bank-2026-07-24-7.txt"]
+    assert len(seen) == 1, [e.memo for e in seen]
+    assert seen[0].lines == [], seen[0].lines
+    # "MFX-RA-4417" alone would prove nothing: the old memo was "Receipt
+    # MFX-RA-4417" and carried the reference too. The refusal is the new half.
+    assert "not posted again" in seen[0].memo, seen[0].memo
+    assert "MFX-RA-4417" in seen[0].memo, seen[0].memo
+
+    # The one that could not have passed before: G3 reports the identical
+    # movement with and without the deposit, which it can only do by leaving
+    # the matched line out of observed rather than doubling to meet a doubled
+    # ledger.
     g3 = next(g for g in result.gates if g.rule.startswith("G3"))
-    assert "agrees" in g3.message, g3.message
+    assert g3.message == g3_before.message, (g3_before.message, g3.message)
 
 
 def test_the_same_month_requires_the_bank_statement_on_the_way_out(bundled):
@@ -199,9 +233,10 @@ def test_the_same_month_requires_the_bank_statement_on_the_way_out(bundled):
     outbound bank line that paid it, and it needs both: the statement raises the
     payable, the bank line clears it. Drop the bank line and 7,281.00 stays
     owed. So on the way out, "send the bank statement as well as the invoice" is
-    exactly right -- which is what makes doing the same on the way in, where it
-    double counts, an ordinary thing for a bookkeeper to do rather than an
-    exotic one. This passes on current code; it is context, not a defect.
+    exactly right -- which is what made doing the same on the way in, where it
+    used to double count, an ordinary thing for a bookkeeper to do rather than
+    an exotic one. This is context, not a defect: it passed before the fix and
+    passes after it, because outbound lines were never the ones at risk.
     """
     _docs, with_line = close_mailbox(bundled)
     (bundled / PERIOD / "bank-2026-07-30-4.txt").unlink()      # paid FCN-2026-07

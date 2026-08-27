@@ -64,6 +64,15 @@ class RecordingStore:
         self.calls["save_drafts"] += 1
         return self._inner.save_drafts(run_id, drafts)
 
+    def claim(self, company, key, payload):
+        # The events route takes its dedupe marker through this seam, so the
+        # recorder has to be the real atomic claim rather than a permissive
+        # stub. A double that always said "yours" would quietly hand the race
+        # back to whoever asked, which is the very thing the route relies on
+        # `claim` to settle.
+        self.calls["claim"] += 1
+        return self._inner.claim(company, key, payload)
+
     def load_close(self, company, period):
         return self._inner.load_close(company, period)
 
@@ -270,9 +279,15 @@ def test_the_durably_filed_close_is_never_one_the_agent_did_not_decide(monkeypat
 
     store.close_payloads.clear()
     with TestClient(service_mod.app) as client:
-        client.post("/events", json={
+        response = client.post("/events", json={
             "message": {"attributes": {"period": PERIOD}, "messageId": "push-2"},
         })
+
+    # Stated before the counting, so that a route which never got as far as the
+    # close names itself as a routing problem rather than turning up below as
+    # the much vaguer "no books were filed at all".
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "closed"
 
     books = [drafts for key, drafts in store.close_payloads if key == PERIOD]
     assert books, "no books were filed at all"
@@ -280,6 +295,15 @@ def test_the_durably_filed_close_is_never_one_the_agent_did_not_decide(monkeypat
         "the period's record was filed with a different set of drafts than the "
         f"one the agent decided on: successive draft counts written for {PERIOD} "
         f"were {books}, and the last is what the agent chose"
+    )
+    # Named rather than left implicit, because the equality above cannot tell a
+    # record that only ever held the agent's judgement from one that held the
+    # standing-policy result at every step. This month drafts five corrections
+    # under standing policy and none once the agent has declined to chase them,
+    # so a five in that list is the pre-decision run reaching Firestore.
+    assert books[-1] == 0, (
+        "the agent noted all ten exceptions and chased none, so the filed record "
+        f"should carry no drafts; it carries {books[-1]}"
     )
 
 

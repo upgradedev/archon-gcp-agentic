@@ -1,36 +1,45 @@
 """Independent check of the run-identity claim, driven from the real trigger.
 
-Written to *refute* the claim if it could be refuted. It could not. The three
-failing tests below were built from scratch rather than adapted from the
-reporting agent's file, and two of them assert on records the product itself
-writes and reads through the published `Store` interface -- the `/events`
-dedupe markers -- rather than on `run_id_for`'s return value or on a private
-dict, so the store testifies to the collision in its own words.
+Written to *refute* the claim if it could be refuted. It could not: three real
+defects came out of it, all since fixed, and the tests that found them are kept
+here the right way round as the guard against them returning. They were built
+from scratch rather than adapted from the reporting agent's file, and two of
+them assert on records the product itself writes and reads through the
+published `Store` interface -- the `/events` dedupe markers -- rather than on
+`run_id_for`'s return value or on a private dict, so the store testifies in its
+own words.
 
-What is confirmed:
+What was wrong, and is now not:
 
-* `run_id_for` (close.py:194-208) hashes only the period and the ordered
-  (source_file, doc_type) pairs. No amount, date, load reference or raw byte
-  reaches it, so a corrected document produces the id the uncorrected one
-  produced. Its docstring's "Change one document and the id changes" is false
-  for a change of content; it is true only for adding, losing or renaming one.
+* `run_id_for` hashed only the period and the ordered (source_file, doc_type)
+  pairs. No amount, date, load reference or raw byte reached it, so a corrected
+  document produced the id the uncorrected one produced. Its docstring's
+  "Change one document and the id changes" was false for a change of content;
+  it was true only for adding, losing or renaming one. The id is now derived
+  from content: period, release, and every document identified by the sha256 of
+  its bytes where they exist and by its figures where they do not, with the
+  fingerprints sorted so the order the mailbox happened to hand them over in is
+  not part of the month's identity.
 * `gcs.dedupe_key` keys on object+generation on purpose, so a corrected
   re-upload of the same object is a *new* event and closes the month again.
-  Two distinct events therefore land on one `runs/{run_id}` document, and
-  `save_run` / `save_drafts` are unconditional keyed writes (store.py:74, 83;
-  Firestore `.set()` at 113 and `batch.set()` at 126), so the second close's
-  journal replaces the first's rather than sitting beside it.
-* `put_document` is keyed on a bare filename that neither mailbox qualifies
-  (`mailbox.py:44` uses `path.name`; `gcs.py:68` strips `mail/<period>/`), so
-  the corrected re-upload also overwrites the archived copy of the original
-  text -- inside one period, with no cross-month contrivance needed.
+  Two distinct events therefore landed on one `runs/{run_id}` document, and
+  `save_run` / `save_drafts` are unconditional keyed writes in both backends,
+  so the second close's journal replaced the first's rather than sitting beside
+  it. Two closes over different bytes are now two run ids, so both journals and
+  both sets of corrective drafts survive.
+* `put_document` was keyed on a bare filename that neither mailbox qualifies
+  (`mailbox.py` uses `path.name`; `gcs.py` strips `mail/<period>/`), so the
+  corrected re-upload also overwrote the archived copy of the original text --
+  inside one period, with no cross-month contrivance needed. Artifacts are now
+  filed under `<name>#<sha256[:12]>`, which files a correction beside the
+  original while leaving the name a human can still read.
 
 What bounds it, and is asserted here as a passing test rather than argued:
 nothing in `src/`, `service/` or `web/` ever calls `load_run` or `load_drafts`.
 Those two collections are write-only in production. The record the UI actually
 reads is `closes/{company}::{period}`, which is keyed by period and would be
 replaced by any re-close whatever the run id were, and after a correction it
-holds the *corrected* books, which are the right ones. So this is a real gap
+holds the *corrected* books, which are the right ones. So this was a real gap
 against the product's stated "a trail you can walk back through", with no
 wrong books, no money moved and no reader degraded.
 
@@ -40,7 +49,7 @@ store, fixed clock.
 from __future__ import annotations
 
 import base64
-import copy
+import hashlib
 import json
 
 import pytest
@@ -73,9 +82,10 @@ class WitnessStore(LocalStore):
     """The real store, keeping a note of every key the close wrote through.
 
     Only the six published `Store` methods are overridden. Nothing here reaches
-    into `LocalStore`'s internals to manufacture a result; `archived()` reads
-    back what `put_document` stored, which is the only readback the protocol
-    has for that collection (it defines no getter for documents at all).
+    into `LocalStore`'s internals to manufacture a result; `archived()` and
+    `archived_keys()` read back what `put_document` stored, which is the only
+    readback there is for that collection (the protocol defines no getter for
+    documents at all).
     """
 
     def __init__(self) -> None:
@@ -96,8 +106,18 @@ class WitnessStore(LocalStore):
         self.draft_writes.append(run_id)
         return super().save_drafts(run_id, drafts)
 
-    def archived(self, name: str) -> str | None:
-        return self._documents.get(name)
+    def archived(self, key: str) -> str | None:
+        return self._documents.get(key)
+
+    def archived_keys(self, name: str) -> list[str]:
+        """Every artifact on file that is a version of this filename.
+
+        Asked for by filename rather than by key because a filename no longer
+        identifies one artifact: `put_document` is handed `<name>#<digest>`, so
+        a corrected re-upload adds a second entry under the same name instead
+        of replacing the first, and a test has to be able to see both.
+        """
+        return sorted(k for k in self._documents if k.split("#")[0] == name)
 
 
 class FakeBlob:
@@ -185,6 +205,17 @@ def corrected(text: str) -> str:
     return text.replace(ORIGINAL_RATE, CORRECTED_RATE)
 
 
+def sha12(text: str) -> str:
+    """The fingerprint `run_close` files an artifact under, computed here.
+
+    Recomputed rather than read back off the store so the test states the key
+    it expects instead of accepting whatever key it is handed. A close that
+    started folding in the clock or the object generation would still produce
+    one key per artifact, and only an independently derived digest catches it.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
 # --------------------------------------------------------------------------
 # 1. the derivation, with every other variable pinned
 # --------------------------------------------------------------------------
@@ -239,7 +270,7 @@ def test_re_reading_the_identical_month_keeps_one_run_id():
 
 
 # --------------------------------------------------------------------------
-# 2. two real events, one journal -- asserted on the store's own markers
+# 2. two real events, two journals -- asserted on the store's own markers
 # --------------------------------------------------------------------------
 
 def test_two_distinct_events_do_not_collapse_onto_one_run_journal(rig):
@@ -283,39 +314,64 @@ def test_two_distinct_events_do_not_collapse_onto_one_run_journal(rig):
 
 def test_the_corrected_reupload_keeps_the_archived_original_artifact(rig):
     """Step 1 promises the raw artifact is "put beyond reach of anything that
-    follows". Within one period, a corrected re-upload reaches it.
+    follows". A corrected re-upload used to reach it, inside one period.
 
-    `documents/{name}` carries no period, bucket, generation or company, so the
-    second close's `put_document("load-L-7101.txt", ...)` lands on the first's.
-    No cross-month filename coincidence is needed for this one; it is the same
-    object in the same month.
+    `documents/{name}` carried no period, bucket, generation or company, so the
+    second close's `put_document("load-L-7101.txt", ...)` landed squarely on
+    the first's, and the bytes the first close had actually posted from could
+    not be produced again from any key. No cross-month filename coincidence was
+    needed for it; it was the same object in the same month, which is the
+    ordinary case of a supplier reissuing a corrected document.
+
+    The key is now the filename and the digest of the bytes, so the two
+    versions are two artifacts. The count at the end is what makes that a real
+    property rather than a coincidence: the second close re-archives all of the
+    month's texts, and only the one that changed adds an entry.
     """
     app, durable, bucket = rig
     _, raw = read_period(PERIOD)
-    for name, text in raw.items():
-        bucket.upload(PERIOD, name, text.encode())
+    landed = {name: bucket.upload(PERIOD, name, text.encode())
+              for name, text in raw.items()}
 
     original_text = raw[AMENDED]
-    assert push(app, finalize(bucket.upload(PERIOD, AMENDED,
-                                            original_text.encode()), "m-1")
-                )["status"] == "closed"
-    archived_first = copy.deepcopy(durable.archived(AMENDED))
-    assert ORIGINAL_RATE in archived_first        # the premise
+    corrected_text = corrected(original_text)
+    original_key = f"{AMENDED}#{sha12(original_text)}"
+    corrected_key = f"{AMENDED}#{sha12(corrected_text)}"
 
-    assert push(app, finalize(bucket.upload(PERIOD, AMENDED,
-                                            corrected(original_text).encode()),
-                              "m-2"))["status"] == "closed"
+    assert push(app, finalize(landed[AMENDED], "m-1"))["status"] == "closed"
+    assert durable.archived_keys(AMENDED) == [original_key], (
+        "the artifact is filed under its name AND its digest, so the name is "
+        "still legible to a human and nothing can collide with it by name")
+    assert ORIGINAL_RATE in durable.archived(original_key)     # the premise
 
-    assert durable.archived(AMENDED) == archived_first, (
-        f"documents/{AMENDED} now holds the corrected text "
-        f"({CORRECTED_RATE}) and the {ORIGINAL_RATE} the first close actually "
-        f"posted from is not under any other key; put_document was called "
-        f"twice with the same bare name "
-        f"({durable.document_writes.count(AMENDED)} writes to that key)")
+    amended_blob = bucket.upload(PERIOD, AMENDED, corrected_text.encode())
+    assert amended_blob.generation == 2           # same object, corrected bytes
+    assert push(app, finalize(amended_blob, "m-2"))["status"] == "closed"
+
+    assert durable.archived(original_key) == original_text, (
+        f"documents/{original_key} no longer holds the {ORIGINAL_RATE} the "
+        f"first close actually posted from. The corrected re-upload reached "
+        f"the archive that step 1 promises is beyond reach")
+
+    assert durable.archived_keys(AMENDED) == sorted([original_key,
+                                                     corrected_key]), (
+        f"the correction should sit BESIDE the original, not over it, and "
+        f"under a key derived from its own bytes. On file: "
+        f"{durable.archived_keys(AMENDED)}")
+    assert CORRECTED_RATE in durable.archived(corrected_key)
+
+    # Both closes wrote every text; the digest is what collapses them. A key
+    # that folded in the generation, the run id or the clock would also have
+    # left the original readable, and would have doubled the collection.
+    assert len(durable.document_writes) == 2 * len(raw)
+    assert len(set(durable.document_writes)) == len(raw) + 1, (
+        f"{len(raw)} texts, one of them in two versions, should be "
+        f"{len(raw) + 1} artifacts; the store holds "
+        f"{len(set(durable.document_writes))}")
 
 
 # --------------------------------------------------------------------------
-# 3. what bounds the blast radius. Passes, and is the severity argument.
+# 3. what bounded the blast radius, and is why this was a gap not a disaster
 # --------------------------------------------------------------------------
 
 def test_the_lost_collections_are_never_read_by_the_product():

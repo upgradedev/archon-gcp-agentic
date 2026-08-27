@@ -254,6 +254,10 @@ def test_one_utf16_remittance_blocks_the_month_and_g6_names_it(rig):
     assert len(read["allocations"]) == 1
     assert read["allocations"][0]["remittance_total"] == 970.0
     assert dropped["statements"] != read["statements"]
+    # Named rather than left to the inequality, because this is the figure the
+    # owner would have acted on: run A says the broker still owes for L-9001.
+    assert dropped["statements"]["accounts_receivable"] == 1000.0
+    assert read["statements"]["accounts_receivable"] == 0.0
 
     # So run A is refused, and run B, which read every object, closes clean on
     # all seven gates.
@@ -419,7 +423,9 @@ def test_the_dropped_remittance_parses_perfectly_once_it_is_utf8():
 
     The bytes that intake refuses carry a remittance the deterministic parser
     reads completely: right family, right reference, right total, right load
-    line. Intake never asks it.
+    line. Intake never asks it, and it still does not: the fix did not teach
+    `read_gcs_period` to decode UTF-16, it made the refusal announce itself as
+    an UNKNOWN document the close has to account for.
     """
     utf16 = REMITTANCE.encode("utf-16")
     assert len(utf16) < gcs.MAX_OBJECT_BYTES
