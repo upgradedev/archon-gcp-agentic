@@ -152,3 +152,26 @@ def get_deliverer() -> Deliverer:
 def owner_address() -> str:
     """Where the owner reads their mail."""
     return os.getenv("ARCHON_OWNER_EMAIL", "owner@bellridgehaulage.example")
+
+
+class RehearsalDelivery:
+    """Delivers nothing, for a close that has not been decided yet.
+
+    Paired with `RehearsalStore`. The rule this enforces is the one the audit
+    named: nothing may reach outside Archon before the agent has decided, and
+    the agent decides at step 5 of eleven. A digest delivered from a rehearsal
+    is a message the owner receives about a month that may still be withheld.
+    """
+
+    channel = "rehearsal"
+
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def deliver(self, digest: Digest) -> Receipt:
+        self.attempts += 1
+        return Receipt(
+            channel=self.channel, delivered=False,
+            detail="rehearsal: composed but not sent, the close is not decided yet",
+            recipient=digest.recipient,
+        )

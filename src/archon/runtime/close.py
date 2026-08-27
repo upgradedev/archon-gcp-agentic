@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 
 from ..adapters import delivery as delivery_mod
 from ..adapters.delivery import Deliverer, Receipt
-from ..adapters.store import Store, get_store
+from ..adapters.store import RehearsalStore, Store, get_store
 from ..domain import allocation as allocation_mod
 from ..domain import digest as digest_mod
 from ..domain import drafts as drafts_mod
@@ -220,16 +220,32 @@ def run_close(period: str,
               decider: Decider | None = None,
               previous: Statements | None = None,
               driver: str = "deterministic",
-              source: dict | None = None) -> CloseResult:
+              source: dict | None = None,
+              commit: bool = True) -> CloseResult:
     """Close one period. Returns even when it fails; read `outcome`.
 
     Raising on a bad month would be the wrong shape. A close that hits a
     problem has still done eight useful things, and the owner needs to see them
     and the problem. So every path returns a `CloseResult`, and `outcome` says
     whether the books can be trusted.
+
+    `commit=False` computes the identical month and writes nothing: no stored
+    close, no stored run, no drafts, no delivered digest. Every one of the
+    eleven steps still runs and still records its trail entry, so the result is
+    the same object a committed run produces and can be compared against one.
+
+    It exists because the agent path has to see the books BEFORE it decides
+    what to do about them, and seeing them used to mean filing them. The close
+    was written twice and the owner's digest delivered twice, and the first
+    filing recorded an outcome the agent had not yet had the chance to
+    withhold. Nothing may reach outside Archon, or become durable, until the
+    decision at step 5 has been made and the gates at step 8 have run.
     """
     store = store or get_store()
     deliverer = deliverer or delivery_mod.get_deliverer()
+    if not commit:
+        store = RehearsalStore()
+        deliverer = delivery_mod.RehearsalDelivery()
     run = RunJournal(run_id=run_id_for(period, documents), period=period, clock=clock)
     ledger = Ledger(period=period, company=company)
     stored: dict = {}
@@ -364,7 +380,12 @@ def run_close(period: str,
         # carrying mail provenance, and this local used to shadow it, which
         # put the string "deterministic" into the persisted source field.
         phrased_by = "deterministic"
-        if narrator is not None:
+        # A rehearsal does not phrase anything. The prose it would produce is
+        # discarded with the rest of the rehearsal, and paying a thinking model
+        # to write it was three Gemini calls per agent close where one is
+        # needed. The deterministic summary is a real summary, so the rehearsed
+        # result stays complete and comparable to the committed one.
+        if narrator is not None and commit:
             try:
                 phrased = narrator(facts)
                 if phrased and phrased.strip():

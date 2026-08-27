@@ -155,3 +155,48 @@ def get_store() -> Store:
         except Exception:  # pragma: no cover - library or credential absent
             pass
     return LocalStore()
+
+
+class RehearsalStore:
+    """A store that remembers nothing, for a close that has not been decided yet.
+
+    The ADK close computes the month more than once: `post_journal` needs the
+    books before the agent has seen the exceptions, and `decide_actions` needs
+    them again with its dispositions applied. Both used to run the whole of
+    `run_close`, side effects included, so a month was filed twice and the
+    owner's digest was delivered twice -- and the FIRST filing recorded an
+    outcome the agent had not yet had a chance to withhold.
+
+    So the runs before the decision use this. Every method matches the `Store`
+    protocol and returns a key that is obviously not a real one, which keeps the
+    trail honest: a reader of the journal sees `rehearsal://` and knows that
+    step wrote nothing. The committed run at the end uses the real store.
+    """
+
+    def __init__(self) -> None:
+        self.writes = 0
+
+    def _key(self, what: str) -> str:
+        self.writes += 1
+        return f"rehearsal://{what}"
+
+    def put_document(self, name: str, content: str) -> str:
+        return self._key(f"documents/{name}")
+
+    def save_run(self, run: dict) -> str:
+        return self._key(f"runs/{run.get('run_id', 'unknown')}")
+
+    def save_close(self, company: str | None, period: str, payload: dict) -> str:
+        return self._key(f"closes/{company}::{period}")
+
+    def save_drafts(self, run_id: str, drafts: list) -> list[str]:
+        return [self._key(f"drafts/{run_id}/{i}") for i, _ in enumerate(drafts)]
+
+    def load_close(self, company: str | None, period: str) -> dict | None:
+        return None
+
+    def load_run(self, run_id: str) -> dict | None:
+        return None
+
+    def load_drafts(self, run_id: str) -> list:
+        return []

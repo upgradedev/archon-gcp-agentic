@@ -154,6 +154,8 @@ class CloseSession:
         self.choices: dict[int, Disposition] | None = None
         self.verdict: str | None = None
         self._findings: list = []
+        #: Set by `_commit`, so the one run with side effects cannot happen twice.
+        self._committed = False
 
     # ── the six tools, in the order the agent is told to call them ───────────
 
@@ -297,7 +299,7 @@ class CloseSession:
             The gate results, the period result, and whether the books can be
             trusted. An outcome of "blocked" means at least one gate failed.
         """
-        self._ensure_run()
+        self._commit()
         assert self.result is not None
         statements = self.result.statements
         return {
@@ -313,7 +315,26 @@ class CloseSession:
             "run_id": self.result.run_id,
         }
 
-    def _ensure_run(self) -> None:
+    def _commit(self) -> None:
+        """The one run that is allowed to write, and it happens once.
+
+        Everything before this point was a rehearsal: the books were computed,
+        the exceptions were triaged, the agent chose what to do about each of
+        them and could have withheld the month, and none of it touched the
+        store or the owner's inbox.
+
+        This is the last of the eleven steps and the only one with side
+        effects. Called twice, it does nothing the second time -- an agent that
+        calls its own last tool again must not file a second copy of the month
+        or send the owner a second digest.
+        """
+        if self._committed:
+            return
+        self._committed = True
+        self.result = None
+        self._ensure_run(commit=True)
+
+    def _ensure_run(self, commit: bool = False) -> None:
         """Run the deterministic close once, on first tool call that needs it.
 
         The alternative, letting each tool mutate a half-built ledger, would
@@ -337,6 +358,10 @@ class CloseSession:
             previous=self.previous, narrator=self.narrator,
             driver="adk-agent", source=self.source,
             decider=decider if choices is not None or verdict else None,
+            # False for every call but the last. Nothing is durable and
+            # nothing is delivered until `_commit` runs, because the agent has
+            # not decided yet and may still withhold the month.
+            commit=commit,
         )
 
 
