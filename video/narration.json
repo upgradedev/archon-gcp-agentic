@@ -46,8 +46,8 @@
     {
       "id": "evidence",
       "_beat": "What a judge can check without asking us. Every claimed capability is reachable by an anonymous judge, or labelled not-deployed in the same sentence.",
-      "captionText": "Every number came from a deterministic ledger, not from a model. The suite runs with no key and no network. Each of the six gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
-      "speechText": "Every number came from a deterministic ledger, not from a model. The test suite runs with no key and no network, and each of the six gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
+      "captionText": "Every number came from a deterministic ledger, not from a model. The suite runs with no key and no network. Each of the seven gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
+      "speechText": "Every number came from a deterministic ledger, not from a model. The test suite runs with no key and no network, and each of the seven gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
     },
     {
       "id": "close",

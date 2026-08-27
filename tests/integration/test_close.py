@@ -51,11 +51,11 @@ def test_every_journal_entry_balances(documents):
     assert close(documents).ledger.all_entries_balanced()
 
 
-def test_all_six_gates_pass_on_the_bundled_month(documents):
+def test_every_gate_passes_on_the_bundled_month(documents):
     result = close(documents)
 
     assert all(gate.passed for gate in result.gates)
-    assert len(result.gates) == 6
+    assert len(result.gates) == 7
 
 
 def test_the_month_reads_like_a_real_thin_margin_haulier(documents):

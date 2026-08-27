@@ -271,11 +271,16 @@ def find_duplicate_charges(documents: list[Document]) -> list[Finding]:
     doubles the list and tells the owner nothing extra.
     """
     findings: list[Finding] = []
-    seen: dict[tuple[str, str, float], list[date | None]] = {}
+    seen: dict[tuple[str, str, float, str], list[date | None]] = {}
     for charge in _charge_events(documents):
         if charge.amount <= 0:
             continue
-        key = (charge.counterparty, charge.place, charge.amount)
+        # Currency is part of the key. 412.85 EUR and 412.85 USD are two
+        # different charges, and while every document defaulted to USD they
+        # looked like one supplier billing the same amount twice -- an
+        # accusation, in a letter, over a pair of legitimate invoices.
+        key = (charge.counterparty, charge.place, charge.amount,
+               getattr(charge.document, "currency", None) or "USD")
         priors = seen.setdefault(key, [])
         for prior in priors:
             close_in_time = (

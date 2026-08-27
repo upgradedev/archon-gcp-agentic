@@ -1,4 +1,4 @@
-"""The six gates. Every one is shown passing AND shown failing.
+"""The gates. Every one is shown passing AND shown failing.
 
 A gate nobody has watched fail is a gate nobody should believe. So each of the
 each is broken deliberately here, once, and asserted red. Nothing in this file
@@ -144,12 +144,13 @@ def test_g5_is_skipped_when_everything_was_readable():
 
 # ── the set ──────────────────────────────────────────────────────────────────
 
-def test_validate_runs_all_six_gates():
+def test_validate_runs_every_gate():
     ledger = _ledger(load("L-1", 1000.0))
     gates = validate(ledger, [])
 
-    assert len(gates) == 6
-    assert [g.rule.split(":")[0] for g in gates] == ["G1", "G2", "G3", "G4", "G5", "G6"]
+    assert len(gates) == 7
+    assert [g.rule.split(":")[0] for g in gates] == [
+        "G1", "G2", "G3", "G4", "G5", "G6", "G7"]
 
 
 def test_a_clean_month_passes_every_gate():
@@ -157,7 +158,7 @@ def test_a_clean_month_passes_every_gate():
     gates = validate(_ledger(*docs), allocate_all(docs))
 
     assert all_passed(gates)
-    assert summary(gates) == "6/6 gates passed"
+    assert summary(gates) == "7/7 gates passed"
 
 
 def test_one_broken_gate_fails_the_set():

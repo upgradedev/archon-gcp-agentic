@@ -72,7 +72,7 @@ subscription wakes a Cloud Run container with an OIDC token, and the close works
 through eleven steps: it classifies 27 artifacts, posts the double-entry journal,
 splits the remittance, reconciles which loads were paid, finds the ten things
 that do not add up, writes
-the corrective letters, checks its own books against six gates, and marks the
+the corrective letters, checks its own books against seven gates, and marks the
 period closed with a trail in Firestore you can walk back through.
 
 Then it writes the owner their month-end letter and hands it to a delivery
@@ -219,7 +219,7 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
    or note it. This is the agent's own judgement, and every choice is checked
    against the books before it can take effect
 7. writes the corrective letters and files them
-8. checks its own work against six gates, one of which refuses to close a
+8. checks its own work against seven gates, one of which refuses to close a
    month while any document the owner sent went unrecognised
 9. writes the month-end summary from a fact sheet it is not allowed to add to
 10. marks the period closed with a trail you can walk back through
@@ -326,7 +326,7 @@ Over the bundled month, `python run.py`:
      5 document(s) drafted and filed unsent: 612.85 that would have leaked
      away, 4,900.00 already owed and unpaid; 2 put in front of the owner instead
  + 7. Check the close against its own gates
-     6/6 gates passed
+     7/7 gates passed
  + 8. Write the month-end summary
      summary written from a 60-line fact sheet; no figure was phrased by a model
  + 9. File the close and mark the period
@@ -378,7 +378,7 @@ flowchart TB
         ps["Pub/Sub push"]
         subgraph run["Cloud Run"]
             svc["archon.adapters.service<br/>POST /events · POST /api/close · GET /"]
-            agent["Google ADK Agent<br/>six tools, one per step"]
+            agent["Google ADK Agent<br/>seven tools, one per step"]
         end
         fs[("Firestore<br/>runs · closes · drafts · documents")]
         gem["Gemini<br/>reads documents, writes English"]
@@ -392,7 +392,7 @@ flowchart TB
         ledger["ledger<br/>double-entry"]
         alloc["allocation<br/>one payment, many loads"]
         exc["exceptions<br/>ten detectors"]
-        val["validation<br/>six gates"]
+        val["validation<br/>seven gates"]
         draft["drafts<br/>corrective letters"]
     end
     core --> fs
@@ -450,7 +450,7 @@ not done.
 |---|---|---|
 | Operational excellence | Every run writes an eleven-step journal to Firestore with counts per step, so an unattended close can be retraced. `POST /api/close/{period}` re-runs it deterministically | No alerting and no SLO. Nobody is paged if a month fails to close |
 | Security | The domain layer holds no credential and reaches no network. Secrets come from environment only, and the SMTP password never reaches a receipt or a stored document, asserted by a test | `POST /events` is unauthenticated so the demo needs no account. A forged Pub/Sub envelope can trigger a close |
-| Reliability | A model outage, a mail server outage or a deliverer raising cannot fail a close: each is caught and the deterministic path continues. Six gates block a close that cannot verify its own books | Single region, no retry budget, no dead-letter topic on the push subscription |
+| Reliability | A model outage, a mail server outage or a deliverer raising cannot fail a close: each is caught and the deterministic path continues. Seven gates block a close that cannot verify its own books | Single region, no retry budget, no dead-letter topic on the push subscription |
 | Cost optimisation | Firestore and Cloud Run both cost nothing when idle, which is the shape of a business that closes its books twelve times a year | No budget alert configured |
 | Performance efficiency | The close is 27 artifacts and finishes in about 15 ms locally, because the engine is pure Python over in-memory structures | Never load tested. A firm with 40 trucks and 400 fuel lines is untested |
 | Sustainability | Scale to zero between months; no idle compute | Not measured |
@@ -468,7 +468,7 @@ it anyway, and the row is what we actually do, not what we intend.
 | Art. 10, data governance | Training and input data are relevant, representative and examined for bias | No model is trained here. Input is the firm's own documents, and the anomaly thresholds are learned from that firm's own books rather than from an external norm, so no population assumption is imported | The bundled corpus is synthetic and single-firm. No evaluation of extraction accuracy across document families exists in this repository |
 | Art. 13, transparency | The deployer can interpret the output and use it appropriately | Every figure traces to a source document through `source_file`, the run journal names what each step touched, and the fact sheet the summary is written from is served at `/api/close/{period}` | No per-figure provenance in the interface itself; the trace is available but the page does not surface it per cell |
 | Art. 14, human oversight | A human can oversee, intervene and stop | The one irreversible action, contacting a counterparty, requires a person. Corrective letters are filed with `status="filed"` and no send path exists | Oversight is all-or-nothing at that edge. There is no partial approval, no audit of who approved what, and no way to stop a close mid-run |
-| Art. 15, accuracy and resilience | Accuracy, resilience to error, and cybersecurity appropriate to purpose | Arithmetic is deterministic and unit tested; six gates fail the close rather than publish books that do not verify; an unreadable document is refused rather than estimated, enforced by gate G5 | No measured extraction accuracy against a labelled corpus. Resilience is asserted for the paths tested, not characterised |
+| Art. 15, accuracy and resilience | Accuracy, resilience to error, and cybersecurity appropriate to purpose | Arithmetic is deterministic and unit tested; seven gates fail the close rather than publish books that do not verify; an unreadable document is refused rather than estimated, enforced by gate G5 | No measured extraction accuracy against a labelled corpus. Resilience is asserted for the paths tested, not characterised |
 | Art. 50, disclosure | People are told they are interacting with an AI system | The page, the README and the digest all say an agent did the work. The digest is signed by the firm and describes itself as written by Archon | The drafted letters to counterparties do not disclose that an AI drafted them. That is a real gap, and it lands on a third party |
 
 Nothing here claims the system meets the Act. These are the controls that exist,
@@ -598,7 +598,7 @@ The suite is a pyramid and it is entirely offline: no key, no credential, no
 paid call.
 
 - **unit** covers each posting shape, the allocation identity, all nine
-  detectors both firing and staying quiet, all six gates both passing and
+  detectors both firing and staying quiet, all seven gates both passing and
   failing, the drafts, the run journal and the store.
 - **integration** runs the real ADK `Agent` against a scripted model, so genuine
   function calling is exercised, and the real `SequentialAgent`, so genuine
@@ -611,7 +611,7 @@ that no counterparty draft is ever sent, that the owner's letter is composed and
 filed in the same run, and that the agent path and the deterministic path agree
 exactly. Delivery is a configured seam, not something the demo performs.
 
-Each of the six gates is broken on purpose, once, and asserted red. A gate
+Each of the seven gates is broken on purpose, once, and asserted red. A gate
 nobody has watched fail is a gate nobody should believe.
 
 ## Who owes whom, and which way it is going
@@ -781,7 +781,7 @@ require the disclosure.
 | The shape of the offline-first agent layer, and the injectable-model pattern | the same build | rewritten for this domain |
 
 Everything else in this repository was written for this entry: the trucking
-domain model, the ledger, the allocation engine, all ten detectors, the six
+domain model, the ledger, the allocation engine, all ten detectors, the seven
 gates, the drafts, the run journal, the close orchestrator, the service, the
 page, the corpus and the tests.
 

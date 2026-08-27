@@ -161,7 +161,7 @@ class CloseSession:
         #: Set by `_commit`, so the one run with side effects cannot happen twice.
         self._committed = False
 
-    # ── the six tools, in the order the agent is told to call them ───────────
+    # ── the seven tools, in the order the agent is told to call them ────────
 
     def take_in_mail(self) -> dict:
         """Read every document waiting for the period being closed.

@@ -181,6 +181,39 @@ def g6_every_document_was_accounted_for(ledger) -> ValidationResult:
     )
 
 
+def g7_one_currency_per_month(ledger) -> ValidationResult:
+    """Every posted document is denominated in the same currency.
+
+    The ledger adds figures together. It has no exchange rate, no rate date and
+    no conversion policy, so adding a euro invoice to a dollar one produces a
+    number that is not money in any currency. Nothing stopped it: the extractor
+    stamped every document USD because it read a `Currency:` label that real
+    invoices do not carry, so two currencies looked like one and summed
+    silently.
+
+    Refusing rather than converting is the honest position while there is no
+    rate source. A close that guesses a rate produces a number the owner cannot
+    check and cannot file. The remedy is a rate policy, not a letter, which is
+    why this blocks and does not draft anything.
+
+    Only posted documents count. A June invoice in a July mailbox is already
+    excluded from the books, so a currency it alone carries is not this month's
+    problem.
+    """
+    rule = "G7: every posted document is in one currency"
+    seen = {(d.currency or "USD").upper() for d in ledger.posted
+            if d.doc_type is not DocType.UNKNOWN}
+    if len(seen) <= 1:
+        return _skipped(rule, f"one currency in the month: {next(iter(seen), 'USD')}")
+
+    by_currency = sorted(seen)
+    return ValidationResult(
+        rule, False, "error",
+        f"{len(by_currency)} currencies in one month ({', '.join(by_currency)}); "
+        "Archon has no exchange rate and will not add them together",
+    )
+
+
 def validate(ledger, results: list[AllocationResult]) -> list[ValidationResult]:
     """Run every gate over a closed month. Pure, deterministic, no model call."""
     return [
@@ -190,6 +223,7 @@ def validate(ledger, results: list[AllocationResult]) -> list[ValidationResult]:
         g4_no_double_posting(ledger),
         g5_unreadable_left_unposted(ledger),
         g6_every_document_was_accounted_for(ledger),
+        g7_one_currency_per_month(ledger),
     ]
 
 

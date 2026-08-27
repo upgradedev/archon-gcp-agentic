@@ -18,6 +18,8 @@ import pytest
 
 from archon.adapters import gcs, service
 from archon.adapters.store import LocalStore
+from archon.domain.models import DocType
+from archon.domain.validation import validate
 from tests.conftest import PERIOD
 
 BUCKET = "test-mail-bucket"
@@ -134,11 +136,36 @@ def test_oversize_and_non_text_objects_are_skipped_and_named():
 
     documents, _raw, manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
 
-    assert len(documents) == 1
     reasons = {s["object"].rsplit("/", 1)[-1]: s["reason"] for s in manifest["skipped"]}
     assert "cap" in reasons["huge.txt"]
     assert reasons["photo.jpg"] == "not text"
     assert reasons["binary.txt"] == "not utf-8"
+
+    # One document was READ. The other three still arrive, as UNKNOWN documents
+    # carrying why they could not be, because an object skipped before it became
+    # a document was invisible to every gate and a month could close green with
+    # a remittance sitting unread in the bucket.
+    readable = [d for d in documents if d.doc_type is not DocType.UNKNOWN]
+    refused = [d for d in documents if d.doc_type is DocType.UNKNOWN]
+
+    assert len(readable) == 1
+    assert {d.source_file for d in refused} == {"huge.txt", "photo.jpg", "binary.txt"}
+    assert all(d.failure_reason.startswith("not read from the mailbox:") for d in refused)
+
+    # And G6 refuses the month rather than closing over them.
+    gates = validate(_ledger_of(documents), [])
+    g6 = next(g for g in gates if g.rule.startswith("G6"))
+    assert g6.passed is False
+    assert "huge.txt" in g6.message or "3 document(s)" in g6.message
+
+
+def _ledger_of(documents):
+    """A ledger holding exactly these documents, for asserting on the gates."""
+    from archon.domain.ledger import Ledger
+
+    ledger = Ledger(period=PERIOD, company="Bell Ridge Haulage")
+    ledger.add_all(documents)
+    return ledger
 
 
 # ── provenance ───────────────────────────────────────────────────────────────

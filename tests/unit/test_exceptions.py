@@ -349,8 +349,17 @@ def test_the_counts_this_repository_states_in_prose_match_the_code():
     detectors = set(re.findall(r"find_\w+", inspect.getsource(exc.find_all))) - {"find_all"}
     gates = [n for n in dir(validation) if re.fullmatch(r"g\d+_\w+", n)]
 
-    words = {5: "five", 6: "six", 9: "nine", 10: "ten", 11: "eleven"}
-    d, g = words[len(detectors)], words[len(gates)]
+    # The tools the agent is actually given, read off the `tools=[...]` list in
+    # `build_close_agent` rather than counted by hand. The README's architecture
+    # diagram and the module's own section comment both said six; there are
+    # seven, and had been since `take_in_mail` was added.
+    from archon.adapters import agents as agents_mod
+
+    tool_block = inspect.getsource(agents_mod.build_close_agent)
+    tools = re.findall(r"session\.(\w+),", tool_block)
+
+    words = {5: "five", 6: "six", 7: "seven", 9: "nine", 10: "ten", 11: "eleven"}
+    d, g, t = words[len(detectors)], words[len(gates)], words[len(tools)]
 
     claims = [
         ("README.md", 'exc["exceptions<br/>' + d + ' detectors"]'),
@@ -363,6 +372,8 @@ def test_the_counts_this_repository_states_in_prose_match_the_code():
         ("web/index.html", d.capitalize() + " detectors, worst first"),
         ("web/index.html", g + " close gates"),
         ("web/index.html", g.capitalize() + " gates run before"),
+        ("README.md", t + " tools, one per step"),
+        ("src/archon/adapters/agents.py", "the " + t + " tools, in the order"),
     ]
 
     root = pathlib.Path(__file__).resolve().parents[2]
@@ -370,6 +381,7 @@ def test_the_counts_this_repository_states_in_prose_match_the_code():
                if phrase not in (root / name).read_text(encoding="utf-8")]
 
     assert not missing, (
-        f"the code has {len(detectors)} detectors and {len(gates)} gates; "
+        f"the code has {len(detectors)} detectors, {len(gates)} gates and "
+        f"{len(tools)} tools; "
         "these places do not say so:\n  " + "\n  ".join(missing)
     )

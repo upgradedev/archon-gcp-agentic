@@ -92,6 +92,45 @@ def _labels(text: str) -> dict[str, str]:
 #: wanted; the currency is carried on the document, not baked into the number.
 _CURRENCY = re.compile(r"[$€£]|\b(?:EUR|USD|GBP)\b", re.IGNORECASE)
 
+#: Which currency each of those means. The symbol is stripped from the amount
+#: and it was then thrown away, so an invoice reading "Total Due: €7,303.60"
+#: was stamped USD -- the default -- and a euro payable was chased in dollars.
+_CURRENCY_OF = {"$": "USD", "€": "EUR", "£": "GBP",
+                "usd": "USD", "eur": "EUR", "gbp": "GBP"}
+
+#: The labels that carry an amount, in the order they are trusted. Read for a
+#: currency only when the document does not name one outright.
+_MONEY_LABELS = ("total due", "amount due", "grand total", "total", "amount",
+                 "net amount", "gross amount", "amount credited", "net pay")
+
+
+def _currency(labels: dict[str, str]) -> str:
+    """The currency this document is denominated in.
+
+    Explicit label first, because a document that names its currency is not
+    guessing. Otherwise read the symbol off the amounts themselves, which is
+    where real invoices put it: "Total Due: €7,303.60" carries the fact and a
+    separate `Currency:` line almost never appears.
+
+    Falls back to USD, and that default is the reason this needed fixing rather
+    than the fix itself: every document became USD, so two currencies summed
+    without complaint and the same figure in euros and dollars looked like the
+    same charge billed twice.
+    """
+    named = _pick(labels, "currency")
+    if named:
+        code = named.strip().lower()
+        return _CURRENCY_OF.get(code, named.strip().upper()[:3])
+
+    for label in _MONEY_LABELS:
+        written = labels.get(label)
+        if not written:
+            continue
+        found = _CURRENCY.search(written)
+        if found:
+            return _CURRENCY_OF.get(found.group(0).lower(), "USD")
+    return "USD"
+
 
 def _money(value: str | None) -> float | None:
     """One parser for both 1,234.56 and 1.234,56, and nothing else.
@@ -353,7 +392,7 @@ def extract_document(text: str, source_file: str = "document.txt",
         counterparty=_pick(labels, "supplier", "broker", "counterparty", "vendor"),
         document_number=_pick(labels, "invoice number", "statement number",
                               "remittance number", "settlement number", "load number"),
-        currency=_pick(labels, "currency") or "USD",
+        currency=_currency(labels),
     )
 
     handler = _HANDLERS.get(doc_type)
