@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections import Counter
 
+from .ledger import matching_remittance
 from .models import (
     Account,
     AllocationResult,
@@ -85,9 +86,16 @@ def g3_bank_movement_agrees(ledger, documents: list[Document]) -> ValidationResu
     if not bank_lines and not remittances:
         return _skipped(rule, "no bank line or remittance in the period")
 
+    # A bank line that is the arrival of a remittance already in this period is
+    # not extra money. Counting both was what made this gate agree with the
+    # double posting it exists to catch: booked and observed committed the same
+    # error, so the drift between them was always zero.
+    duplicated = [d for d in bank_lines if matching_remittance(d, documents) is not None]
+    independent = [d for d in bank_lines if d not in duplicated]
+
     observed = round(
         sum((d.net_amount or 0.0) if d.direction == "in" else -(d.net_amount or 0.0)
-            for d in bank_lines)
+            for d in independent)
         + sum(d.remittance_total or 0.0 for d in remittances),
         2,
     )

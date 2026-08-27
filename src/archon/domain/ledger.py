@@ -50,6 +50,64 @@ _SIMPLE_EXPENSES = {
 }
 
 
+
+# ── one movement of money, however many documents describe it ────────────────
+
+#: Cash matched to the cent. A remittance advice and the bank credit it
+#: produced are the same money, and the factor sends the advice for the exact
+#: figure it deposits, so there is nothing to tolerate here. A near-miss is a
+#: DIFFERENT payment and must stay a separate line.
+def matching_remittance(bank_line: Document, documents: list[Document]) -> Document | None:
+    """The remittance a given inbound bank line is the arrival of, if any.
+
+    The defect this closes: a broker remittance posted Dr Bank / Cr AR, and the
+    inbound bank line it produced posted Dr Bank / Cr AR again. Two entries,
+    one movement of money. On the shipped July corpus, adding the deposit line
+    for MFX-RA-4417 in the same format as the six bank files already in that
+    directory took cash in from 18,667.65 to 37,335.30 and receivables to
+    -14,907.65, and the close reported 6/6 gates passed with ten findings, the
+    same ten as before.
+
+    Nothing keyed on the cash event. `doc.direction` had four independent
+    readers and none of them deduped, and G4 counts filenames, which differ.
+
+    Matching is on the reference first, because the factor writes its advice
+    number on the deposit and that is an identity rather than a coincidence.
+    Amount alone is not enough: two brokers paying the same round figure in one
+    month is ordinary. Where a statement carries no reference, the counterparty
+    and the amount together are accepted, which is the same evidence a
+    bookkeeper would use.
+    """
+    if bank_line.direction != "in":
+        return None
+    landed = round(bank_line.net_amount or 0.0, 2)
+    if landed <= 0:
+        return None
+
+    reference = (bank_line.reference or "").strip().lower()
+    candidates = [d for d in documents if d.doc_type == DocType.BROKER_REMITTANCE]
+
+    if reference:
+        for remittance in candidates:
+            number = (remittance.document_number or "").strip().lower()
+            if not number or number != reference:
+                continue
+            if round(remittance.remittance_total or 0.0, 2) == landed:
+                return remittance
+        # A reference that names no remittance is a different payment, and
+        # guessing past it by amount would silently swallow a real second
+        # receipt that happens to be for the same figure.
+        return None
+
+    counterparty = (bank_line.counterparty or "").strip().lower()
+    for remittance in candidates:
+        if round(remittance.remittance_total or 0.0, 2) != landed:
+            continue
+        broker = (remittance.broker or remittance.counterparty or "").strip().lower()
+        if counterparty and broker and counterparty == broker:
+            return remittance
+    return None
+
 class Ledger:
     """The month's books: documents in, balanced entries out, statements up.
 
@@ -76,7 +134,20 @@ class Ledger:
         return entry
 
     def add_all(self, docs: list[Document]) -> list[JournalEntry]:
-        return [self.add(d) for d in docs]
+        """Take in a whole month, then post it.
+
+        Every document is recorded BEFORE any of them is posted, and the order
+        matters. `_post_bank_transaction` has to ask whether an inbound line is
+        the arrival of a remittance already in this period, and asking a list
+        that is still being filled makes the answer depend on which file the
+        mailbox happened to hand over first. The books must not depend on that:
+        it is the same reason the agent's tools report slices of one
+        deterministic run rather than each mutating a half-built ledger.
+        """
+        self.documents.extend(docs)
+        entries = [self._post(d) for d in docs]
+        self.entries.extend(entries)
+        return entries
 
     @property
     def posted(self) -> list[Document]:
@@ -182,6 +253,16 @@ class Ledger:
         amount = doc.net_amount or 0.0
         reference = doc.reference or ""
         if doc.direction == "in":
+            already = matching_remittance(doc, self.documents)
+            if already is not None:
+                # The remittance already posted this cash. Posting it again is
+                # the same money twice, and G3 agreed with the doubled figure
+                # because it added the same two sources to get its own.
+                entry.memo = (
+                    f"Receipt {reference}: already posted via remittance "
+                    f"{already.document_number}, not posted again"
+                )
+                return
             entry.memo = f"Receipt {reference}"
             entry.lines = [_dr(Account.BANK, amount),
                            _cr(Account.ACCOUNTS_RECEIVABLE, amount)]
