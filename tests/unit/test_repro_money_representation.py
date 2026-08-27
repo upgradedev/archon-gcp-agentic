@@ -4,9 +4,10 @@ The claim bundles four sub-claims. They do not all hold, and the difference
 matters more than the headline:
 
     (a) money is float                      -- TRUE, but see (c)/(d)
-    (b) currency is not handled explicitly  -- TRUE, and it reaches the owner
-    (c) amounts in different currencies     -- TRUE, silently, end to end
-        could be summed
+    (b) currency is not handled explicitly  -- TRUE, and it still reaches the
+                                               owner through the drafter
+    (c) amounts in different currencies     -- WAS TRUE, silently and end to
+        could be summed                        end. G7 now refuses the month
     (d) rounding is not deterministic       -- FALSE. It is deterministic.
                                                It is merely not half-up.
 
@@ -16,7 +17,8 @@ on a style preference; every failing test asserts that a NUMBER OR A LABEL THE
 OWNER READS is wrong.
 
 Test naming: `test_repro_*` fails on the current code because the defect is
-real. `test_documents_*` passes and pins behaviour the audit got wrong.
+real. `test_documents_*` passes and pins behaviour, either behaviour the audit
+got wrong or the behaviour a fix put in place of a reproduced defect.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ from archon.adapters.store import LocalStore
 from archon.domain import allocation as allocation_mod
 from archon.domain import drafts as drafts_mod
 from archon.domain import exceptions as exceptions_mod
+from archon.domain import validation as validation_mod
 from archon.domain.extract import extract_document
 from archon.domain.ledger import Ledger
 from archon.domain.models import (
@@ -168,14 +171,26 @@ def test_repro_a_eur_payment_is_reported_as_eur_but_billed_back_as_usd() -> None
     )
 
 
-# ── reproduced (c): two currencies summed, and an accusation built on it ─────
+# ── (c), reproduced then fixed: summed silently, now refused at a gate ───────
 
-def test_repro_two_currencies_are_summed_into_one_revenue_figure() -> None:
-    """EUR 1,000 + USD 1,000 posts as 2,000 with no refusal and no note.
+def test_documents_two_currencies_in_one_month_are_refused_not_absorbed() -> None:
+    """EUR 1,000 + USD 1,000 used to post as 2,000 with no refusal and no note.
 
-    The ledger never reads `doc.currency`. Statements are a roll-up of journal
-    lines, and a journal line is a bare float on an account, so the currency is
-    gone by the time anything can object to it.
+    The ledger never read `doc.currency`, and it still does not. Statements are
+    a roll-up of journal lines, and a journal line is a bare float on an
+    account, so the currency is gone by the time the addition happens. That is
+    why the sum below is still 2,000 out of two thousands that are not the same
+    unit, and it is why the objection cannot live in the roll-up.
+
+    What was missing was anybody objecting at all. The product's stated rule is
+    that it raises what it cannot explain rather than absorbing it, and adding
+    two currencies is exactly that: with no exchange rate, no rate date and no
+    conversion policy, 2,000 is not money in any currency. G7 is where the
+    objection now lives. It reads the currency off every posted document,
+    refuses the month when more than one appears, and names them, so the owner
+    is told which two units were about to be added rather than handed a total
+    that quietly averages them. Refusing beats converting while there is no
+    rate source, because a guessed rate produces a number nobody can check.
     """
     ledger = Ledger(period=PERIOD, company="Bell Ridge Haulage")
     ledger.add_all([
@@ -190,15 +205,19 @@ def test_repro_two_currencies_are_summed_into_one_revenue_figure() -> None:
     ])
     statements = ledger.statements()
 
-    # The sum happens. This part is just the fact.
+    # The sum still happens, and that is precisely why the gate has to exist.
     assert statements.revenue == 2000.00
 
-    # The product's stated rule is that it raises what it cannot explain rather
-    # than absorbing it. Adding two currencies is exactly that, and nothing in
-    # the roll-up says so.
-    assert any("currenc" in note.lower() for note in statements.notes), (
-        "revenue of 2000.00 was produced by adding USD 1000 to EUR 1000 and "
-        f"the statements carry no note saying so. notes={statements.notes}"
+    gate = validation_mod.g7_one_currency_per_month(ledger)
+
+    assert not gate.passed
+    assert gate.severity == "error"
+    # Naming both is the part the owner acts on: "two currencies" alone would
+    # not tell them which document to go and look at.
+    assert "EUR" in gate.message and "USD" in gate.message, (
+        "revenue of 2000.00 was produced by adding USD 1000 to EUR 1000, and "
+        "the gate that refuses the month did not name both currencies: "
+        f"{gate.message}"
     )
 
 

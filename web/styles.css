@@ -462,9 +462,12 @@
     }
     .shell.side-collapsed .side { display: flex; }
     .side-foot { display: none; }
-    .nav { flex-direction: row; overflow-x: auto; gap: 4px; scrollbar-width: none;
-           padding-bottom: 2px; }
-    .nav::-webkit-scrollbar { display: none; }
+    /* WRAPS. It used to be one nowrap row with `overflow-x: auto` and a hidden
+       scrollbar: at 375px that is a 1,406px strip inside a 347px window, so
+       eight of the ten sections were off-screen with nothing on the page to
+       suggest they existed. A judge on a phone saw two. Wrapping costs a few
+       rows of height and hides nothing. */
+    .nav { flex-direction: row; flex-wrap: wrap; gap: 4px; padding-bottom: 2px; }
     .nav-h { display: none; }
     .tab { width: auto; flex: none; padding: 7px 12px; }
     .nav-i { display: none; }
@@ -491,15 +494,26 @@
   @media (max-width: 520px) {
     .topbar .live-badge { order: 3; }
     .top-spacer { display: none; }
-    /* The primary action survives every width. Hiding it on a phone hid
-       the one thing the page is for, and the journey is tested at 375.
-       Replay and the raw JSON are secondary and stay out of the way;
-       the topbar wraps, so #run takes its own full-width row. */
-    #replay, #raw { display: none; }
-    #run { width: 100%; }
+    /* Every control survives every width. Hiding them on a phone hid the
+       things the page is for, and the journey is tested at 375. The topbar
+       wraps, so each takes its own row rather than competing for one. */
+    #run, #replay { width: 100%; }
+    #raw { width: 100%; font-size: 12px; }
     .hero-actions { align-items: stretch; flex-direction: column; width: 100%; }
     #hero-run { width: 100%; }
     .hero-context { max-width: none; }
     .hero-result { padding: 22px 20px; }
     .two { grid-template-columns: 1fr; }
   }
+
+  /* The first focusable thing on the page, and invisible until it is focused.
+     Without it a keyboard visitor tabs through ten navigation buttons before
+     reaching the close they came to read, on every panel change. */
+  .skip-link {
+    position: absolute; left: -9999px; top: 0; z-index: 10;
+    background: var(--card-hi); color: var(--text); border: 1px solid var(--primary-hi);
+    border-radius: var(--r-sm); padding: 10px 14px; font-size: 13px; font-weight: 650;
+  }
+  .skip-link:focus { left: 12px; top: 12px; }
+  .panel:focus { outline: none; }
+  .panel:focus-visible { outline: 2px solid var(--primary-hi); outline-offset: 6px; }

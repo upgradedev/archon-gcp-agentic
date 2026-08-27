@@ -10,19 +10,28 @@ mailbox differs only in where the bytes come from; `read_period` takes a `root`)
 
 Not one `Document(...)` is constructed by hand in any `test_repro_*` here.
 
-What survives the refutation attempt:
+What survived the refutation attempt:
 
-    (b) currency is not handled explicitly   -- REAL, reaches an outbound letter
-    (c) two currencies can be summed         -- REAL, silently, end to end
+    (b) currency is not handled explicitly   -- REAL, and STILL real in the one
+                                                artifact that leaves the
+                                                building; extraction was fixed,
+                                                the outbound letter was not
+    (c) two currencies can be summed         -- WAS real, silently, end to end;
+                                                gate G7 now refuses such a month
 
-What does not:
+What did not:
 
     (a) money is float                       -- true and inert; see the two
                                                 `test_documents_float_*` tests
     (d) rounding is not deterministic        -- FALSE; it is deterministic
 
 Naming follows the repo's convention: `test_repro_*` FAILS on this commit
-because the defect is real; `test_documents_*` PASSES and pins behaviour.
+because the defect is real; `test_documents_*` PASSES and pins behaviour. Exactly
+one `test_repro_*` is left. `extract._currency` now reads the currency a document
+actually states, so a EUR payment is recorded as EUR, but `drafts._money` still
+prints every figure as USD and no call site overrides it. The finding and the
+letter drafted from it now disagree inside a single close, which is precisely
+what the old accidental agreement between the two halves used to hide.
 """
 from __future__ import annotations
 
@@ -144,7 +153,7 @@ def test_documents_the_standing_policy_really_does_draft_this_kind() -> None:
     assert decisions[0].applied is policy_mod.Disposition.DRAFT
 
 
-# ── REPRODUCED (b): one document, one close, two currencies printed ──────────
+# ── (b): fixed at extraction, STILL WRONG in the letter that goes out ────────
 
 def test_repro_a_eur_payment_off_disk_is_billed_back_to_the_supplier_in_usd(tmp_path) -> None:
     """The strongest sub-claim, driven from bytes on disk to the outbound letter.
@@ -178,16 +187,19 @@ def test_repro_a_eur_payment_off_disk_is_billed_back_to_the_supplier_in_usd(tmp_
     )
 
 
-def test_repro_currency_written_only_inside_the_amount_is_stamped_usd(tmp_path) -> None:
-    """`_money` deletes the EUR token, `extract_document` then defaults to USD.
+def test_documents_currency_written_only_inside_the_amount_is_recovered(tmp_path) -> None:
+    """`_money` deleted the EUR token and `extract_document` then defaulted to USD.
 
-    extract.py:112 runs `_CURRENCY.sub("", value)` before parsing; extract.py:356
-    reads the currency ONLY from a separate `currency:` label. An invoice that
-    writes its currency the way most of Europe writes it -- inside the amount --
-    has that marker deleted and is then stamped USD.
+    extract.py ran `_CURRENCY.sub("", value)` before parsing and read the
+    currency ONLY from a separate `currency:` label. An invoice that writes its
+    currency the way most of Europe writes it -- inside the amount -- had that
+    marker deleted and was then stamped USD.
 
-    Reachability is total: ordinary supplier text, the real mailbox, no label a
-    document would not carry.
+    Reachability was total: ordinary supplier text, the real mailbox, no label a
+    document would not carry, which is why the default was never a safe one.
+    `extract._currency` now reads the explicit label first and otherwise takes
+    the symbol or code off the amount itself, so the unit survives the parse
+    that used to eat it.
     """
     documents, _ = mail(tmp_path, **{"expense-mnt-M3": MAINTENANCE_EUR_IN_THE_AMOUNT})
     doc = documents[0]
@@ -201,29 +213,56 @@ def test_repro_currency_written_only_inside_the_amount_is_stamped_usd(tmp_path) 
     )
 
 
-def test_documents_the_two_currency_defects_partly_cancel_each_other(tmp_path) -> None:
-    """An honest qualifier the audit's bundling hides.
+def test_documents_the_two_currency_defects_no_longer_cancel_each_other(tmp_path) -> None:
+    """An honest qualifier the audit's bundling hid, and the half of it left open.
 
-    When the currency is written only inside the amount, extract loses it and
-    stamps USD -- and `drafts._money`'s USD default is then ACCIDENTALLY
-    consistent with it. The finding and the letter agree, and both are wrong in
-    the same direction. Sub-claims 1 and 2 are two faces of one missing
+    When the currency was written only inside the amount, extract lost it and
+    stamped USD -- and `drafts._money`'s USD default was then ACCIDENTALLY
+    consistent with it. The finding and the letter agreed, and both were wrong
+    in the same direction. Sub-claims 1 and 2 were two faces of one missing
     currency channel, not two independent defects, and fixing either one alone
-    makes the pair visibly disagree.
+    was always going to make the pair visibly disagree.
+
+    Extraction is the half that was fixed, and this is where the cancellation
+    dies. The same figure from the same supplier, written in the two notations a
+    real mailbox actually receives, now comes back as two different currencies
+    instead of collapsing into one. Nothing downstream can lean on the units
+    agreeing any more, which is exactly why
+    `test_repro_a_eur_payment_off_disk_is_billed_back_to_the_supplier_in_usd`
+    still fails: the letter is the half nobody has fixed yet.
     """
-    documents, _ = mail(tmp_path, **{"expense-mnt-M3": MAINTENANCE_EUR_IN_THE_AMOUNT})
-    assert documents[0].currency == "USD"         # lost at extraction
-    # and so nothing downstream can print anything but USD, consistently wrong.
+    documents, _ = mail(tmp_path, **{
+        "expense-mnt-M3": MAINTENANCE_EUR_IN_THE_AMOUNT,   # unit inside the amount
+        "expense-mnt-M1": MAINTENANCE_USD,                 # unit on its own label
+    })
+    by_file = {d.source_file: d for d in documents}
+    euro, dollar = by_file["expense-mnt-M3.txt"], by_file["expense-mnt-M1.txt"]
+
+    assert euro.currency == "EUR"
+    assert dollar.currency == "USD"
+    # Identical figures, different money. Under the old default both read USD
+    # 1,200.00 and were indistinguishable to every consumer of a Document.
+    assert euro.net_amount == dollar.net_amount == 1200.00
+    assert euro.currency != dollar.currency
 
 
-# ── REPRODUCED (c): two currencies summed, and an accusation built on it ──────
+# ── (c): fixed. Two currencies are refused, not summed and accused ───────────
 
-def test_repro_two_currencies_off_disk_are_summed_and_the_close_says_nothing(tmp_path) -> None:
-    """A month holding USD and EUR closes, sums them, and never mentions it.
+def test_documents_two_currencies_off_disk_block_the_month_and_are_named(tmp_path) -> None:
+    """A month holding USD and EUR used to close, sum them, and never mention it.
 
-    No gate in `validation.py` asks whether the figures being compared share a
-    unit, `ledger.py` never reads `doc.currency`, and `_dr`/`_cr` put a bare
-    float on an account, so the unit is gone before anything could object.
+    No gate in `validation.py` asked whether the figures being compared shared a
+    unit, `ledger.py` never read `doc.currency`, and `_dr`/`_cr` put a bare float
+    on an account, so the unit was gone before anything could object. The month
+    closed on a maintenance figure that was not money in any currency, and no
+    gate, finding, note or line of the summary said so.
+
+    G7 is the gate that was missing. The addition still happens, because the
+    ledger has no exchange rate and inventing one would produce a number the
+    owner cannot check; refusing is the honest answer while there is no rate
+    source. What changed is that the month is now blocked and the gate names
+    both currencies, so that meaningless total never reaches anyone as a closed
+    book.
     """
     documents, raw = mail(tmp_path, **{
         "expense-mnt-M1": MAINTENANCE_USD,
@@ -233,9 +272,19 @@ def test_repro_two_currencies_off_disk_are_summed_and_the_close_says_nothing(tmp
 
     result = close(documents, raw)
 
-    # The sum happens: 1,200 USD + 1,200 EUR = "2,400.00" of maintenance.
+    # The sum still happens: 1,200 USD + 1,200 EUR = "2,400.00" of maintenance.
+    # Nothing teaches the ledger arithmetic it cannot do; the gate is what stops
+    # the answer counting.
     assert result.statements.maintenance == 2400.00
-    assert result.outcome == "closed"
+    assert result.outcome == "blocked"
+
+    currency_gate = next(g for g in result.gates if g.rule.startswith("G7"))
+    assert currency_gate.passed is False
+    assert currency_gate.severity == "error"
+    # Naming both units is the difference between a refusal the owner can act on
+    # and one they have to go hunting for.
+    assert "EUR" in currency_gate.message
+    assert "USD" in currency_gate.message
 
     spoken = "\n".join(
         [g.message for g in result.gates]
@@ -245,24 +294,25 @@ def test_repro_two_currencies_off_disk_are_summed_and_the_close_says_nothing(tmp
     )
     assert "currenc" in spoken.lower(), (
         "the close added a EUR invoice to a USD invoice, reported "
-        f"{result.statements.maintenance:,.2f} of maintenance, closed the month, "
-        "and said nothing about the unit in any gate, finding, note or "
+        f"{result.statements.maintenance:,.2f} of maintenance, and said nothing "
+        "about the unit in any gate, finding, note or "
         f"summary.\noutcome={result.outcome}\n{spoken}"
     )
 
 
-def test_repro_two_currencies_off_disk_become_a_duplicate_charge_accusation(tmp_path) -> None:
-    """The false accusation, built end to end from real files.
+def test_documents_two_currencies_off_disk_are_not_a_duplicate_charge(tmp_path) -> None:
+    """The false accusation that used to be built end to end from real files.
 
-    `exceptions.py:293` keys duplicates on `(counterparty, place, amount)` with
-    no currency, so EUR 1,200 and USD 1,200 from the same supplier collide. The
-    close raises a DUPLICATE_CHARGE error and drafts a DUPLICATE_REFUND letter
-    asking Kastro Garage to credit money back.
+    The duplicate detector keyed on `(counterparty, place, amount)` with no
+    currency, so EUR 1,200 and USD 1,200 from the same supplier collided. The
+    close raised a DUPLICATE_CHARGE error and drafted a DUPLICATE_REFUND letter
+    asking Kastro Garage to credit money back that it had never been paid twice.
 
     The detector is deliberately fuzzy about two same-currency charges of the
-    same size -- it says "probably" and the letter asks for confirmation. This
-    is different in kind: it is not a fuzzy call that went wrong, it is a
-    guaranteed false positive from a key that omits the unit.
+    same size -- it says "probably" and the letter asks for confirmation. That
+    was different in kind: not a fuzzy call that went wrong, but a guaranteed
+    false positive from a key that omitted the unit. The key now carries the
+    currency, so two figures in two currencies are two charges.
     """
     documents, raw = mail(tmp_path, **{
         "expense-mnt-M1": MAINTENANCE_USD,

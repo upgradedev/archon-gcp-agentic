@@ -31,16 +31,37 @@ let health = null;
 // with is one of eight and they should not have to scroll past the other seven.
 // Every panel stays in the DOM: a judge reading the page source, and the
 // browser journey that walks it, both see the whole close whichever tab is up.
-function show(name) {
+function show(name, { focus = false } = {}) {
   document.querySelectorAll(".panel").forEach((p) =>
     p.classList.toggle("hidden", p.id !== `panel-${name}`));
-  document.querySelectorAll(".tab").forEach((t) =>
-    t.classList.toggle("on", t.dataset.panel === name));
+  // `on` drives the styling and `aria-selected` drives the announcement. Both,
+  // because a class is invisible to a screen reader and an attribute is
+  // invisible to the stylesheet. `tabindex` keeps the standard tablist
+  // behaviour: one stop in the tab order, arrow keys move between tabs.
+  document.querySelectorAll(".tab").forEach((t) => {
+    const active = t.dataset.panel === name;
+    t.classList.toggle("on", active);
+    t.setAttribute("aria-selected", active ? "true" : "false");
+    t.tabIndex = active ? 0 : -1;
+  });
+  const panel = $(`panel-${name}`);
+  if (focus && panel) panel.focus();
   window.scrollTo({ top: 0 });
 }
 
-document.querySelectorAll(".tab").forEach((tab) =>
-  tab.addEventListener("click", () => show(tab.dataset.panel)));
+const TABS = [...document.querySelectorAll(".tab")];
+TABS.forEach((tab, index) => {
+  tab.addEventListener("click", () => show(tab.dataset.panel));
+  tab.addEventListener("keydown", (event) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+    const jump = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1 : null;
+    if (step === undefined && jump === null) return;
+    event.preventDefault();
+    const next = jump !== null ? jump : (index + step + TABS.length) % TABS.length;
+    TABS[next].focus();
+    show(TABS[next].dataset.panel);
+  });
+});
 
 // ── the close ────────────────────────────────────────────────────────────────
 
@@ -384,9 +405,9 @@ function renderStats(d) {
      `${Object.keys(s.per_truck).length} trucks`],
     ["findings", "Exceptions", String(d.findings.length), `${errs} of them errors`,
      errs ? [`${errs} error${errs > 1 ? "s" : ""}`, "err"] : null],
-    ["letters", "Leaking away", usd(d.leakage), "money nobody would have caught",
+    ["letters", "Leaking away", usd(d.leakage), "found by the checks, not by a person",
      d.drafts.length ? [`${d.drafts.length} letters ready`, "warn"] : null],
-    ["register", "Invoiced, unpaid", usd(d.outstanding), "owed already, now chased"],
+    ["register", "Invoiced, unpaid", usd(d.outstanding), "letters drafted, none sent"],
     ["checks", "Close", title(d.outcome),
      `${d.gates.filter((g) => g.passed).length}/${d.gates.length} gates passed`],
   ];
@@ -638,6 +659,20 @@ function runAndFollow() {
 
 $("run").addEventListener("click", runAndFollow);
 $("hero-run").addEventListener("click", runAndFollow);
+
+// The primary action a judge should take, and the one that costs nothing: the
+// close a Cloud Storage object already triggered, walked again step by step.
+// It was the SECONDARY control, behind a button that spent a thinking model on
+// every press, which is the wrong way round for an anonymous public page.
+function replayAndFollow() {
+  if (!last) return;
+  show("runner");
+  render(last);
+  $("status").textContent =
+    `replaying run ${last.run_id} · nothing was re-executed, no model was called`;
+}
+
+$("hero-replay").addEventListener("click", replayAndFollow);
 document.querySelectorAll("[data-show-panel]").forEach((control) =>
   control.addEventListener("click", () => show(control.dataset.showPanel)));
 $("raw").addEventListener("click", () => window.open(`/api/close/${period}`, "_blank"));

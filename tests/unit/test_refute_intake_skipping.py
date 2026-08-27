@@ -1,14 +1,28 @@
 """Independent attempt to REFUTE the section-5 intake-skipping claim. It failed.
 
 NOTE ON THE FILENAME: this file is named `test_refute_*` because refuting was
-the assignment, not because it refutes anything. It does not. Test 1 below is a
-REPRODUCTION and fails on the current code, the same way `test_repro_*` files
-in this directory do. Read the name as the question that was asked, not as the
-answer that came back.
+the assignment, not because it refutes anything. It did not. Test 1 below began
+as a REPRODUCTION and failed on the code as it stood then, the same way the
+`test_repro_*` files in this directory do. Read the name as the question that
+was asked, not as the answer that came back.
 
+The defect it reproduced has since been fixed, and every test here now asserts
+the fixed behaviour. The reasoning is kept, in the past tense, because the
+reasoning is what stops the defect coming back.
 
-The other agent's repro uses three dropped objects at once, one of which is a
-1 MB block of `x` bytes it built by hand. That invites the obvious objection:
+WHAT WAS WRONG: `read_gcs_period` filtered an object out of the month before it
+could become a `Document`, on a name that was not `.txt`, on a size over
+`MAX_OBJECT_BYTES`, and on a `UnicodeDecodeError`. Everything downstream was
+handed only the survivors, so no gate could see the object that never arrived
+and a month closed green with a remittance sitting unread in the bucket. Now
+every BLOCKING skip comes back as a `DocType.UNKNOWN` document carrying
+`failure_reason="not read from the mailbox: ..."`, G6 refuses the month and
+names the file, and the one skip that is not an unaccounted artifact -- bytes
+identical to an object already read -- is marked non-blocking and lets the
+month close.
+
+The other agent's repro used three dropped objects at once, one of which was a
+1 MB block of `x` bytes it built by hand. That invited the obvious objection:
 the failure was manufactured out of an input no bookkeeper would ever upload.
 
 So this file throws that objection at the claim as hard as it can. It removes
@@ -21,8 +35,10 @@ produce by default.
 
 The test is a differential: the SAME month, the SAME characters, the SAME real
 `read_gcs_period`, the SAME real `POST /events` route, run twice, differing
-only in the text encoding of one object. If the encoding alone moves the books
-while both runs report six green gates, the claim survives the refutation.
+only in the text encoding of one object. The encoding still moves the books,
+because one run has a remittance in it and the other does not. What changed is
+that the run missing it is now refused by name instead of being handed over as
+a finished month with every gate green.
 
 Fakes are the repository's own: `FakeBlob`/`FakeClient` here are the same shape
 as `tests/integration/test_gcs_ingestion.py`, which is the project's
@@ -186,7 +202,7 @@ def accounting_surfaces(payload: dict) -> str:
 
 # ── 1. the refutation attempt: one ordinary object, encoding the only variable ─
 
-def test_one_utf16_remittance_changes_the_books_and_no_gate_notices(rig):
+def test_one_utf16_remittance_blocks_the_month_and_g6_names_it(rig):
     """Same month twice. Only the text encoding of the remittance differs.
 
     This is the claim with every arguable input removed. No PDF, no image, no
@@ -195,8 +211,18 @@ def test_one_utf16_remittance_changes_the_books_and_no_gate_notices(rig):
     parses these exact characters -- and the only difference between the two
     runs is `str.encode("utf-16")` versus `str.encode("utf-8")`.
 
-    If the two runs produce different books while both report six green gates,
-    then intake is deciding the month's figures and no gate can see it.
+    What used to happen: the two runs produced different books and BOTH
+    reported six green gates. Intake was deciding the month's figures and no
+    gate could see it. Run A's books said the broker still owed 1,000.00 for
+    L-9001 while the remittance settling it was sitting in the mailbox, and
+    nothing an owner or a judge reads as the result of the month named the
+    object, so there was nothing to go and fix.
+
+    What happens now: the refused object comes back from intake as an UNKNOWN
+    document carrying its reason, G6 fails on it by name, and run A is blocked
+    instead of closed. The two runs still produce different books -- one of them
+    really is missing a remittance, and no fix at intake can invent it -- but
+    the month missing it is no longer offered as a finished close.
     """
     load = LOAD.encode("utf-8")
 
@@ -212,42 +238,52 @@ def test_one_utf16_remittance_changes_the_books_and_no_gate_notices(rig):
         [obj(LOAD_OBJ, load), obj(REMIT_OBJ, REMITTANCE.encode("utf-8"))],
         trigger=REMIT_OBJ, generation="2")
 
-    # The one object really was dropped, and only that one.
+    # The one object really was refused, and only that one. `blocking` is the
+    # distinction the fix turns on: a refusal that leaves the month incomplete,
+    # as against a duplicate of bytes already in the books.
     assert dropped["source"]["objects_read"] == 1
     assert dropped["source"]["objects_skipped"] == 1
     assert dropped["source"]["skipped"][0]["reason"] == "not utf-8"
+    assert dropped["source"]["skipped"][0]["blocking"] is True
     assert read["source"]["objects_read"] == 2
     assert read["source"]["objects_skipped"] == 0
 
-    # The encoding alone moved the books. The broker's payment is in run B and
-    # is nowhere in run A.
+    # The encoding alone still moves the books. The broker's payment is in run
+    # B and is nowhere in run A.
     assert dropped["allocations"] == []
     assert len(read["allocations"]) == 1
     assert read["allocations"][0]["remittance_total"] == 970.0
     assert dropped["statements"] != read["statements"]
 
-    # And both months closed, on all six gates.
-    assert dropped["outcome"] == "closed"
+    # So run A is refused, and run B, which read every object, closes clean on
+    # all seven gates.
+    assert dropped["outcome"] == "blocked"
     assert read["outcome"] == "closed"
-    assert [g["passed"] for g in dropped["gates"]] == [True] * 6
-    assert [g["passed"] for g in read["gates"]] == [True] * 6
+    assert [g["passed"] for g in read["gates"]] == [True] * 7
 
-    # Nothing an owner or a judge reads as the result of run A names it.
+    # G6 is the gate that refuses it, and it is the only one that fails: the
+    # books the survivors produced still balance, which is exactly why nothing
+    # else could have caught this.
+    failed = [g["rule"] for g in dropped["gates"] if not g["passed"]]
+    assert len(failed) == 1 and failed[0].startswith("G6"), failed
+
+    # Somewhere an owner or a judge reads as the result of run A names the
+    # object, so "which file do I re-save?" has an answer.
     named = REMIT_OBJ in accounting_surfaces(dropped)
 
     assert named, (
-        f"REPRODUCED, on the least arguable input available. The same month, "
-        f"the same characters, closed twice through the real POST /events. "
-        f"The only difference is that one object was saved as UTF-16: "
-        f"{REMIT_OBJ} was dropped at intake with reason "
-        f"{dropped['source']['skipped'][0]['reason']!r}. "
-        f"Run A closed 'closed' with 6/6 gates and "
-        f"{len(dropped['allocations'])} remittance(s) allocated; run B closed "
-        f"'closed' with 6/6 gates and {len(read['allocations'])}. "
-        f"Run A's books say the broker still owes 1,000.00 for L-9001 when the "
-        f"remittance settling it was sitting in the mailbox. No gate, finding, "
-        f"draft, summary, outcome reason, owner digest or journal step names "
-        f"the object.")
+        f"REGRESSION of the section-5 intake defect, on the least arguable "
+        f"input available. The same month, the same characters, closed twice "
+        f"through the real POST /events. The only difference is that one "
+        f"object was saved as UTF-16: {REMIT_OBJ} was refused at intake with "
+        f"reason {dropped['source']['skipped'][0]['reason']!r}. Run A came "
+        f"back {dropped['outcome']!r} with "
+        f"{len(dropped['allocations'])} remittance(s) allocated against run "
+        f"B's {len(read['allocations'])}, so its books say the broker still "
+        f"owes 1,000.00 for L-9001 when the remittance settling it was sitting "
+        f"in the mailbox -- and no gate, finding, draft, summary, outcome "
+        f"reason, owner digest or journal step names the object a person has "
+        f"to go and fix.")
 
 
 # ── 2. the G3 sub-claim, on a realistic dropped object ───────────────────────
@@ -260,27 +296,34 @@ def bank_line(date: str, direction: str, amount: str, reference: str) -> str:
             f"Reference: {reference}\nPaid To: Roadway Fuel Network\n")
 
 
-def test_g3_cannot_detect_intake_loss_because_both_its_sides_are_the_survivors(rig):
+def test_g3_still_cannot_see_intake_loss_and_g6_refuses_the_month_anyway(rig):
     """A correction to the audit's stated G3 mechanism, tested rather than argued.
 
     `validate` calls `g3_bank_movement_agrees(ledger, ledger.documents)`, so
     "the bank lines observed" is derived from the very documents the ledger was
     built from. It is self-referential, and that gives it exactly two
-    behaviours in the face of an object intake dropped, neither of which is
+    behaviours in the face of an object intake refused, neither of which is
     detection:
 
       * drop the ONLY bank line and the gate has no input left, so it reports
         passed-and-skipped and never evaluates. This is what actually happened
         in the other agent's four-object run, whose sole survivor was a load
         confirmation -- so their wording, "a dropped bank line vanishes from
-        BOTH sides of its comparison and G3 passes at zero drift", does not
+        BOTH sides of its comparison and G3 passes at zero drift", did not
         describe their own scenario.
 
       * leave a bank line surviving and the gate DOES evaluate, and then the
         wording is right: the dropped line is missing from `observed` and from
         `booked` alike, and the gate agrees with itself at zero drift.
 
-    Both are asserted here, so the corrected claim is the executed one.
+    Both are still true, and both are asserted here, because the fix did not
+    touch G3 and could not: a gate that compares the books against the
+    documents the books were built from can never see a document that never
+    arrived. What used to follow from that was a month that closed green with
+    7,281.00 of bank movement nobody had read. What follows now is G6, which
+    compares nothing -- intake hands it the refused object as an UNKNOWN
+    document, and it refuses the month and names the file. That is the reason
+    the fix belongs at intake rather than in the gate.
     """
     load = obj(LOAD_OBJ, LOAD.encode("utf-8"))
     kept = obj("bank-2026-07-20.txt",
@@ -289,7 +332,7 @@ def test_g3_cannot_detect_intake_loss_because_both_its_sides_are_the_survivors(r
                   bank_line("2026-07-24", "out", "7,281.00", "FCN-2026-07"
                             ).encode("utf-16"))
 
-    # (a) the only bank line dropped: the gate never runs.
+    # (a) the only bank line refused: the gate never runs.
     only = close_a_month(rig, [load, dropped], trigger=BANK_OBJ)
     assert only["source"]["objects_skipped"] == 1
     g3_only = next(g for g in only["gates"] if g["rule"].startswith("G3"))
@@ -310,19 +353,33 @@ def test_g3_cannot_detect_intake_loss_because_both_its_sides_are_the_survivors(r
     assert "-2,322.00" in g3_both["message"], g3_both["message"]
     assert "7,281" not in g3_both["message"], g3_both["message"]
 
-    assert only["outcome"] == both["outcome"] == "closed"
+    # Neither month is closeable, in both cases for the reason G3 could not
+    # give: the object whose bytes intake refused, named.
+    assert only["outcome"] == both["outcome"] == "blocked"
+    for payload in (only, both):
+        g6 = next(g for g in payload["gates"] if g["rule"].startswith("G6"))
+        assert g6["passed"] is False, g6["message"]
+        assert BANK_OBJ in g6["message"], g6["message"]
 
 
-# ── 3. the half of the audit's wording that does NOT hold ────────────────────
+# ── 3. the half of the audit's wording that never held, and the half that did ─
 
-def test_the_drop_is_recorded_in_provenance_and_rendered_by_the_page(rig):
-    """Passing, and it is the correction the audit's 'silently' needs.
+def test_the_drop_is_recorded_in_provenance_and_carried_into_the_close(rig):
+    """The audit's word 'silently' was always wrong. The rest of it was right.
 
-    `event_source` persists `objects_skipped` and a `{object, reason}` per
-    dropped object, and `web/app.js` renders a count in the origin panel and a
-    `pill warn` row per object in the mailbox table. The defect is that this
-    is the only place it appears and nothing downstream consumes it -- not
-    that nothing recorded it.
+    `event_source` has always persisted `objects_skipped` and a
+    `{object, reason}` per dropped object, and `web/app.js` has always rendered
+    a count in the origin panel and a `pill warn` row per object in the mailbox
+    table. So the drop was recorded. The defect was that the provenance block
+    was the ONLY place it appeared: nothing downstream consumed it, and the run
+    journal an owner actually scrolls counted just the survivors -- "1
+    artifacts" for a mailbox holding two -- with no note that anything had been
+    set aside.
+
+    Now the manifest entry also carries `blocking`, and every blocking entry is
+    handed to the close as an UNKNOWN document, so one refusal shows up three
+    times over: in the intake tally, in the exceptions an owner reads, and in
+    the verify step that refuses to present the month.
     """
     payload = close_a_month(
         rig,
@@ -333,14 +390,26 @@ def test_the_drop_is_recorded_in_provenance_and_rendered_by_the_page(rig):
     src = payload["source"]
     assert src["objects_skipped"] == 1
     assert src["skipped"] == [
-        {"object": f"mail/{PERIOD}/{REMIT_OBJ}", "reason": "not utf-8"}]
+        {"object": f"mail/{PERIOD}/{REMIT_OBJ}", "reason": "not utf-8",
+         "blocking": True}]
 
-    # ... and the intake journal step, which is what an owner scrolls, counts
-    # only the survivor and says nothing about the drop.
+    # ... and the intake journal step now counts the refused object as one of
+    # the month's artifacts, under the family it was given for being refused.
     intake = next(s for s in payload["journal"]["steps"] if s["name"] == "intake")
     assert intake["status"] == "ok"
-    assert intake["detail"].startswith("1 artifacts")
-    assert "skip" not in intake["detail"].lower()
+    assert intake["detail"].startswith("2 artifacts"), intake["detail"]
+    assert "unknown x1" in intake["detail"], intake["detail"]
+
+    # ... the exception list an owner reads names the file and records that
+    # nothing was posted from it.
+    unrecognised = [f for f in payload["findings"]
+                    if f["kind"] == "unrecognised_document"]
+    assert [f["source_file"] for f in unrecognised] == [REMIT_OBJ]
+
+    # ... and the step that decides whether the month is presentable says no.
+    verify = next(s for s in payload["journal"]["steps"] if s["name"] == "verify")
+    assert verify["status"] == "blocked"
+    assert "G6" in verify["detail"], verify["detail"]
 
 
 # ── 4. the dropped object is genuinely parseable: not a malformed input ──────

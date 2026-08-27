@@ -18,22 +18,23 @@
     <div class="brand-t"><b>ARCHON</b><span class="brand-s">Freight close &amp; dispute</span></div>
   </div>
 
-  <nav class="nav" id="tabs" aria-label="Explore Archon">
+  <a class="skip-link" href="#out">Skip to the close</a>
+  <nav class="nav" id="tabs" role="tablist" aria-label="Explore Archon">
     <div class="nav-h">Start here</div>
-    <button class="tab on" data-panel="overview"><span class="nav-i" aria-hidden="true">◈</span><span class="nav-t">What Archon does</span></button>
+    <button class="tab on" data-panel="overview" role="tab" aria-controls="panel-overview" aria-selected="true" tabindex="0"><span class="nav-i" aria-hidden="true">◈</span><span class="nav-t">What Archon does</span></button>
     <div class="nav-h">How it works</div>
-    <button class="tab" data-panel="runner"><span class="nav-i" aria-hidden="true">▶</span><span class="nav-t">Watch the agent</span></button>
-    <button class="tab" data-panel="mailbox"><span class="nav-i" aria-hidden="true">▤</span><span class="nav-t">Documents read</span></button>
+    <button class="tab" data-panel="runner" role="tab" aria-controls="panel-runner" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">▶</span><span class="nav-t">Watch the agent</span></button>
+    <button class="tab" data-panel="mailbox" role="tab" aria-controls="panel-mailbox" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">▤</span><span class="nav-t">Documents read</span></button>
     <div class="nav-h">Business outcome</div>
-    <button class="tab" data-panel="alloc"><span class="nav-i" aria-hidden="true">⇄</span><span class="nav-t">Payment matched</span></button>
-    <button class="tab" data-panel="register"><span class="nav-i" aria-hidden="true">◔</span><span class="nav-t">Money still owed</span></button>
-    <button class="tab" data-panel="findings"><span class="nav-i" aria-hidden="true">!</span><span class="nav-t">What needs attention</span></button>
-    <button class="tab" data-panel="letters"><span class="nav-i" aria-hidden="true">✉</span><span class="nav-t">Letters to review</span></button>
+    <button class="tab" data-panel="alloc" role="tab" aria-controls="panel-alloc" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">⇄</span><span class="nav-t">Payment matched</span></button>
+    <button class="tab" data-panel="register" role="tab" aria-controls="panel-register" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">◔</span><span class="nav-t">Money still owed</span></button>
+    <button class="tab" data-panel="findings" role="tab" aria-controls="panel-findings" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">!</span><span class="nav-t">What needs attention</span></button>
+    <button class="tab" data-panel="letters" role="tab" aria-controls="panel-letters" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">✉</span><span class="nav-t">Letters to review</span></button>
     <div class="nav-h">Business insight</div>
-    <button class="tab" data-panel="trends"><span class="nav-i" aria-hidden="true">↗</span><span class="nav-t">Month over month</span></button>
-    <button class="tab" data-panel="trucks"><span class="nav-i" aria-hidden="true">▣</span><span class="nav-t">Truck performance</span></button>
+    <button class="tab" data-panel="trends" role="tab" aria-controls="panel-trends" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">↗</span><span class="nav-t">Month over month</span></button>
+    <button class="tab" data-panel="trucks" role="tab" aria-controls="panel-trucks" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">▣</span><span class="nav-t">Truck performance</span></button>
     <div class="nav-h">Proof &amp; audit</div>
-    <button class="tab" data-panel="checks"><span class="nav-i" aria-hidden="true">✓</span><span class="nav-t">Checks &amp; evidence</span></button>
+    <button class="tab" data-panel="checks" role="tab" aria-controls="panel-checks" aria-selected="false" tabindex="-1"><span class="nav-i" aria-hidden="true">✓</span><span class="nav-t">Checks &amp; evidence</span></button>
   </nav>
 
   <div class="side-foot">
@@ -69,15 +70,19 @@
 <main id="out">
 
   <!-- ── Dashboard ─────────────────────────────────────────────────────── -->
-  <section class="panel" id="panel-overview">
+  <section class="panel" id="panel-overview" role="tabpanel" tabindex="-1">
     <div class="hero">
       <div class="hero-copy">
         <p class="eyebrow">Autonomous month-end close for owner-operated trucking firms running 3 to 12 trucks</p>
         <h1>It closes the month while nobody is watching.</h1>
         <p class="hero-dek">Drop in a month of documents and get back reconciled books and letters ready to review. Archon reads invoices, receipts and broker remittances; closes the ledger; catches missing money and unusual spend; then prepares the owner&apos;s report and corrective letters.</p>
         <div class="hero-actions">
-          <button id="hero-run">Watch Archon close July</button>
-          <span class="hero-context">Runs a fresh close on synthetic Bell Ridge Haulage data</span>
+          <button id="hero-replay">Replay the unattended close</button>
+          <button class="ghost" id="hero-run">Run a fresh close</button>
+          <span class="hero-context" id="hero-context">Replay walks the eleven steps of the close that
+            a file landing in Cloud Storage already triggered. Nothing re-runs and no model is called.
+            A fresh close runs the month again on synthetic data, takes about a minute, and is
+            discarded when you leave.</span>
         </div>
         <p class="hero-line" id="hero-line" aria-live="polite">Loading the latest close…</p>
       </div>
@@ -152,7 +157,7 @@
   </section>
 
   <!-- ── Close runner ──────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-runner">
+  <section class="panel hidden" id="panel-runner" role="tabpanel" tabindex="-1">
     <h2>The autonomous close</h2>
     <p class="sub">
       Eleven steps, start to finish, with nobody in the loop. The trail is written as the run
@@ -170,7 +175,7 @@
   </section>
 
   <!-- ── Mailbox ───────────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-mailbox">
+  <section class="panel hidden" id="panel-mailbox" role="tabpanel" tabindex="-1">
     <h2>The mailbox this close was built from</h2>
     <p class="sub">
       Every object the close read, with its size, generation and sha256, and every
@@ -182,7 +187,7 @@
   </section>
 
   <!-- ── Reconciliation ────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-alloc">
+  <section class="panel hidden" id="panel-alloc" role="tabpanel" tabindex="-1">
     <h2>One payment, split back across the loads it settles</h2>
     <p class="sub">
       This is the step that makes a haulier's month closeable, and it is not
@@ -195,7 +200,7 @@
   </section>
 
   <!-- ── Open items ────────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-register">
+  <section class="panel hidden" id="panel-register" role="tabpanel" tabindex="-1">
     <h2>Who owes whom</h2>
     <p class="sub">
       The register an owner actually opens, because it answers the two questions
@@ -219,7 +224,7 @@
   </section>
 
   <!-- ── Exceptions ────────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-findings">
+  <section class="panel hidden" id="panel-findings" role="tabpanel" tabindex="-1">
     <h2>What does not add up</h2>
     <p class="sub">
       Ten detectors, worst first by severity then by money. Every threshold is
@@ -235,7 +240,7 @@
   </section>
 
   <!-- ── Letters ───────────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-letters">
+  <section class="panel hidden" id="panel-letters" role="tabpanel" tabindex="-1">
     <h2>The owner's close package, composed and filed</h2>
     <p class="sub">
       A haulier does not open a bookkeeping console on the first of the month,
@@ -258,7 +263,7 @@
   </section>
 
   <!-- ── Trends ────────────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-trends">
+  <section class="panel hidden" id="panel-trends" role="tabpanel" tabindex="-1">
     <h2>Against the month before</h2>
     <p class="sub" id="trend-line"></p>
     <div class="pane" id="chart-trend-pane">
@@ -273,7 +278,7 @@
   </section>
 
   <!-- ── Fleet ─────────────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-trucks">
+  <section class="panel hidden" id="panel-trucks" role="tabpanel" tabindex="-1">
     <h2>Per truck</h2>
     <p class="sub">
       Direct cost is fuel and maintenance, the two an owner can act on per truck.
@@ -288,7 +293,7 @@
   </section>
 
   <!-- ── Checks ────────────────────────────────────────────────────────── -->
-  <section class="panel hidden" id="panel-checks">
+  <section class="panel hidden" id="panel-checks" role="tabpanel" tabindex="-1">
     <h2>The close checked its own work</h2>
     <p class="sub">
       Seven gates run before Archon will call a month closed. A failure blocks the
