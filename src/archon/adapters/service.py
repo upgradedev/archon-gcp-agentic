@@ -330,27 +330,64 @@ async def events(request: Request) -> JSONResponse:
     # One close per object generation. Pub/Sub is at-least-once, and without
     # this a redelivered message re-runs the close and re-writes the record,
     # which is wasteful at best and, with the agent on, costs a model run.
+    # A month can arrive as one object or as twenty-seven, and the difference
+    # matters: every OBJECT_FINALIZE starts a close, so a bookkeeper dragging a
+    # folder into the bucket runs the month once per file. Each close is
+    # correct and each supersedes the last, but twenty-six of them are wasted,
+    # and with the agent on each one is a model conversation.
+    #
+    # The fix for that is a batch-complete signal, and it has to be explicit:
+    # Cloud Storage does not say "that was the last one", and a settle window
+    # needs a durable timer that a scale-to-zero container does not have.
+    #
+    # `ARCHON_BATCH_MARKER` names an object that means "the batch is complete".
+    # With it set, ordinary uploads are recorded and acknowledged, and only the
+    # marker closes the month: twenty-seven uploads plus one marker is one
+    # close. Unset, which is how this deployment currently runs, every object
+    # closes as before -- the demo drops a single file, so it never fans out,
+    # and changing the live trigger days before a deadline buys nothing.
+    batch_marker = os.getenv("ARCHON_BATCH_MARKER", "").strip()
+    if batch_marker:
+        obj = ((envelope.get("message") or {}).get("attributes") or {}).get("objectId", "")
+        name = obj.rsplit("/", 1)[-1]
+        if name and name.lower() != batch_marker.lower():
+            log.info("collecting %s for %s; waiting for %s", name, period, batch_marker)
+            return JSONResponse(
+                {"status": "collecting", "period": period, "object": name,
+                 "reason": f"held until {batch_marker} says the batch is complete"},
+                status_code=200)
+
     marker_key = gcs.dedupe_key(envelope, period)
     if marker_key:
-        marker = get_store().load_close(COMPANY, marker_key)
-        if marker and marker.get("status") == "closed":
-            return JSONResponse(
-                {"status": "duplicate", "reason":
-                 "this object generation already closed the period"},
-                status_code=200)
-        if marker:
-            # A redelivery while the first attempt is still running. A 200
-            # here would ack work that has not finished; a 503 makes Pub/Sub
-            # come back, by which time the marker is either closed (duplicate)
-            # or still processing (come back again). If the first attempt died
-            # with the instance, the retries land here until the message
-            # expires, each one answered in milliseconds.
+        # ONE operation, not three. This used to read the marker, decide it was
+        # absent, and then write it, with a gap in the middle that two Pub/Sub
+        # deliveries of the same message both fitted through: both read absent,
+        # both ran a close, and with the agent on that is two model
+        # conversations and two owner digests for one event.
+        #
+        # `claim` creates the marker only if nothing holds it, atomically --
+        # a lock in memory, `create()` in Firestore, which fails when the
+        # document exists. Losing the race is now indistinguishable from
+        # arriving second, which is what it always was.
+        mine = get_store().claim(COMPANY, marker_key,
+                                 {"period": period, "status": "processing"})
+        if not mine:
+            marker = get_store().load_close(COMPANY, marker_key) or {}
+            if marker.get("status") == "closed":
+                return JSONResponse(
+                    {"status": "duplicate", "reason":
+                     "this object generation already closed the period"},
+                    status_code=200)
+            # Someone else holds it and has not finished. A 200 here would ack
+            # work that has not been done; a 503 makes Pub/Sub come back, by
+            # which time the marker is either closed (duplicate) or still held
+            # (come back again). If the holder died with its instance, the
+            # retries land here until the message expires, each answered in
+            # milliseconds.
             return JSONResponse(
                 {"status": "in-progress", "reason":
                  "this object generation is being closed right now"},
                 status_code=503)
-        get_store().save_close(COMPANY, marker_key,
-                               {"period": period, "status": "processing"})
 
     # The mail is the actual objects in the bucket the event names, not the
     # bundled corpus. The event used to pick only the *period* and the close

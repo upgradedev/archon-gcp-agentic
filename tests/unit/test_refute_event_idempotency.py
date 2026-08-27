@@ -148,13 +148,14 @@ def build_rig(monkeypatch, store=None):
 
 # ── 1. the fan-out, counted from the store and the bucket ────────────────────
 
-def test_a_month_uploaded_one_file_at_a_time_is_closed_once_per_file(monkeypatch):
+def test_a_month_uploaded_one_file_at_a_time_is_closed_once_for_the_batch(monkeypatch):
     """27 OBJECT_FINALIZE pushes, nothing else, measured on the outputs.
 
     No counter is wrapped around `run_close`.  The evidence is what the durable
     store holds afterwards and what the bucket was asked for, which is what a
     Firestore console and a GCS bill would show.
     """
+    monkeypatch.setenv("ARCHON_BATCH_MARKER", "_READY")
     rig = build_rig(monkeypatch)
     mail = mail_for(PERIOD)
 
@@ -162,7 +163,13 @@ def test_a_month_uploaded_one_file_at_a_time_is_closed_once_per_file(monkeypatch
         blob = rig.bucket.upload(PERIOD, name, data)
         response = rig.deliver(blob, f"m-{index}")
         assert response.status_code == 200
-        assert response.json()["status"] == "closed"
+        assert response.json()["status"] == "collecting"
+
+    assert rig.run_ids() == set() or len(rig.run_ids()) == 0, (
+        "not one of the uploads may file a run before the batch is complete")
+
+    blob = rig.bucket.upload(PERIOD, "_READY", b"")
+    assert rig.deliver(blob, "m-ready").json()["status"] == "closed"
 
     drafts = sum(len(rig.store.load_drafts(rid)) for rid in rig.run_ids())
     assert len(rig.run_ids()) == 1, (
@@ -357,11 +364,25 @@ def test_the_two_racing_closes_agree_with_each_other(monkeypatch):
         thread.join(timeout=120)
 
     payloads = [r.json() for r in results]
-    documents, _raw, _manifest = REAL_READ_GCS_PERIOD(BUCKET, PERIOD,
-                                                      client=rig.bucket)
-    expected = run_id_for(PERIOD, documents)
+    documents, raw, _manifest = REAL_READ_GCS_PERIOD(BUCKET, PERIOD,
+                                                     client=rig.bucket)
+    expected = run_id_for(PERIOD, documents, raw)
 
-    assert {p["run_id"] for p in payloads} == {expected}
-    assert {p["outcome"] for p in payloads} == {payloads[0]["outcome"]}
+    # Exactly one of the two racing deliveries does the work. The other is told
+    # to come back, because a 200 would acknowledge work it did not do; if the
+    # winner dies with its instance, Pub/Sub redelivers and the retry finds the
+    # marker either closed or still held.
+    #
+    # Before the claim was atomic, BOTH threads read the marker as absent and
+    # both ran a full close: two model conversations and two owner digests for
+    # one event.
+    ran = [p for p in payloads if "run_id" in p]
+    waved_off = [p for p in payloads if "run_id" not in p]
+
+    assert len(ran) == 1, f"{len(ran)} of the two deliveries ran a close"
+    assert ran[0]["run_id"] == expected
+    assert len(waved_off) == 1
+    assert waved_off[0]["status"] in ("in-progress", "duplicate")
+
     assert len(rig.run_ids()) == 1
     assert close_key(service.COMPANY, PERIOD) in shared._closes

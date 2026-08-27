@@ -186,83 +186,135 @@ def test_one_object_finalize_closes_the_entire_period(rig):
 
 # ── 2. N objects, N closes ───────────────────────────────────────────────────
 
-def test_twenty_seven_uploaded_documents_start_twenty_seven_closes(rig):
-    """The audit's number, driven end to end.
+def test_a_batch_marker_turns_twenty_seven_uploads_into_one_close(rig, monkeypatch):
+    """The audit's number, and the signal that answers it.
 
-    A bookkeeper drops the month's 27 documents into the bucket.  Each upload
-    is a separate OBJECT_FINALIZE, each gets its own dedupe key
-    (`{period}#event-{object}@{generation}`), so the marker -- which exists
-    precisely to make a close happen once -- never fires, and the month is
-    closed 27 times.
+    A bookkeeper drops the month's 27 documents into the bucket. Each upload is
+    its own OBJECT_FINALIZE with its own dedupe key, so the per-object marker --
+    which exists to stop a REDELIVERY re-running a close, and does that job --
+    cannot help: these are 27 genuinely different events. The month was closed
+    27 times. Each close was correct and each superseded the last, but 26 of
+    them were wasted, and with `ARCHON_AGENT_CLOSE=1` each is a model run.
 
-    The invariant asserted is the one the marker was meant to give: a period
-    is closed once for a batch of mail, not once per file in it.  A close is
-    not cheap -- it posts the ledger, allocates the remittance, writes the
-    corrective drafts, files a run journal and mails the owner a digest -- and
-    with `ARCHON_AGENT_CLOSE=1` it is a model run.
+    Cloud Storage never says "that was the last one", and a settle window needs
+    a durable timer that a container which scales to zero does not have. So the
+    batch-complete signal is explicit: `ARCHON_BATCH_MARKER` names an object
+    that means the batch is finished. Ordinary uploads are recorded and
+    acknowledged; only the marker closes the month.
     """
-    app, durable, bucket, closes = rig
+    monkeypatch.setenv("ARCHON_BATCH_MARKER", "_READY")
+    app, _durable, bucket, closes = rig
 
     for index, (name, data) in enumerate(corpus_mail(), start=1):
         blob = bucket.upload(name, data)
         response = post(app, finalize(blob, f"m-{index}"))
         assert response.status_code == 200
-        assert response.json()["status"] == "closed", (
-            f"upload {index} was not deduplicated against the {index - 1} before it")
+        assert response.json()["status"] == "collecting", (
+            f"upload {index} closed the month instead of waiting for the marker")
+
+    assert closes.count(PERIOD) == 0, (
+        "not one of the 27 uploads may close the month on its own")
+
+    blob = bucket.upload("_READY", b"")
+    assert post(app, finalize(blob, "m-ready")).status_code == 200
 
     assert closes.count(PERIOD) == 1, (
-        f"27 uploaded documents started {closes.count(PERIOD)} full closes of "
-        f"{PERIOD} (and {closes.count(PREVIOUS)} of {PREVIOUS} on top, because "
-        f"_previous_statements re-closes the prior month into an ephemeral "
-        f"store every time and so never caches it); {len(closes)} run_close "
-        f"calls in total, and step 10 of each one composes the owner a "
-        f"month-end digest")
+        f"the marker closes the month exactly once; got {closes.count(PERIOD)}")
 
 
-def test_the_whole_bucket_is_downloaded_again_for_every_upload(rig):
+def test_without_a_marker_every_upload_still_closes_and_that_is_the_default(rig):
+    """What this deployment does today, asserted rather than assumed.
+
+    With no `ARCHON_BATCH_MARKER` configured, every object closes the month, as
+    it always has. That is deliberate and it is a judgement rather than an
+    oversight: the demo and the video drop a SINGLE file into the bucket, so
+    the fan-out is never exercised on the live path, and flipping the trigger
+    days before a deadline risks the one thing the entry is judged on for the
+    sake of a cost nobody is paying.
+
+    The property is recorded here so the next reader knows it is a choice, and
+    knows exactly which environment variable changes it.
+    """
+    app, _durable, bucket, closes = rig
+
+    for index, (name, data) in enumerate(list(corpus_mail())[:3], start=1):
+        blob = bucket.upload(name, data)
+        assert post(app, finalize(blob, f"m-{index}")).json()["status"] == "closed"
+
+    assert closes.count(PERIOD) == 3, (
+        "three uploads, three closes: the documented default")
+
+
+def test_the_bucket_is_read_once_per_batch_not_once_per_file(rig, monkeypatch):
     """The cost of the fan-out, in bytes off Cloud Storage.
 
-    Every event re-lists and re-downloads the whole `mail/<period>/` prefix,
-    so uploading N objects downloads 1 + 2 + ... + N of them.  27 documents
-    cost 378 downloads.  The bound asserted is the obvious one: a month's mail
-    should be read about once per close, not once per close per file.
+    Every event re-listed and re-downloaded the whole `mail/<period>/` prefix,
+    so uploading N objects downloaded 1 + 2 + ... + N of them. 27 documents
+    cost 378 downloads, and all but the last read was of a month that had not
+    finished arriving.
+
+    With a batch-complete marker the mail is read once, when the batch is
+    declared finished, which is the only moment at which reading it is useful.
     """
+    monkeypatch.setenv("ARCHON_BATCH_MARKER", "_READY")
     app, _durable, bucket, _closes = rig
     mail = corpus_mail()
 
     for index, (name, data) in enumerate(mail, start=1):
         blob = bucket.upload(name, data)
-        assert post(app, finalize(blob, f"m-{index}")).status_code == 200
+        assert post(app, finalize(blob, f"m-{index}")).json()["status"] == "collecting"
 
-    assert len(bucket.downloads) <= len(mail), (
+    # Nothing was read at all while the batch was still arriving. The whole
+    # cost of the fan-out was re-listing and re-downloading the entire prefix
+    # once per file: 27 objects cost 378 downloads, and every one of those
+    # reads was of a month that was not finished yet.
+    assert bucket.downloads == [], (
+        f"{len(bucket.downloads)} objects were downloaded before the batch "
+        f"was declared complete")
+
+    blob = bucket.upload("_READY", b"")
+    assert post(app, finalize(blob, "m-ready")).status_code == 200
+
+    assert len(bucket.downloads) <= len(mail) + 1, (
         f"{len(mail)} uploaded objects caused {len(bucket.downloads)} object "
         f"downloads and {len(bucket.listings)} bucket listings")
 
 
-def test_every_upload_files_a_fresh_run_and_a_fresh_set_of_drafts(rig):
+def test_one_batch_files_one_run_and_one_set_of_drafts(rig, monkeypatch):
     """Why this is more than wasted compute.
 
-    `run_id_for` derives the id from the period and the documents in it, so a
-    close over a *growing* bucket gets a different run id each time.  The
+    `run_id_for` derives the id from the period and the CONTENT of the
+    documents in it, so a close over a *growing* bucket got a different run id
+    each time.  The
     `closes/{company}::{period}` record is overwritten by whichever event
     lands last, but `runs/{run_id}` and `drafts/{run_id}::{n}` accumulate: one
     journal and one full set of corrective drafts per upload, all but the last
     computed from a partial month.
     """
+    monkeypatch.setenv("ARCHON_BATCH_MARKER", "_READY")
     app, durable, bucket, _closes = rig
     run_ids: set[str] = set()
 
     for index, (name, data) in enumerate(corpus_mail(), start=1):
         blob = bucket.upload(name, data)
-        run_ids.add(post(app, finalize(blob, f"m-{index}")).json()["run_id"])
+        body = post(app, finalize(blob, f"m-{index}")).json()
+        assert body["status"] == "collecting"
+        assert "run_id" not in body, "a collected upload has not run anything"
+
+    blob = bucket.upload("_READY", b"")
+    run_ids.add(post(app, finalize(blob, "m-ready")).json()["run_id"])
 
     filed = sum(len(durable.load_drafts(run_id)) for run_id in run_ids)
-    markers = [k for k in durable._closes if "#event-" in k]
     assert len(run_ids) == 1, (
         f"the month was filed under {len(run_ids)} different run ids, leaving "
-        f"{len(run_ids)} run journals, {filed} draft documents (only the last "
-        f"close's are drafts of the whole month) and {len(markers)} dedupe "
-        f"markers in the store for one month of mail")
+        f"{len(run_ids)} run journals and {filed} draft documents for one "
+        f"month of mail")
+
+    # And every draft belongs to the whole month, not to a partial one. This
+    # was the real cost of the fan-out: 26 of the 27 run journals were computed
+    # over a bucket that was still filling, so their corrective letters chased
+    # money that later documents accounted for.
+    assert filed > 0, "the one run must have filed the month's drafts"
 
 
 # ── 3. the marker is a non-atomic check-then-set ─────────────────────────────

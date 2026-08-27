@@ -23,6 +23,7 @@ and the same key scheme, so a test proves the calling code, not a mock.
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import asdict, is_dataclass
 from typing import Any, Protocol
 
@@ -51,6 +52,7 @@ class Store(Protocol):
     def save_run(self, run: dict) -> str: ...
     def save_close(self, company: str | None, period: str, payload: dict) -> str: ...
     def save_drafts(self, run_id: str, drafts: list) -> list[str]: ...
+    def claim(self, company: str | None, key: str, payload: dict) -> bool: ...
     def load_close(self, company: str | None, period: str) -> dict | None: ...
     def load_run(self, run_id: str) -> dict | None: ...
 
@@ -65,6 +67,7 @@ class LocalStore:
         self._runs: dict[str, dict] = {}
         self._closes: dict[str, dict] = {}
         self._drafts: dict[str, list] = {}
+        self._claims = threading.Lock()
 
     def put_document(self, name: str, content: str) -> str:
         self._documents[name] = content
@@ -82,6 +85,20 @@ class LocalStore:
     def save_drafts(self, run_id: str, drafts: list) -> list[str]:
         self._drafts[run_id] = [_plain(d) for d in drafts]
         return [f"memory://drafts/{run_id}::{i}" for i in range(len(drafts))]
+
+    def claim(self, company: str | None, key: str, payload: dict) -> bool:
+        """Create this key if nothing holds it. True only if we created it.
+
+        The lock is what makes it a claim rather than a suggestion. The check
+        and the set have to be one operation, or two threads both read "absent"
+        and both proceed, which is exactly what happened on the events route.
+        """
+        full = close_key(company, key)
+        with self._claims:
+            if full in self._closes:
+                return False
+            self._closes[full] = _plain(payload)
+        return True
 
     def load_close(self, company: str | None, period: str) -> dict | None:
         return self._closes.get(close_key(company, period))
@@ -127,6 +144,26 @@ class FirestoreStore:
             paths.append(f"firestore://drafts/{run_id}::{index}")
         batch.commit()
         return paths
+
+    def claim(self, company: str | None, key: str, payload: dict) -> bool:
+        """Create this key if nothing holds it. True only if we created it.
+
+        `create()` rather than `set()`, because `create()` fails when the
+        document already exists and does so atomically inside Firestore. The
+        events route used to read the marker, decide it was absent, and then
+        write it, which is three round trips with a gap in the middle: two
+        Pub/Sub deliveries of the same message both read absent and both ran a
+        close, and with the agent on that is two model conversations and two
+        owner digests for one event.
+        """
+        from google.api_core import exceptions as gcloud_exceptions
+
+        ref = self._db.collection("closes").document(close_key(company, key))
+        try:
+            ref.create(_plain(payload))
+        except gcloud_exceptions.AlreadyExists:
+            return False
+        return True
 
     def load_close(self, company: str | None, period: str) -> dict | None:
         snapshot = self._db.collection("closes").document(close_key(company, period)).get()
@@ -191,6 +228,11 @@ class RehearsalStore:
 
     def save_drafts(self, run_id: str, drafts: list) -> list[str]:
         return [self._key(f"drafts/{run_id}/{i}") for i, _ in enumerate(drafts)]
+
+    def claim(self, company: str | None, key: str, payload: dict) -> bool:
+        # A rehearsal claims nothing, because it is not going to do anything
+        # that would need protecting from a second attempt.
+        return True
 
     def load_close(self, company: str | None, period: str) -> dict | None:
         return None
