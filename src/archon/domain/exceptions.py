@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 
 from .allocation import unsettled_loads
 from .models import (
@@ -31,6 +31,7 @@ from .models import (
     ExceptionKind,
     Finding,
 )
+from .periods import parse_date, period_bounds
 
 #: Two charges to the same counterparty for the same amount inside this window
 #: are a probable double-billing rather than a coincidence.
@@ -49,30 +50,10 @@ TAX_MIN_INVOICES = 3
 TAX_ABS_TOLERANCE = 0.50
 TAX_REL_TOLERANCE = 0.01
 
-_DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y")
-
-
-def parse_date(value: str | None) -> date | None:
-    """Best-effort date parse. Returns None rather than guessing."""
-    if not value:
-        return None
-    text = value.strip()
-    for fmt in _DATE_FORMATS:
-        try:
-            return datetime.strptime(text, fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
-def _period_bounds(period: str) -> tuple[date, date] | None:
-    try:
-        year, month = int(period[:4]), int(period[5:7])
-    except (ValueError, IndexError):
-        return None
-    first = date(year, month, 1)
-    last = date(year + (month == 12), (month % 12) + 1, 1)
-    return first, last
+# Both of these moved to `periods.py` when the ledger turned out to need the
+# same answer and was not asking anyone for it. Re-exported under their old
+# names because this module's callers and its tests import them from here.
+_period_bounds = period_bounds
 
 
 # ── detectors ────────────────────────────────────────────────────────────────

@@ -144,26 +144,37 @@ def test_every_journal_entry_carries_the_close_period():
     assert {e.period for e in result.ledger.entries} == {JULY}
 
 
-def test_filtering_the_roll_up_by_entry_period_would_change_nothing():
-    """The fix implied by the audit's root cause, applied: a no-op.
+def test_the_entry_period_predicate_the_audit_suggested_would_still_be_a_no_op():
+    """The reason the obvious fix was not the fix, kept because it is the trap.
 
-    If ``balances()`` grew the period predicate the audit says it lacks, it
-    would admit every entry it admits today, June invoice included, and July's
-    toll line would still read 1,156.20.
+    The audit's root cause pointed at `balances()` not reading `entry.period`,
+    which reads as "add the predicate". Adding it would have changed NOTHING:
+    the stamp comes from `doc.period`, which the extractor sets to the month
+    being closed, so every entry in a July ledger is stamped July whatever its
+    date. The predicate admits everything and the bug survives, now with a test
+    beside it asserting the fix is in place.
+
+    So this asserts the no-op is still a no-op, and that the books are right
+    anyway — which is only possible because the real fix keys off the date and
+    stops the entry posting in the first place.
     """
     ledger = close_july().ledger
 
     kept = [e for e in ledger.entries if e.period == ledger.period]
-    assert len(kept) == len(ledger.entries), "the predicate excludes nothing"
+    assert len(kept) == len(ledger.entries), (
+        "the stamp still admits every entry; if this ever fails, the extractor "
+        "changed what it writes into Document.period and this file should be re-read"
+    )
 
-    tolls_under_the_fix = round(
+    tolls = round(
         sum(line.debit - line.credit
             for entry in kept for line in entry.lines
             if line.account is Account.TOLLS_EXPENSE),
         2,
     )
-    assert tolls_under_the_fix == JULY_TOLLS_WITH_JUNE
-    assert tolls_under_the_fix != JULY_TOLLS_ALONE
+    assert tolls == JULY_TOLLS_ALONE, (
+        "July's tolls are July's, and not because of the predicate above"
+    )
 
 
 def test_the_only_surviving_signal_is_the_date():

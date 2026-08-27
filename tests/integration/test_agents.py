@@ -233,7 +233,7 @@ def test_the_agent_really_calls_its_tools_and_closes_the_month(monkeypatch):
     assert len(result.drafts) == 1
     assert result.decisions[0].applied is Disposition.DRAFT
     assert result.decisions[1].applied is Disposition.ESCALATE
-    assert result.statements.net_profit == 1_994.24     # the books, untouched
+    assert result.statements.net_profit == 2_406.84     # the books, untouched
 
 
 def test_the_agent_is_never_asked_anything_by_its_own_instruction():
@@ -291,12 +291,12 @@ def test_the_pipeline_runs_end_to_end_offline_and_hands_state_between_stages():
     stages = run_report_pipeline(facts, models=[
         ScriptedText("everything reconciles"),
         ScriptedText("three errors worth chasing"),
-        ScriptedText("July closed with 1,994.24 of profit."),
+        ScriptedText("July closed with 2,406.84 of profit."),
     ])
 
     assert stages["reconciliation"] == "everything reconciles"
     assert stages["exceptions"] == "three errors worth chasing"
-    assert stages["summary"] == "July closed with 1,994.24 of profit."
+    assert stages["summary"] == "July closed with 2,406.84 of profit."
 
 
 def test_the_gemini_narrator_returns_the_pipeline_summary():

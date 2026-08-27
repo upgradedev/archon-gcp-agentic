@@ -93,8 +93,8 @@ both figures are labelled, measured, and reproducible by pressing the button.
 Being precise about which value is which is the difference between a tool and
 a pitch.
 
-On the July it ships with: 23,005.00 billed over 10,810 miles against 21,010.76
-spent, a margin of 0.184 a mile. The five letters it wrote break into three
+On the July it ships with: 23,005.00 billed over 10,810 miles against 20,598.16
+spent, a margin of 0.223 a mile. The five letters it wrote break into three
 different things, and they are reported separately because adding them up
 produces a number that flatters us:
 
@@ -338,9 +338,9 @@ Over the bundled month, `python run.py`:
  = closed
 ```
 
-The month it found: 23,005.00 billed over 10,810 miles, 21,010.76 spent,
-1,994.24 of profit. That is 2.128 a mile earned against 1.944 a mile spent, and
-the 0.184 a mile left over is why the 612.85 that was quietly leaking matters
+The month it found: 23,005.00 billed over 10,810 miles, 20,598.16 spent,
+2,406.84 of profit. That is 2.128 a mile earned against 1.905 a mile spent, and
+the 0.223 a mile left over is why the 612.85 that was quietly leaking matters
 at all. On a fatter margin it would be noise.
 
 ### The nine things it looks for
@@ -589,7 +589,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 544 | `python -m pytest` |
+| Tests, all offline | 708 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -638,7 +638,7 @@ whether things are getting better. Two do:
 
 ```
 Against 2026-06: fuel up 139%, maintenance up 124%, factoring fees up 58%.
-The margin widened to 0.184 a mile, from 0.181.
+The margin widened to 0.223 a mile, from 0.181.
 ```
 
 Direction is not just a sign. Fuel rising is **worse** and revenue rising is

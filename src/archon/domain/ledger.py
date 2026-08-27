@@ -30,6 +30,7 @@ from .models import (
     JournalLine,
     Statements,
 )
+from .periods import belongs_to
 
 
 def _dr(account: Account, amount: float) -> JournalLine:
@@ -77,10 +78,51 @@ class Ledger:
     def add_all(self, docs: list[Document]) -> list[JournalEntry]:
         return [self.add(d) for d in docs]
 
+    @property
+    def posted(self) -> list[Document]:
+        """The documents that belong to this month, and therefore to its figures.
+
+        `self.documents` is everything that ARRIVED, and stays that way because
+        G6 has to be able to account for an artifact the owner sent whatever its
+        date. This is the narrower list every roll-up must use: revenue, costs,
+        miles and the per-truck table are statements about one month, and a June
+        load confirmation is not one of them.
+
+        Splitting the two is the whole fix. Before it, the money was rolled up
+        from entries (which posted regardless of date) and the miles from
+        `self.documents` (which never filtered), so a June load added its
+        distance to July's cost-per-mile even after the money stopped leaking.
+        """
+        return [d for d in self.documents if belongs_to(self.period, d.date)]
+
     def _post(self, doc: Document) -> JournalEntry:
         entry = JournalEntry(
             date=doc.date, period=doc.period, memo="", source_doc=doc.source_file
         )
+
+        # A document dated outside this month posts NOTHING. `find_out_of_period`
+        # has always said so in as many words -- "what it must not do is post it
+        # silently into the wrong month" -- and for as long as it said it, the
+        # figures went into the books anyway and `balances()` rolled up every
+        # entry with no period predicate at all.
+        #
+        # The check has to read the DATE. `doc.period` is the month being
+        # closed, stamped on every document by the extractor, so a June invoice
+        # read during a July close carries "2026-07" and the obvious comparison
+        # is always false. That is why this was never caught by inspection.
+        #
+        # Same deliberate-no-op shape as `_post_unreadable`: the entry survives
+        # on the trail carrying its reason, and the warning the detector already
+        # raises is what tells the owner. The month still closes, because a June
+        # invoice arriving in July mail is ordinary. It simply is not June's
+        # money counted as July's.
+        if not belongs_to(self.period, doc.date):
+            entry.memo = (
+                f"Dated {doc.date}, outside {self.period}. Recorded, not posted: "
+                f"{doc.source_file}"
+            )
+            return entry
+
         handler = getattr(self, "_post_" + doc.doc_type.value, None)
         if handler is None:
             entry.memo = f"Not posted: {doc.doc_type.value} {doc.source_file}"
@@ -261,7 +303,7 @@ class Ledger:
         # facts, and 0 says the first. The digest's opening sentence and the
         # per-mile panes read this field, so a zero here is a lie in the first
         # line the owner reads.
-        mileage_docs = [d for d in self.documents
+        mileage_docs = [d for d in self.posted
                         if d.doc_type == DocType.LOAD_CONFIRMATION]
         miles = (round(sum(d.miles or 0.0 for d in mileage_docs), 2)
                  if mileage_docs else None)
@@ -321,7 +363,7 @@ class Ledger:
                 name, {"miles": 0.0, "revenue": 0.0, "fuel": 0.0, "maintenance": 0.0}
             )
 
-        for doc in self.documents:
+        for doc in self.posted:
             if doc.doc_type == DocType.LOAD_CONFIRMATION:
                 row = bucket(doc.truck)
                 if row is not None:

@@ -62,11 +62,16 @@ def test_the_month_reads_like_a_real_thin_margin_haulier(documents):
     statements = close(documents).statements
 
     assert statements.revenue == 23_005.00
-    assert statements.operating_expenses == 21_010.76
-    assert statements.net_profit == 1_994.24
+    # Both moved when the ledger stopped posting a June toll invoice into July:
+    # `expense-toll-88231.txt` is dated 2026-06-28 and sits in the July mailbox
+    # on purpose, as the corpus's out-of-period case. It contributed 412.60 net
+    # (445.61 gross, the rest VAT) to July's costs for as long as the roll-up
+    # ignored dates, which made this month look thinner than it was.
+    assert statements.operating_expenses == 20_598.16
+    assert statements.net_profit == 2_406.84
     assert statements.total_miles == 10_810.0
     assert statements.revenue_per_mile == 2.128
-    assert statements.cost_per_mile == 1.944
+    assert statements.cost_per_mile == 1.905
 
 
 def test_three_trucks_each_carry_their_own_miles_and_direct_cost(documents):

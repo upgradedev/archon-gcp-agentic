@@ -138,21 +138,37 @@ def test_july_alone_produces_julys_figures():
 
 # ── the reproduction ─────────────────────────────────────────────────────────
 
-def test_the_ledger_does_not_roll_another_periods_entry_into_this_period():
-    """`_post` stamps `entry.period` from the document; `balances()` never reads it.
+def test_a_june_document_is_recorded_by_the_ledger_and_posts_nothing():
+    """What the defect looked like, and what replaced it.
 
-    The field is written and never used, so a June entry sitting in a July
-    ledger is indistinguishable from a July one at roll-up time. This is the
-    mechanism, isolated from the close runtime.
+    `_post` stamped `entry.period` from the document and `balances()` never read
+    it, so a June entry in a July ledger was indistinguishable from a July one
+    at roll-up time and June's figures became July's.
+
+    The stamp was never going to save it: `extract_document(text, period=...)`
+    writes the month being CLOSED onto every document it produces, so a June
+    invoice read during a July close carries `period="2026-07"` and any
+    comparison against the ledger's period is true by construction. The date is
+    the only field that still knows, which is what `belongs_to` reads.
+
+    Both halves are asserted here. The entry still EXISTS, carrying its reason,
+    because G6 has to account for an artifact the owner sent whatever its date;
+    and it posts no lines, so it cannot reach the books.
     """
     ledger = Ledger(period=JULY, company="Bell Ridge Haulage")
     ledger.add_all(june_in_the_july_mail())
 
-    june_entries = [e for e in ledger.entries if e.period == JUNE and e.lines]
-    assert len(june_entries) == 2, "both June documents should have posted entries"
-    assert ledger.period == JULY
+    june_entries = [e for e in ledger.entries if e.date.startswith(JUNE)]
+    assert len(june_entries) == 2, "both June documents must stay on the trail"
+    assert all(e.lines == [] for e in june_entries), "and neither may post a line"
+    assert all("outside 2026-07" in e.memo for e in june_entries), (
+        "the entry has to say why it posted nothing"
+    )
 
-    # The ledger knows these two entries belong to June. Its roll-up does not.
+    assert ledger.period == JULY
+    assert [d.source_file for d in ledger.documents] != [d.source_file for d in ledger.posted], (
+        "the arrived list and the posted list must differ, or nothing was excluded"
+    )
     assert figures(ledger.statements()) == JULY_ALONE
 
 
