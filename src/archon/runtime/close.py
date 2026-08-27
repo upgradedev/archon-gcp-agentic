@@ -36,6 +36,7 @@ tab nobody clicks.
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -191,20 +192,59 @@ class CloseResult:
         }
 
 
-def run_id_for(period: str, documents: list[Document]) -> str:
-    """A run id derived from the period and the exact documents in it.
+#: What makes two documents the same document to this product. Used to identify
+#: a run only when the raw bytes are not available to hash instead.
+_IDENTIFYING = ("document_number", "reference", "load_ref", "date", "direction",
+                "net_amount", "tax_amount", "gross_amount", "remittance_total",
+                "factoring_fee", "driver_net", "driver_gross", "miles",
+                "counterparty", "broker", "currency")
+
+
+def run_id_for(period: str, documents: list[Document],
+               raw_texts: dict[str, str] | None = None) -> str:
+    """A run id derived from the period and the CONTENT of the documents in it.
 
     Deriving it rather than randomising it makes a close idempotent in the way
-    that matters: re-running the same month over the same mail produces the same
-    run id, overwrites the same record, and does not litter the trail with
-    near-identical runs. Change one document and the id changes, which is
-    correct, because it is a different month.
+    that matters: the same month over the same mail produces the same run id,
+    overwrites the same record, and does not litter the trail with
+    near-identical runs.
+
+    The previous version hashed the period, the filenames and the document
+    families, and its docstring claimed "change one document and the id
+    changes". It did not. Correct a figure on an invoice and keep the filename,
+    which is exactly what a supplier reissuing a corrected document does, and
+    the id was identical -- so the corrected run FILED OVER the first one. Its
+    journal, its drafts and its stored close all went, and the immutable audit
+    trail this product sells kept one version of a month that had two.
+
+    What goes in now is what a reader would have to agree on before calling two
+    runs the same run: the period, the release that read the mail, and every
+    document identified by its bytes where they exist and by its figures where
+    they do not.
     """
+    def fingerprint(doc: Document) -> str:
+        name = doc.source_file or ""
+        parts = [f"doc={name}", f"type={doc.doc_type.value}"]
+        text = (raw_texts or {}).get(name)
+        if text is not None:
+            parts.append("sha=" + hashlib.sha256(text.encode("utf-8")).hexdigest())
+        else:
+            # An injected document, or one a caller built by hand. Fold in the
+            # figures so a changed amount still changes the id.
+            parts += [f"{f}={getattr(doc, f, None)!r}" for f in _IDENTIFYING]
+        return "|".join(parts)
+
+    # Sorting the FINGERPRINTS, not the documents. Sorting documents by name and
+    # family leaves two files with the same name and family tied, and a tie puts
+    # the order the mailbox happened to hand them over into the id. A month is a
+    # set of documents; the order they arrived in is not part of its identity.
     digest = hashlib.sha256()
     digest.update(period.encode())
-    for doc in documents:
-        digest.update((doc.source_file or "").encode())
-        digest.update(str(doc.doc_type.value).encode())
+    digest.update(b"|release=")
+    digest.update((os.getenv("ARCHON_RELEASE") or "dev").encode())
+    for line in sorted(fingerprint(d) for d in documents):
+        digest.update(b"|")
+        digest.update(line.encode())
     return f"{period}-{digest.hexdigest()[:10]}"
 
 
@@ -246,7 +286,8 @@ def run_close(period: str,
     if not commit:
         store = RehearsalStore()
         deliverer = delivery_mod.RehearsalDelivery()
-    run = RunJournal(run_id=run_id_for(period, documents), period=period, clock=clock)
+    run = RunJournal(run_id=run_id_for(period, documents, raw_texts),
+                     period=period, clock=clock)
     ledger = Ledger(period=period, company=company)
     stored: dict = {}
 
@@ -257,7 +298,14 @@ def run_close(period: str,
         for doc in documents:
             by_type[doc.doc_type.value] = by_type.get(doc.doc_type.value, 0) + 1
         for name, text in (raw_texts or {}).items():
-            store.put_document(name, text)
+            # Keyed by content, not by filename. `remittance.txt` corrected and
+            # re-sent is a DIFFERENT artifact with the same name, and storing it
+            # under the name alone filed it over the original -- so the raw
+            # evidence the trail points at was whichever copy arrived last, and
+            # the first one could not be produced again. The name is kept in the
+            # key because a human reading the store should still recognise it.
+            fingerprint = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+            store.put_document(f"{name}#{fingerprint}", text)
         origin = (f" from gs://{source['bucket']}/mail/{period}/"
                   if source and source.get("bucket") else "")
         step.note(
