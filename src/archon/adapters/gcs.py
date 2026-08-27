@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 
 from ..domain.extract import extract_document
 from ..domain.models import DocType, Document
@@ -141,6 +142,13 @@ def event_source(envelope: dict, period: str, manifest: dict) -> dict:
     attributes = message.get("attributes") or {}
     return {
         "mailbox": "gcs",
+        # Which BUILD read these bytes. `/api/health` reports the release it is
+        # running and separately the release that produced the last close, and
+        # the second was reading this field, which nothing wrote: it answered
+        # null on the deployed service, which is the same shape as the defect
+        # that pair of fields exists to close. A parser fix changes what the
+        # same bytes mean, so the build is part of the provenance.
+        "release": os.getenv("ARCHON_RELEASE") or None,
         "bucket": manifest["bucket"],
         "period": period,
         "trigger_object": attributes.get("objectId") or "",

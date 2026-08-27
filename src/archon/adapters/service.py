@@ -116,6 +116,7 @@ def _close(period: str, store=None, documents=None, raw=None, source=None,
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if source is None:
             source = {"mailbox": "bundled-sample",
+                      "release": os.getenv("ARCHON_RELEASE") or None,
                       "detail": f"corpus/{period}, the synthetic month shipped "
                                 "with the repository"}
 
