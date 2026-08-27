@@ -299,6 +299,21 @@ def test_a_visitor_who_asks_for_less_motion_gets_none(still_page, base_url):
     still_page.locator("#run").click()
     expect(still_page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
+    # Polled rather than read once. `renderTrail` replaces the whole of
+    # `#trail`, so a single `eval_on_selector_all` can land on nodes that were
+    # detached between the count assertion and the read, and
+    # `getComputedStyle` on a detached node returns "" for every property. That
+    # is what made this flake: the failure said `{''} == {'1'}`, which is not a
+    # step at the wrong opacity, it is a step that was not in the document.
+    still_page.wait_for_function(
+        """() => {
+            const steps = [...document.querySelectorAll('#trail .step')];
+            return steps.length === 11
+                && steps.every(s => getComputedStyle(s).opacity === '1');
+        }""",
+        timeout=10_000,
+    )
+
     opacities = still_page.eval_on_selector_all(
         "#trail .step", "els => els.map(e => getComputedStyle(e).opacity)")
 
