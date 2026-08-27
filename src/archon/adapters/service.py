@@ -35,7 +35,8 @@ from starlette.concurrency import run_in_threadpool
 from .. import PERIOD, __version__, paths
 from ..runtime.close import run_close
 from ..runtime.mailbox import available_periods, read_period
-from . import auth, gcs, headers
+from . import auth, gcs, headers, ratelimit
+from . import delivery as delivery_mod
 from .store import LocalStore, get_store
 
 log = logging.getLogger("archon.service")
@@ -92,13 +93,21 @@ def _narrator():
         return None
 
 
-def _close(period: str, store=None, documents=None, raw=None, source=None) -> dict:
+def _close(period: str, store=None, documents=None, raw=None, source=None,
+           *, public: bool = False, allow_model: bool = True) -> dict:
     """Run one close and return it as the shape the page renders.
 
-    `store` decides what the run is allowed to touch, and it is the whole of
-    the least-privilege control: the public route hands in an ephemeral store,
-    the trusted route hands in the durable one. The close itself cannot tell
-    the difference and produces identical books either way.
+    `store` decides what the run is allowed to touch, and it was described here
+    as "the whole of the least-privilege control". It was not, and the sentence
+    was the reason nobody looked further: the store was handed in and the
+    DELIVERER was not, so `run_close` resolved one from the environment. On a
+    deployment configured for real mail, an anonymous visitor pressing a demo
+    button put a message in the owner's inbox, and the page's own boot fetch
+    did it without anyone pressing anything.
+
+    `public=True` is what an anonymous caller gets. It hands in a deliverer
+    that has no code path that sends, so this is structural rather than a flag
+    that configuration can switch back on.
     """
     if documents is None:
         try:
@@ -112,19 +121,24 @@ def _close(period: str, store=None, documents=None, raw=None, source=None) -> di
 
     target = store if store is not None else get_store()
     previous = _previous_statements(period)
+    deliverer = delivery_mod.SandboxDelivery() if public else None
+    # `allow_model=False` is a hard refusal, not a preference: no agent, no
+    # narrator, no Gemini call of any kind. It is what a GET gets.
+    narrator = _narrator() if allow_model else None
 
     # The agent first, when it is switched on. A model that refuses, times out
     # or is not reachable must not take the judge's button down with it, so the
     # failure is logged with its reason and the deterministic path runs. Which
     # one produced the payload is stamped on it rather than inferred.
-    if USE_AGENT:
+    if USE_AGENT and allow_model:
         try:
             from .agents import run_agent_close
 
             result, _final = run_agent_close(
                 period=period, company=COMPANY, store=target,
-                previous=previous, narrator=_narrator(),
+                previous=previous, narrator=narrator,
                 documents=documents, raw=raw, source=source,
+                deliverer=deliverer,
             )
             if result is not None:
                 payload = result.to_dict()
@@ -137,8 +151,8 @@ def _close(period: str, store=None, documents=None, raw=None, source=None) -> di
 
     result = run_close(
         period=period, documents=documents, company=COMPANY,
-        store=target, narrator=_narrator(), raw_texts=raw, previous=previous,
-        source=source,
+        store=target, narrator=narrator, raw_texts=raw, previous=previous,
+        source=source, deliverer=deliverer,
     )
     payload = result.to_dict()
     payload["driver"] = "deterministic"
@@ -221,28 +235,54 @@ def periods() -> dict:
 
 
 @app.post("/api/close/{period}")
-def close_period(period: str) -> dict:
+def close_period(period: str, request: Request) -> dict:
     """Close a period now. This is what the button on the page calls.
 
-    Anonymous, and deliberately unable to write. The run happens against an
-    ephemeral in-memory store and is discarded when the response is sent, so a
-    stranger pressing the button cannot change anything the owner will read
-    later. The books are byte-identical to the trusted path; only their
-    lifetime differs.
+    Anonymous, and deliberately unable to write: the run happens against an
+    ephemeral in-memory store, so a stranger pressing the button cannot change
+    anything the owner will read later. The books are byte-identical to the
+    trusted path; only their lifetime differs.
+
+    It is also unable to SEND, and bounded in what it may spend. Neither was
+    true before: the store was handed in and the deliverer was not, and nothing
+    limited how often a stranger could start a thinking-model conversation on a
+    public URL.
     """
-    return _close(period, store=LocalStore())
+    caller = request.client.host if request.client else "unknown"
+    allowed, why = ratelimit.PUBLIC_CLOSES.check(caller)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=why)
+
+    with ratelimit.PUBLIC_CLOSES.slot() as slot:
+        if not slot.acquired:
+            raise HTTPException(
+                status_code=429,
+                detail=(f"{ratelimit.PUBLIC_CLOSES.concurrent} fresh closes are already "
+                        "running. The saved close is available now and is the same books."),
+            )
+        return _close(period, store=LocalStore(), public=True)
 
 
 @app.get("/api/close/{period}")
 def read_close(period: str) -> dict:
-    """The last close of a period, from the store.
+    """The last close of a period, from the store. A read, and only a read.
 
-    Falls back to running one when nothing is stored. A judge arriving at a
-    cold container should see a closed month, not an empty state explaining
-    that they need to press something first.
+    This used to fall back to RUNNING a close when nothing was stored, which
+    made a GET a side effect: the page fetches this on every load, so an
+    anonymous visitor arriving at a cold container started an agent close and,
+    before the deliverer was fixed, could put mail in the owner's inbox without
+    pressing anything. A refresh loop was an unbounded bill from a route that
+    reads.
+
+    So the fallback is a DETERMINISTIC close: no agent, no model call, nothing
+    delivered, nothing stored. It gives a judge the closed month they should
+    see on arrival, and it is honest about what produced it -- the payload is
+    stamped `driver: deterministic`, and the page says so.
     """
     stored = get_store().load_close(COMPANY, period)
-    return stored or _close(period, store=LocalStore())
+    if stored:
+        return stored
+    return _close(period, store=LocalStore(), public=True, allow_model=False)
 
 
 @app.post("/events")

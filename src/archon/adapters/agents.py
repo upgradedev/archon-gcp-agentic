@@ -127,11 +127,15 @@ class CloseSession:
                  previous=None, narrator=None,
                  documents: list[Document] | None = None,
                  raw: dict[str, str] | None = None,
-                 source: dict | None = None):
+                 source: dict | None = None, deliverer=None):
         self.period = period
         self.company = company
         self.store = store
         self.clock = clock
+        #: Handed in by the public routes so an anonymous close cannot reach a
+        #: real mail channel. None means "resolve from the environment", which
+        #: is correct for the trusted path and was the defect on the public one.
+        self.deliverer = deliverer
         #: Carried through so the agent path produces the SAME payload as the
         #: reference path. Without them the agent closes a month with no
         #: comparison against the one before, and the console's trends panel
@@ -356,7 +360,7 @@ class CloseSession:
             period=self.period, documents=self.documents, company=self.company,
             store=self.store, clock=self.clock, raw_texts=self.raw,
             previous=self.previous, narrator=self.narrator,
-            driver="adk-agent", source=self.source,
+            driver="adk-agent", source=self.source, deliverer=self.deliverer,
             decider=decider if choices is not None or verdict else None,
             # False for every call but the last. Nothing is durable and
             # nothing is delivered until `_commit` runs, because the agent has
@@ -402,7 +406,7 @@ def run_agent_close(period: str, company: str | None = None, model=None,
                     store=None, clock: Clock | None = None,
                     app_name: str = "archon", previous=None,
                     narrator=None, documents=None, raw=None,
-                    source=None) -> tuple[CloseResult | None, str]:
+                    source=None, deliverer=None) -> tuple[CloseResult | None, str]:
     """Let the ADK agent drive the close. Returns the result and its final word.
 
     This is the path the demo shows and the video records: one instruction in,
@@ -413,7 +417,8 @@ def run_agent_close(period: str, company: str | None = None, model=None,
 
     session = CloseSession(period=period, company=company, store=store, clock=clock,
                            previous=previous, narrator=narrator,
-                           documents=documents, raw=raw, source=source)
+                           documents=documents, raw=raw, source=source,
+                           deliverer=deliverer)
     agent = build_close_agent(session, model=model)
     runner = InMemoryRunner(agent=agent, app_name=app_name)
     user, session_id = "owner", f"close-{period}"

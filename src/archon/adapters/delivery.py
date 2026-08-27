@@ -175,3 +175,31 @@ class RehearsalDelivery:
             detail="rehearsal: composed but not sent, the close is not decided yet",
             recipient=digest.recipient,
         )
+
+
+class SandboxDelivery:
+    """Refuses to send, structurally, for anything a stranger can reach.
+
+    The public page has an anonymous button and an anonymous boot fetch. Both
+    reached `run_close` without passing a deliverer, so `get_deliverer()`
+    resolved one from the environment -- which on a deployment configured for
+    real mail is the real SMTP sender. A visitor pressing a demo button could
+    put a message in the owner's inbox, and the page's own page-load fetch
+    could do it without anyone pressing anything.
+
+    This is not a flag that can be switched on by configuration. It is the
+    object the public routes hand in, and it has no code path that sends.
+    """
+
+    channel = "sandbox"
+
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def deliver(self, digest: Digest) -> Receipt:
+        self.attempts += 1
+        return Receipt(
+            channel=self.channel, delivered=False,
+            detail="public sandbox: the digest was composed and filed, no message was sent",
+            recipient=digest.recipient,
+        )

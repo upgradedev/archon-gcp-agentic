@@ -113,3 +113,20 @@ def unreadable(name: str = "scan.pdf", reason: str = "no text layer") -> Documen
         doc_type=DocType.UNREADABLE, period=PERIOD, source_file=name,
         date="2026-07-19", failure_reason=reason,
     )
+
+
+@pytest.fixture(autouse=True)
+def _forget_public_rate_limit():
+    """The public close limiter is process-wide, so it leaks between tests.
+
+    Three presses per address per ten minutes is the production bound. In a
+    suite, the fourth test to press the anonymous button would get a 429 from
+    the presses of the three before it, and which three depends on collection
+    order. Cleared before and after every test so a limit test measures the
+    limit and nothing else measures it by accident.
+    """
+    from archon.adapters import ratelimit
+
+    ratelimit.PUBLIC_CLOSES.reset()
+    yield
+    ratelimit.PUBLIC_CLOSES.reset()
