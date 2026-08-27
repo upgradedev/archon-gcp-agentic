@@ -34,17 +34,28 @@ DRAFT_FOR_FINDING = {
 }
 
 
-def _money(amount: float, currency: str = "USD") -> str:
-    return f"{currency} {amount:,.2f}"
+#: The currency the letters in this module are written in. It is a module-level
+#: default rather than a field on every Finding because G7 refuses a month that
+#: mixes currencies, so a month that reaches the drafting step has exactly one
+#: and there is nothing to carry per finding.
+#:
+#: It mattered: `_money` took a currency parameter and not one caller passed it,
+#: so a euro payable was chased with "USD 7,303.60" written on the letter. The
+#: figure was right and the letter was wrong, which is the worse of the two.
+DEFAULT_CURRENCY = "USD"
 
 
-def _document_request(finding: Finding, company: str) -> Draft:
+def _money(amount: float, currency: str | None = None) -> str:
+    return f"{currency or DEFAULT_CURRENCY} {amount:,.2f}"
+
+
+def _document_request(finding: Finding, company: str, currency: str) -> Draft:
     return Draft(
         kind=DraftKind.DOCUMENT_REQUEST,
         recipient=finding.counterparty or "the supplier on this payment",
         subject=f"Missing documentation for payment {finding.reference}",
         body=(
-            f"We show a payment of {_money(finding.amount)} leaving our account "
+            f"We show a payment of {_money(finding.amount, currency)} leaving our account "
             f"referencing {finding.reference}, and we hold no invoice or receipt "
             f"against it.\n\n"
             f"Please send the supporting document so we can record the expense "
@@ -59,14 +70,14 @@ def _document_request(finding: Finding, company: str) -> Draft:
     )
 
 
-def _short_pay_dispute(finding: Finding, company: str) -> Draft:
+def _short_pay_dispute(finding: Finding, company: str, currency: str) -> Draft:
     return Draft(
         kind=DraftKind.SHORT_PAY_DISPUTE,
         recipient=finding.counterparty or "the broker",
         subject=f"Short payment on load {finding.reference}",
         body=(
             f"Your remittance settled load {finding.reference} "
-            f"{_money(finding.amount)} below the rate we confirmed.\n\n"
+            f"{_money(finding.amount, currency)} below the rate we confirmed.\n\n"
             f"{finding.message}\n\n"
             f"Please confirm whether a deduction was intended and on what basis, "
             f"or release the balance with your next remittance.\n\n"
@@ -79,14 +90,14 @@ def _short_pay_dispute(finding: Finding, company: str) -> Draft:
     )
 
 
-def _duplicate_refund(finding: Finding, company: str) -> Draft:
+def _duplicate_refund(finding: Finding, company: str, currency: str) -> Draft:
     return Draft(
         kind=DraftKind.DUPLICATE_REFUND,
         recipient=finding.counterparty or "the supplier on this charge",
-        subject=f"Duplicate charge of {_money(finding.amount)}",
+        subject=f"Duplicate charge of {_money(finding.amount, currency)}",
         body=(
             f"{finding.message}\n\n"
-            f"Please confirm the duplicate and credit {_money(finding.amount)} "
+            f"Please confirm the duplicate and credit {_money(finding.amount, currency)} "
             f"back to the account. If the two charges are genuinely separate, "
             f"send the detail for each and we will clear our query.\n\n"
             f"{company}"
@@ -98,14 +109,14 @@ def _duplicate_refund(finding: Finding, company: str) -> Draft:
     )
 
 
-def _payment_reminder(finding: Finding, company: str) -> Draft:
+def _payment_reminder(finding: Finding, company: str, currency: str) -> Draft:
     return Draft(
         kind=DraftKind.PAYMENT_REMINDER,
         recipient=finding.counterparty or "the broker",
         subject=f"Load {finding.reference} remains unpaid",
         body=(
             f"Load {finding.reference} was delivered and invoiced at "
-            f"{_money(finding.amount)}, and no part of it appears on any "
+            f"{_money(finding.amount, currency)}, and no part of it appears on any "
             f"remittance we have received.\n\n"
             f"Please confirm the payment date, or tell us what you still need "
             f"from us to release it.\n\n"
@@ -126,7 +137,8 @@ _BUILDERS = {
 }
 
 
-def draft_for(finding: Finding, company: str = "Accounts") -> Draft | None:
+def draft_for(finding: Finding, company: str = "Accounts",
+              currency: str = DEFAULT_CURRENCY) -> Draft | None:
     """The corrective document for one finding, or None if there is no honest one."""
     kind = DRAFT_FOR_FINDING.get(finding.kind)
     if kind is None:
@@ -135,12 +147,13 @@ def draft_for(finding: Finding, company: str = "Accounts") -> Draft | None:
         # Nothing to ask for. A zero-amount dispute wastes the recipient's time
         # and burns the owner's credibility with a counterparty they depend on.
         return None
-    return _BUILDERS[kind](finding, company)
+    return _BUILDERS[kind](finding, company, currency)
 
 
-def draft_all(findings: list[Finding], company: str = "Accounts") -> list[Draft]:
+def draft_all(findings: list[Finding], company: str = "Accounts",
+              currency: str = DEFAULT_CURRENCY) -> list[Draft]:
     """Draft a corrective document for every finding that warrants one."""
-    drafts = [draft_for(f, company) for f in findings]
+    drafts = [draft_for(f, company, currency) for f in findings]
     return [d for d in drafts if d is not None]
 
 
@@ -190,7 +203,8 @@ def recoverable(drafts: list[Draft]) -> float:
     return leakage(drafts)
 
 
-def draft_for_decisions(decisions, company: str = "Accounts") -> list[Draft]:
+def draft_for_decisions(decisions, company: str = "Accounts",
+                        currency: str = DEFAULT_CURRENCY) -> list[Draft]:
     """Write a letter for every finding that was decided to warrant one.
 
     The decisions come from `policy.apply_choices`, which has already overruled
@@ -201,7 +215,7 @@ def draft_for_decisions(decisions, company: str = "Accounts") -> list[Draft]:
     from .policy import Disposition
 
     drafts = [
-        draft_for(decision.finding, company)
+        draft_for(decision.finding, company, currency)
         for decision in decisions
         if decision.applied is Disposition.DRAFT
     ]

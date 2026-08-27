@@ -391,7 +391,13 @@ def run_close(period: str,
         )
 
     with run.step("draft", "Write the corrective documents") as step:
-        filed = drafts_mod.draft_for_decisions(decisions, company or "Accounts")
+        # One currency per month, guaranteed by G7, so the letters can be written
+        # in it rather than in a hard-coded default that made a euro payable
+        # read "USD 7,303.60".
+        month_currency = next(
+            (d.currency for d in ledger.posted if d.currency), "USD")
+        filed = drafts_mod.draft_for_decisions(
+            decisions, company or "Accounts", month_currency)
         escalated = [d for d in decisions if d.applied is Disposition.ESCALATE]
         step.note(
             f"{len(filed)} document(s) drafted and filed unsent: "

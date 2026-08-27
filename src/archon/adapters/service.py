@@ -186,9 +186,20 @@ def _previous_statements(period: str):
             return None
         from ..adapters.store import LocalStore
 
+        # A REHEARSAL, and this is the second time the same mistake was found
+        # in the same shape. The public route was given a sandbox deliverer and
+        # this call was not, so an anonymous press on the July button sent the
+        # owner a letter about JUNE: not the month anyone asked for, closed
+        # only to source a trend comparison, and mailed because nobody had
+        # thought of it as a close at all.
+        #
+        # `commit=False` is the whole answer rather than another deliverer to
+        # remember: nothing is stored, nothing is delivered, no model is
+        # called, and only the figures are kept. A month closed to be compared
+        # against is not a month being closed.
         return run_close(period=periods[index - 1], documents=documents,
                          company=COMPANY, store=LocalStore(),
-                         raw_texts=raw).statements
+                         raw_texts=raw, commit=False).statements
 
     fields = {f: stored["statements"].get(f) for f in Statements.__dataclass_fields__}
     return Statements(**fields)
@@ -205,18 +216,58 @@ def _model_id() -> str:
     return DEFAULT_MODEL
 
 
+def _last_successful_close() -> dict:
+    """What the last close that actually finished says about itself.
+
+    `close_path` reports what this deployment is CONFIGURED to do, and that is
+    a different fact from what it has DONE. A container with the agent switched
+    on whose every model call is failing still answers "adk-agent", so a judge
+    reading the health endpoint is told the sponsor claim holds while the
+    deterministic fallback is quietly carrying every close.
+
+    So the configured path and the observed one are now separate fields. This
+    one is read from the durable store, which is the only place that knows.
+    Failures are swallowed on purpose: health must answer even when the store
+    cannot, and an unknown last run is reported as unknown rather than as an
+    outage.
+    """
+    try:
+        stored = get_store().load_close(COMPANY, PERIOD)
+    except Exception:                                  # noqa: BLE001
+        return {"driver": None, "release": None, "run_id": None, "outcome": None}
+    if not stored:
+        return {"driver": None, "release": None, "run_id": None, "outcome": None}
+    return {
+        "driver": stored.get("driver"),
+        "release": (stored.get("source") or {}).get("release"),
+        "run_id": stored.get("run_id"),
+        "outcome": stored.get("outcome"),
+        "period": stored.get("period"),
+    }
+
+
 @app.get("/api/health")
 def health() -> dict:
     """Liveness, plus enough detail to tell which backend a deploy is using."""
     store = get_store()
+    last = _last_successful_close()
+    configured = "adk-agent" if USE_AGENT else "deterministic"
     return {
         "status": "ok",
         "version": __version__,
         "store": getattr(store, "backend", "unknown"),
         "gemini": USE_GEMINI,
-        # What a judge needs to check the sponsor claim without reading code:
-        # which path closes a month here, and which model it would reach for.
-        "close_path": "adk-agent" if USE_AGENT else "deterministic",
+        # Configured, observed, and whether they agree. The third is the one a
+        # judge actually wants: "degraded" means this deployment is set up to
+        # run the agent and the last close it finished did not.
+        "close_path_configured": configured,
+        "last_close": last,
+        "degraded": bool(
+            USE_AGENT and last.get("driver") and last.get("driver") != "adk-agent"
+        ),
+        # Kept under the old name because the page, the readiness gate and the
+        # video's preflight all read it. It still means "configured".
+        "close_path": configured,
         "model": _model_id() if (USE_AGENT or USE_GEMINI) else None,
         # Which build answered. K_REVISION is stamped by Cloud Run itself;
         # ARCHON_RELEASE is set at deploy time to the short commit, so a judge
