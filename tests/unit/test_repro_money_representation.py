@@ -368,9 +368,14 @@ def test_documents_a_thousand_small_charges_still_total_exactly() -> None:
     ledger = Ledger(period=PERIOD)
     ledger.add(fuel("FC-1", fills))
 
-    naive = sum(0.01 for _ in range(1000))
-    assert naive != 10.00                      # the drift is real in the abstract
-    assert ledger.statements().fuel == 10.00   # and absent from the books
+    # The claim is about the BOOKS, and only about the books. An earlier
+    # version asserted `sum(0.01 for _ in range(1000)) != 10.00` first, to show
+    # the drift it survives. That is not portable: whether a naive sum of a
+    # thousand hundredths lands exactly on 10.00 depends on the platform, and
+    # it passed on Windows and CPython 3.11 and failed on Linux and 3.12.
+    # A test that asserts floating point is imprecise is asserting the
+    # platform, not the product.
+    assert ledger.statements().fuel == 10.00
 
 
 def test_documents_the_allocation_identity_holds_on_binary_inexact_parts() -> None:

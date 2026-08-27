@@ -382,9 +382,10 @@ def test_documents_float_drift_is_neutralised_by_step_rounding(tmp_path) -> None
     documents, _ = mail(tmp_path, **{"fuelcard-FCN": statement})
     assert len(documents[0].fuel_lines) == 40
 
-    naive = sum(0.10 for _ in range(40))
-    assert naive != 4.00                         # the drift is real in the abstract
-
+    # Deliberately no assertion that the naive sum drifts first. Whether it
+    # does depends on the platform: the same line passed on Windows and CPython
+    # 3.11 and failed on Linux and 3.12. What is being tested is that the
+    # books land on the figure, whatever the arithmetic underneath did.
     ledger = Ledger(period=PERIOD)
     ledger.add_all(documents)
     assert ledger.statements().fuel == 4.00      # and absent from the books
