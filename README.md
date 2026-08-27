@@ -94,9 +94,12 @@ Being precise about which value is which is the difference between a tool and
 a pitch.
 
 On the July it ships with: 23,005.00 billed over 10,810 miles against 20,598.16
-spent, a margin of 0.223 a mile. The five letters it wrote break into three
+spent, a margin of 0.223 a mile. The letters it writes break into three
 different things, and they are reported separately because adding them up
-produces a number that flatters us:
+produces a number that flatters us. How MANY there are is not fixed: an
+agent decides which exceptions warrant a letter and which go to the owner
+instead, so the count moves between runs and a number printed here would be
+true of one of them:
 
 | | | |
 |---|---|---|
@@ -332,7 +335,7 @@ Over the bundled month, `python run.py`:
  + 9. File the close and mark the period
      period 2026-07 marked closed
  + 10. Write the owner their month-end letter
-     "2026-07 closed. 612.85 was quietly leaking, 5 letters ready" -> composed for
+     "2026-07 closed. 612.85 was quietly leaking, N letters ready" -> composed for
      owner@bellridgehaulage.example and filed; no channel is configured, so
      nothing left this machine
  = closed
@@ -426,7 +429,7 @@ sequenceDiagram
     A->>D: triage_exceptions
     D-->>A: 10 exceptions, 3 errors
     A->>D: draft_corrections
-    D-->>A: 5 letters, status=filed
+    D-->>A: letters, status=filed
     A->>D: verify_and_file
     D-->>F: books, drafts, 11-step trail
     A->>O: month-end digest, composed and filed
