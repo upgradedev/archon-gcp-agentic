@@ -136,9 +136,11 @@ def test_a_credit_increases_the_bank_balance_end_to_end() -> None:
 def test_direction_by_sign_alone_end_to_end() -> None:
     """A statement that encodes direction only in the sign of the amount.
 
-    `_money` parses the sign correctly, so the figures are right. Nothing ever
-    consults that sign to decide direction, so both lines default to "out" and
-    the month's bank movement comes out exactly inverted.
+    `_money` always parsed the sign correctly; nothing consulted it. Both lines
+    defaulted to "out" and the month's bank movement came out exactly
+    inverted -- a 4,400.00 error on 4,600.00 of real movement. `_direction`
+    now falls back to the sign when the statement carries no word for it,
+    which is the statement's other way of saying which way the money went.
     """
     ledger = Ledger(period="2026-07")
     for amount, reference in [("-1,200.00", "FUEL-OUT"), ("3,400.00", "BROKER-IN")]:
@@ -149,14 +151,14 @@ def test_direction_by_sign_alone_end_to_end() -> None:
             )
         )
 
-    # The amounts themselves parsed fine; only the direction is lost.
-    assert [d.net_amount for d in ledger.documents] == [-1200.00, 3400.00]
+    # `_money` always parsed the sign; the direction is where it now lands.
+    # The amount is stored as a magnitude so the sign is not applied twice.
+    assert [d.direction for d in ledger.documents] == ["out", "in"]
+    assert [d.net_amount for d in ledger.documents] == [1200.00, 3400.00]
 
     assert _bank_movement(ledger) == 2_200.00, (
-        f"1,200.00 left and 3,400.00 arrived, so the bank moved +2,200.00. "
-        f"The books moved it {_bank_movement(ledger):,.2f}: the sign is "
-        f"inverted because every line defaulted to 'out' and the negative "
-        f"amount was then posted as a negative credit to Bank."
+        f"1,200.00 left and 3,400.00 arrived, so the bank moved +2,200.00, "
+        f"and the books must agree. They moved it {_bank_movement(ledger):,.2f}."
     )
 
 
@@ -215,21 +217,34 @@ def test_spellings_that_do_work(spelling: str, expected: str) -> None:
     assert extract_document(_statement(spelling)).direction == expected
 
 
-def test_a_missing_direction_label_defaults_to_outgoing() -> None:
-    """No label at all is silently treated as money leaving the account."""
+def test_a_missing_direction_label_with_a_positive_amount_is_an_arrival() -> None:
+    """No word for it, but a positive amount still says which way it went.
+
+    This used to read "out" because "out" was the catch-all for everything the
+    prefix test did not recognise, which was almost everything.
+    """
     doc = extract_document(_statement(direction=None))
-    assert doc.direction == "out"
+    assert doc.direction == "in"
     assert doc.net_amount == 1200.00
 
 
-def test_the_misread_is_silent_because_g3_reads_the_same_field() -> None:
-    """No gate reports the corruption, which is what makes it dangerous.
+def test_a_statement_that_says_nothing_at_all_refuses_to_guess() -> None:
+    """No word, no sign, no direction. A guess here is a number in the owner's
+    books pointing the wrong way, so the field is left empty and the close
+    raises it rather than picking a side."""
+    doc = extract_document(_statement(direction=None, amount="0.00"))
+    assert doc.direction is None
 
-    G3 exists to catch "a fuel statement booked to the wrong side". It cannot
-    catch this one: `validation.py:89` derives the "observed" bank movement
-    from `doc.direction` — the very field the parser got wrong — and compares
-    it to a ledger built from that same field. Both sides move together, so
-    the drift is always zero.
+
+def test_a_credit_now_moves_the_bank_the_way_the_statement_says() -> None:
+    """Why no gate could ever have caught this, and why the parser had to be
+    the fix rather than the gate.
+
+    G3 derives its "observed" bank movement from `doc.direction` -- the very
+    field the parser got wrong -- and compares it to a ledger built from that
+    same field. Both sides moved together, so the drift was always zero and a
+    20,000.00 error reported "bank movement agrees". A gate cannot audit its
+    own input; the reading had to be right.
     """
     ledger = Ledger(period="2026-07")
     ledger.add(
@@ -242,16 +257,16 @@ def test_the_misread_is_silent_because_g3_reads_the_same_field() -> None:
     result = g3_bank_movement_agrees(ledger, ledger.documents)
 
     assert result.passed is True
-    assert "-10,000.00" in result.message
-    # i.e. the close reports "bank movement agrees" on a 20,000.00 error.
+    assert _bank_movement(ledger) == 10_000.00, "a CREDIT must move the bank up"
+    assert "-10,000.00" not in result.message
 
 
-def test_a_misread_credit_raises_a_bogus_payment_exception() -> None:
-    """The misread does not just corrupt the books, it invents an exception.
+def test_a_credit_no_longer_invents_a_payment_to_chase() -> None:
+    """The misread did not just corrupt the books, it invented work.
 
-    Because the arriving money is now an outgoing payment with no matching
-    document, the operator is handed a "payment without document" finding to
-    chase on cash that was never spent.
+    An arrival read as an outgoing payment with no matching document handed the
+    owner a "payment without document" finding, and sent them chasing cash that
+    was never spent. Read correctly, there is nothing to chase.
     """
     doc = extract_document(
         _statement("CREDIT", amount="10,000.00", reference="BROKER-PAYMENT-9"),
@@ -259,6 +274,6 @@ def test_a_misread_credit_raises_a_bogus_payment_exception() -> None:
     )
     findings = find_payments_without_documents([doc])
 
-    assert [(f.reference, f.amount) for f in findings] == [
-        ("BROKER-PAYMENT-9", 10_000.00)
-    ]
+    assert findings == [], (
+        "money arriving is not a payment without a document"
+    )

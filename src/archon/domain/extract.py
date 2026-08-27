@@ -422,10 +422,66 @@ def _driver_settlement(text: str, labels: dict[str, str], doc: Document) -> None
     doc.truck = _pick(labels, "unit", "truck")
 
 
+#: The words a bank statement uses for money leaving, and for money arriving.
+#: Matched as whole words, and the outbound set is consulted FIRST, because
+#: three of the commonest outbound wordings begin with the letters "in":
+#: "Internal transfer out", "Instant payment sent", "Interest charge". A prefix
+#: test on "in" reads all three as arrivals.
+_MONEY_OUT = frozenset({
+    "out", "outgoing", "outbound", "outward",
+    "debit", "dr", "withdrawal", "withdrawn",
+    "sent", "paid", "payment_sent", "charge", "charged", "fee",
+})
+_MONEY_IN = frozenset({
+    "in", "incoming", "inbound", "inward",
+    "credit", "cr", "deposit", "deposited",
+    "received", "receipt", "collection",
+})
+
+
+def _direction(written: str | None, amount: float | None) -> str | None:
+    """Which way the money moved, or None when the statement does not say.
+
+    The rule this replaces was `direction.startswith("in")` with "out" as the
+    unconditional catch-all, which is wrong in both directions at once. Every
+    real spelling of an arrival -- CREDIT, CR, DEPOSIT, "Payment received" --
+    was booked as money leaving the account, and the three outbound wordings
+    that begin with "in" were booked as money arriving. It was also the only
+    place a bank line's direction was decided anywhere in the product.
+
+    None means the statement did not say and the amount carried no sign. A
+    guess here is a number in the owner's books pointing the wrong way, so the
+    document is left unposted and the close raises it instead.
+    """
+    words = re.findall(r"[a-z]+", (written or "").lower())
+    if any(w in _MONEY_OUT for w in words):
+        return "out"
+    if any(w in _MONEY_IN for w in words):
+        return "in"
+    # No vocabulary matched. A signed amount is the statement's other way of
+    # saying it: -250.00 and (250.00) both mean money left.
+    if amount is not None and amount != 0:
+        return "out" if amount < 0 else "in"
+    return None
+
+
 def _bank_transaction(text: str, labels: dict[str, str], doc: Document) -> None:
-    direction = (_pick(labels, "direction") or "").lower()
-    doc.direction = "in" if direction.startswith("in") else "out"
-    doc.net_amount = _amount(labels, "amount")
+    amount = _amount(labels, "amount")
+    # Real statements rarely write "Direction". They write "Type: CR", or
+    # "Debit/Credit", or put it in the transaction description. Reading only
+    # the one label meant the commonest real column heading never reached the
+    # decision at all.
+    doc.direction = _direction(
+        _pick(labels, "direction", "type", "transaction type", "debit/credit",
+              "dr/cr", "movement", "entry type"),
+        amount,
+    )
+    # `direction` is the authority on which way the money went, so the amount is
+    # stored as a magnitude. Leaving a negative here applied the sign twice: a
+    # -1,200.00 line resolved to "out" and was then posted as a credit to Bank
+    # of -1,200.00, which is a debit of +1,200.00, and a month that moved
+    # +2,200.00 came out as +4,600.00.
+    doc.net_amount = None if amount is None else abs(amount)
     doc.reference = _pick(labels, "reference")
     doc.driver = _pick(labels, "driver")
     doc.counterparty = _pick(labels, "paid to", "description", "counterparty")

@@ -87,20 +87,24 @@ def test_documents_that_plain_bank_letterhead_alone_reaches_the_parser() -> None
     assert doc.doc_type is DocType.BANK_TRANSACTION
     assert doc.net_amount == 10_000.00
     assert doc.reference == "RM-2026-07-02"
-    # No evidence of direction was present anywhere on the artifact.
-    assert doc.direction == "out"
+    # No word for direction anywhere on the artifact, but a positive amount is
+    # the statement's other way of saying money arrived. It used to read "out",
+    # because "out" was the catch-all for everything not starting with "in".
+    assert doc.direction == "in"
 
 
-def test_documents_that_direction_has_no_alias_table() -> None:
-    """PASSES. `Type: CR` and `Type: Credit` are simply not seen.
+def test_direction_reads_the_column_headings_real_statements_use() -> None:
+    """`Type: CR` was the finding, and it is the commonest real heading.
 
-    Every other messy-key field goes through `_ALIASES`. `direction` does not,
-    so the commonest real column headings never reach the decision at all.
+    Every other messy-key field went through an alias list; `direction` read
+    exactly one label, so a statement that said `Type: Credit` never reached
+    the decision at all and fell to the "out" catch-all with everything else.
     """
-    for label in ("CR", "Credit", "DR", "Debit"):
+    for label, expected in (("CR", "in"), ("Credit", "in"),
+                            ("DR", "out"), ("Debit", "out")):
         doc = extract_document(
             _plain_statement("10,000.00", "RM-1", type_label=label))
-        assert doc.direction == "out", label
+        assert doc.direction == expected, label
 
 
 def test_documents_that_direction_is_never_left_unknown() -> None:
@@ -144,7 +148,10 @@ def test_a_month_encoded_by_sign_alone_comes_out_exactly_inverted() -> None:
         ledger.add(extract_document(_plain_statement(amount, reference),
                                     source_file=f"{reference}.txt"))
 
-    assert [d.net_amount for d in ledger.documents] == [-1200.00, 3400.00]
+    # The sign now lands in `direction`, and the amount is kept as a magnitude
+    # so that posting cannot apply the sign a second time.
+    assert [d.direction for d in ledger.documents] == ["out", "in"]
+    assert [d.net_amount for d in ledger.documents] == [1200.00, 3400.00]
 
     assert _bank_movement(ledger) == 2_200.00, (
         f"The two lines sum to +2,200.00 on the parser's own figures. The "
@@ -213,5 +220,10 @@ def test_g3_cannot_see_it_because_it_reads_the_same_field() -> None:
 
     result = g3_bank_movement_agrees(ledger, ledger.documents)
 
+    # G3 still passes, and now it passes over the right number. It never could
+    # have caught this: it derives "observed" from `doc.direction`, the field
+    # the parser got wrong, and compares it to a ledger built from the same
+    # field, so both sides moved together and the drift was always zero.
     assert result.passed is True
-    assert "-10,000.00" in result.message
+    assert _bank_movement(ledger) == 10_000.00
+    assert "-10,000.00" not in result.message
