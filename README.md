@@ -66,10 +66,14 @@ So Archon allocates instead, and then proves its own answer. What landed in the
 bank has to equal what the lines pay, less the fee charged once. When that leaves
 anything over, it says so rather than pushing it into a suspense account.
 
-A month of documents lands in a Cloud Storage bucket. Nothing is pressed. The
-bucket's own finalize notification publishes to a Pub/Sub topic, whose push
-subscription wakes a Cloud Run container with an OIDC token, and the close works
-through eleven steps: it classifies 27 artifacts, posts the double-entry journal,
+A month of documents lands in a Cloud Storage bucket, and then one empty object
+called `_READY` says the batch is complete. Nothing is pressed. The bucket's own
+finalize notification publishes to a Pub/Sub topic, whose push subscription wakes
+a Cloud Run container with an OIDC token; each document is acknowledged and held,
+and the marker starts the close. That marker is there because Cloud Storage never
+says "that was the last one", and without it a folder of 27 documents would close
+the month 27 times, 26 of them over a month that had not finished arriving. The
+close then works through eleven steps: it classifies 27 artifacts, posts the double-entry journal,
 splits the remittance, reconciles which loads were paid, finds the ten things
 that do not add up, writes
 the corrective letters, checks its own books against seven gates, and marks the
@@ -114,6 +118,14 @@ than quietly corrected.
 The letters to brokers and suppliers are written, costed and filed unsent. That is
 the one thing a person does, and it is deliberate: every step Archon takes can be
 re-run and produces the same books, but an email to a broker cannot be un-sent.
+
+You can work that gate on the demo. Approve or reject any letter and the state
+moves, with an audit line carrying the timestamp and what happens next. It is a
+public sandbox and it says so: nothing is sent, the decision is not kept, and the
+approver reads "sandbox visitor" where a configured deployment records a person.
+There is deliberately no server endpoint behind it, because one nobody can
+authenticate to is dead code and a fake identity in an audit trail is a worse lie
+than a missing button.
 
 Every figure above was computed by a deterministic ledger, never phrased by a
 model. Gemini's role is judgement and sequencing, not arithmetic: the ADK agent
