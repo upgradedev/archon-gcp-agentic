@@ -664,13 +664,27 @@ Not a diagram. This happened, on the URL above, and it is the part of the claim
 that is hardest to believe without seeing it.
 
 ```bash
-gcloud storage cp corpus/2026-07/remittance-MFX-RA-4417.txt \
+# The month's documents. Each is acknowledged and held; none closes anything.
+gcloud storage cp corpus/2026-07/*.txt \
     gs://upgradegr-archon-agentic-archon-mail/mail/2026-07/
+
+# The batch is complete. THIS closes the month.
+printf "" | gcloud storage cp - \
+    gs://upgradegr-archon-agentic-archon-mail/mail/2026-07/_READY
 ```
 
-An object landed in a bucket. Cloud Storage published an object-finalize
-notification, Pub/Sub pushed it to `/events` with an OIDC token, and Cloud Run
-closed the month. Nobody pressed anything, and nobody was watching.
+Objects landed in a bucket. Cloud Storage published an object-finalize
+notification for each, Pub/Sub pushed them to `/events` with an OIDC token, and
+Cloud Run answered `collecting` until the marker arrived. Then it closed the
+month. Nobody pressed anything, and nobody was watching.
+
+**Why a marker.** Cloud Storage never says "that was the last one". Without a
+batch-complete signal every object starts a close, so a folder of 27 documents
+runs the month 27 times: 26 of them over a month that has not finished
+arriving, and with the agent on each one is a model conversation. A settle
+window needs a durable timer, which a container that scales to zero does not
+have. So the signal is explicit: `ARCHON_BATCH_MARKER`, declared in
+`infra/main.tf`.
 
 **And the close reads the actual objects.** `/events` downloads every object
 under `mail/<period>/` in the bucket the event names, hashes each one, dedupes
@@ -716,7 +730,8 @@ mail bucket, the Pub/Sub topic and the push subscription. Then, to watch it fire
 with nobody touching it:
 
 ```bash
-gcloud storage cp corpus/2026-07/remittance-MFX-RA-4417.txt gs://your-project-archon-mail/mail/2026-07/
+gcloud storage cp corpus/2026-07/*.txt gs://your-project-archon-mail/mail/2026-07/
+printf "" | gcloud storage cp - gs://your-project-archon-mail/mail/2026-07/_READY
 ```
 
 ### Or let main deploy itself

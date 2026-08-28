@@ -109,6 +109,12 @@ variable "model_location" {
   default     = "global"
 }
 
+variable "batch_marker" {
+  description = "Object name under mail/<period>/ that means the batch is complete. Empty disables batching."
+  type        = string
+  default     = "_READY"
+}
+
 variable "release" {
   description = "short commit SHA of the image being deployed, shown on /api/health"
   type        = string
@@ -329,6 +335,20 @@ resource "google_cloud_run_v2_service" "archon" {
       env {
         name  = "ARCHON_AGENT_CLOSE"
         value = var.agent_close
+      }
+      # The batch-complete signal. Cloud Storage never says "that was the last
+      # one", so every OBJECT_FINALIZE would otherwise start a close and a
+      # bookkeeper dragging in a folder of 27 documents would run the month 27
+      # times: 26 of them over a month that had not finished arriving, each one
+      # a model conversation with the agent on.
+      #
+      # Declared here rather than defaulted in the code, because whether a
+      # month arrives as one object or as twenty-seven is a fact about a
+      # customer's bookkeeping. Ordinary uploads are acknowledged as
+      # `collecting`; this object closes the month.
+      env {
+        name  = "ARCHON_BATCH_MARKER"
+        value = var.batch_marker
       }
       env {
         name  = "ARCHON_USE_GEMINI"

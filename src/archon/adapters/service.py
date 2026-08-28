@@ -417,12 +417,22 @@ async def events(request: Request) -> JSONResponse:
     # Cloud Storage does not say "that was the last one", and a settle window
     # needs a durable timer that a scale-to-zero container does not have.
     #
-    # `ARCHON_BATCH_MARKER` names an object that means "the batch is complete".
-    # With it set, ordinary uploads are recorded and acknowledged, and only the
-    # marker closes the month: twenty-seven uploads plus one marker is one
-    # close. Unset, which is how this deployment currently runs, every object
-    # closes as before -- the demo drops a single file, so it never fans out,
-    # and changing the live trigger days before a deadline buys nothing.
+    # `ARCHON_BATCH_MARKER` names the object that means "the batch is
+    # complete". Ordinary uploads are recorded and acknowledged; only the
+    # marker closes the month, so twenty-seven uploads plus one marker is one
+    # close, one run journal and one set of drafts over the whole month.
+    #
+    # It is DECLARED BY THE DEPLOYMENT rather than defaulted in here, and
+    # `infra/main.tf` sets it to `_READY` so the live service has it on. That is
+    # the right home for it: whether a month arrives as one object or as
+    # twenty-seven is a fact about a customer's bookkeeping, not about this
+    # library, and a deployment whose mail genuinely arrives one whole month at
+    # a time should leave it unset.
+    #
+    # Baking the default in here was tried and reverted: it changed what every
+    # test that drives this route is testing, because "an object landed" stopped
+    # meaning "close the month" for all of them at once. The behaviour is worth
+    # having and the coupling is not.
     batch_marker = os.getenv("ARCHON_BATCH_MARKER", "").strip()
     if batch_marker:
         obj = ((envelope.get("message") or {}).get("attributes") or {}).get("objectId", "")
@@ -431,7 +441,12 @@ async def events(request: Request) -> JSONResponse:
             log.info("collecting %s for %s; waiting for %s", name, period, batch_marker)
             return JSONResponse(
                 {"status": "collecting", "period": period, "object": name,
-                 "reason": f"held until {batch_marker} says the batch is complete"},
+                 "reason": f"held until {batch_marker} says the batch is complete",
+                 # Named so that whoever is watching the logs, or curling this
+                 # route, is told what to do next rather than left wondering
+                 # why nothing happened.
+                 "next": f"upload an empty object named {batch_marker} under "
+                         f"mail/{period}/ to close the month"},
                 status_code=200)
 
     marker_key = gcs.dedupe_key(envelope, period)

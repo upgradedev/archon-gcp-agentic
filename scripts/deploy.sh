@@ -96,8 +96,11 @@ An unauthenticated POST to it gets a 403.
 To watch it fire with nobody touching it, drop a document into the bucket under
 a folder named for the period:
 
-  gcloud storage cp corpus/2026-07/remittance-MFX-RA-4417.txt \\
+  gcloud storage cp corpus/2026-07/*.txt \\
       gs://${BUCKET}/mail/2026-07/
+  # The batch-complete signal. Without it every object would close the
+  # month on its own, once per file.
+  printf "" | gcloud storage cp - gs://${BUCKET}/mail/2026-07/_READY
 
 Then read the run back:
 
