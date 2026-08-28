@@ -83,7 +83,12 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
         name = blob.name[len(prefix):]
         if not name:                                   # the prefix placeholder
             continue
-        if marker and name.lower() == marker.lower():
+        # An underscore prefix is the convention for a control object, and
+        # every marker this deployment has ever used carries one. Matching the
+        # convention rather than one exact name means a marker that had to be
+        # suffixed, because the bucket would not allow an overwrite, does not
+        # come back as an unreadable document and block the month.
+        if name.startswith("_") or (marker and name.lower().startswith(marker.lower())):
             # The batch-complete signal is a CONTROL object, not a document.
             # It has no extension and no content, so the fail-closed intake
             # below read it as an unreadable artifact, G6 refused the month and
@@ -91,7 +96,7 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
             # service, because it is the interaction of two changes that are
             # each correct on their own.
             skipped.append({"object": blob.name, "blocking": False,
-                            "reason": "batch-complete marker, not a document"})
+                            "reason": "control object, not a document"})
             continue
         if not name.endswith(".txt"):
             skipped.append({"object": blob.name, "reason": "not text",

@@ -358,14 +358,21 @@ def test_the_batch_marker_is_not_read_as_a_document(monkeypatch):
     client = FakeClient([
         blob("load-1.txt", load_text("L-9001", 1000.0)),
         blob("_READY", b""),
+        # A SUFFIXED marker, because a marker cannot always be overwritten: on
+        # this project's own bucket the owner holds bucket-level roles only, so
+        # re-closing a month needs a new object name. It must not come back as
+        # an unreadable document either.
+        blob("_READY2", b""),
+        blob("_notes", b"scratch"),
     ])
 
     documents, _raw, manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
 
     assert [d.doc_type for d in documents] == [DocType.LOAD_CONFIRMATION]
-    marker = next(s for s in manifest["skipped"] if s["object"].endswith("_READY"))
-    assert marker["blocking"] is False
-    assert "not a document" in marker["reason"]
+    controls = [s for s in manifest["skipped"] if not s["blocking"]]
+    assert {c["object"].rsplit("/", 1)[-1] for c in controls} == {
+        "_READY", "_READY2", "_notes"}
+    assert all("not a document" in c["reason"] for c in controls)
 
     gates = validate(_ledger_of(documents), [])
     assert next(g for g in gates if g.rule.startswith("G6")).passed is True

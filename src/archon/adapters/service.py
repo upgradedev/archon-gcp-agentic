@@ -437,7 +437,12 @@ async def events(request: Request) -> JSONResponse:
     if batch_marker:
         obj = ((envelope.get("message") or {}).get("attributes") or {}).get("objectId", "")
         name = obj.rsplit("/", 1)[-1]
-        if name and name.lower() != batch_marker.lower():
+        # STARTSWITH, not equals. A marker cannot always be overwritten: on
+        # this project's own bucket the owner holds bucket-level roles only and
+        # `gcloud storage cp` over an existing object returns 403 on
+        # `storage.objects.get`. Re-closing a month then needs a NEW object, so
+        # `_READY2` and `_READY-2026-08-28` have to count. Found by doing it.
+        if name and not name.lower().startswith(batch_marker.lower()):
             log.info("collecting %s for %s; waiting for %s", name, period, batch_marker)
             return JSONResponse(
                 {"status": "collecting", "period": period, "object": name,
