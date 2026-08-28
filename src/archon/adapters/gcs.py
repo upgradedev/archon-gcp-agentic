@@ -58,6 +58,9 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
         client = storage.Client()
 
     prefix = f"mail/{period}/"
+    # Read here rather than passed in, so the signature stays the two arguments
+    # every test double in this suite already wraps.
+    marker = os.getenv("ARCHON_BATCH_MARKER", "").strip()
     read: list[dict] = []
     skipped: list[dict] = []
     seen_hashes: dict[str, str] = {}
@@ -68,6 +71,16 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
                        key=lambda b: b.name):
         name = blob.name[len(prefix):]
         if not name:                                   # the prefix placeholder
+            continue
+        if marker and name.lower() == marker.lower():
+            # The batch-complete signal is a CONTROL object, not a document.
+            # It has no extension and no content, so the fail-closed intake
+            # below read it as an unreadable artifact, G6 refused the month and
+            # every batched close came back "blocked". Found on the live
+            # service, because it is the interaction of two changes that are
+            # each correct on their own.
+            skipped.append({"object": blob.name, "blocking": False,
+                            "reason": "batch-complete marker, not a document"})
             continue
         if not name.endswith(".txt"):
             skipped.append({"object": blob.name, "reason": "not text",

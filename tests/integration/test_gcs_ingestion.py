@@ -340,3 +340,32 @@ def test_a_transient_storage_failure_is_retryable_and_a_permanent_one_is_not(
     response = _post(envelope(generation="881"))
     assert response.status_code == 200, "a permanent failure must not redeliver forever"
     assert json.loads(response.body)["status"] == "error"
+
+
+def test_the_batch_marker_is_not_read_as_a_document(monkeypatch):
+    """The interaction of two changes that are each correct on their own.
+
+    `ARCHON_BATCH_MARKER` names a control object that means "the batch is
+    complete". It has no extension and no content, so the fail-closed intake
+    read it as an artifact that could not be read, turned it into an UNKNOWN
+    document, and G6 refused the month. Every batched close came back
+    `blocked`, over a month whose books were perfectly fine.
+
+    Found on the live service after deploying, not here, which is the argument
+    for closing a real month before calling the work done.
+    """
+    monkeypatch.setenv("ARCHON_BATCH_MARKER", "_READY")
+    client = FakeClient([
+        blob("load-1.txt", load_text("L-9001", 1000.0)),
+        blob("_READY", b""),
+    ])
+
+    documents, _raw, manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
+
+    assert [d.doc_type for d in documents] == [DocType.LOAD_CONFIRMATION]
+    marker = next(s for s in manifest["skipped"] if s["object"].endswith("_READY"))
+    assert marker["blocking"] is False
+    assert "not a document" in marker["reason"]
+
+    gates = validate(_ledger_of(documents), [])
+    assert next(g for g in gates if g.rule.startswith("G6")).passed is True
