@@ -369,3 +369,32 @@ def test_the_batch_marker_is_not_read_as_a_document(monkeypatch):
 
     gates = validate(_ledger_of(documents), [])
     assert next(g for g in gates if g.rule.startswith("G6")).passed is True
+
+
+def test_a_renamed_copy_never_displaces_the_document_it_was_copied_from():
+    """Which name the trail points at, when two objects hold the same bytes.
+
+    Content-hash dedupe keeps the first object read and folds the rest away.
+    Plain alphabetical order decided that, and `-` sorts before `.`, so
+    `remittance-MFX-RA-4417-redelivery-3.txt` beat
+    `remittance-MFX-RA-4417.txt`. The live manifest then reported the month's
+    actual remittance as a duplicate of an experimental copy of itself, which
+    reads to anyone inspecting provenance as though the real document was
+    ignored.
+
+    A copy is named after its original and is therefore longer. Shortest name
+    wins, and the rule needs no knowledge of which object the event named.
+    """
+    canonical = load_text("L-7105", 2460.0)
+    client = FakeClient([
+        blob("load-L-7105-redelivery-3.txt", canonical),
+        blob("load-L-7105.txt", canonical),
+        blob("zz-another-copy.txt", canonical),
+    ])
+
+    documents, _raw, manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
+
+    assert [d.source_file for d in documents] == ["load-L-7105.txt"]
+    folded = {s["object"].rsplit("/", 1)[-1] for s in manifest["skipped"]}
+    assert folded == {"load-L-7105-redelivery-3.txt", "zz-another-copy.txt"}
+    assert all("load-L-7105.txt" in s["reason"] for s in manifest["skipped"])

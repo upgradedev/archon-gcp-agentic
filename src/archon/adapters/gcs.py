@@ -67,8 +67,19 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
     documents: list[Document] = []
     raw: dict[str, str] = {}
 
+    # Shortest name first, then alphabetical. When two objects hold identical
+    # bytes the first one read wins and the rest are folded away, so this rule
+    # decides which name the trail points at.
+    #
+    # Plain alphabetical picked whichever sorted first, and `-` sorts before
+    # `.`, so `remittance-MFX-RA-4417-redelivery-3.txt` beat
+    # `remittance-MFX-RA-4417.txt` and the manifest reported the month's actual
+    # remittance as a duplicate of an experimental copy of itself. A copy is
+    # named after its original and is therefore longer: keeping the shorter
+    # name keeps the canonical one, and it needs no knowledge of which object
+    # the event named.
     for blob in sorted(client.list_blobs(bucket_name, prefix=prefix),
-                       key=lambda b: b.name):
+                       key=lambda b: (len(b.name), b.name)):
         name = blob.name[len(prefix):]
         if not name:                                   # the prefix placeholder
             continue

@@ -79,22 +79,57 @@ function setRunControls(state) {
   hero.disabled = state === "running";
 }
 
+//: Ticks while a close is running, so the status line answers "is it still
+//: going" rather than saying one thing for a minute. It is elapsed time and
+//: not a progress bar, because the close does not report progress and a bar
+//: that invents it is a lie a judge can catch by watching it.
+let ticking = null;
+
+function startTicking() {
+  const began = Date.now();
+  const say = () => {
+    const seconds = Math.round((Date.now() - began) / 1000);
+    $("status").textContent =
+      `Archon is reading the documents, closing the ledger and checking its `
+      + `work. ${seconds}s elapsed; a close on the thinking model usually takes `
+      + `about a minute.`;
+  };
+  say();
+  ticking = setInterval(say, 1000);
+}
+
+function stopTicking() {
+  if (ticking) clearInterval(ticking);
+  ticking = null;
+}
+
 async function close() {
   setRunControls("running");
   $("dot").className = "dot working";
-  $("status").textContent = "Archon is reading the documents, closing the ledger and checking its work. This can take a few minutes.";
+  startTicking();
   renderPhases(last ? last.journal : {steps: []}, true);
   $("error").classList.add("hidden");
   try {
     const res = await fetch(`/api/close/${period}`, { method: "POST" });
+    if (res.status === 429) {
+      // The limit is a product decision, so it gets a product sentence rather
+      // than a status code. It also points at the free alternative, which is
+      // the thing the visitor actually wants.
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail
+        || "This demo allows a few fresh closes per address. Press Replay to "
+           + "walk the saved close instead; it is the same books and costs nothing.");
+    }
     if (!res.ok) throw new Error(`the close returned ${res.status}`);
     last = await res.json();
+    stopTicking();
     render(last);
     setRunControls("complete");
     $("dot").className = `dot ${last.outcome === "closed" ? "ok" : "err"}`;
     $("status").textContent = `Close complete · ${last.outcome} · Review what needs attention or inspect the letters ready for approval.`;
   } catch (err) {
-    $("error").textContent = `Could not close the month: ${err.message}`;
+    stopTicking();
+    $("error").textContent = err.message;
     $("error").classList.remove("hidden");
     $("dot").className = "dot err";
     $("status").textContent = "The close did not finish. No books or letters were filed from this attempt.";
