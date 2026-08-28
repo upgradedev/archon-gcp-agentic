@@ -134,6 +134,15 @@ def test_the_provider_and_voice_are_pinned():
 
 
 def test_nothing_in_the_script_is_still_a_placeholder():
-    for segment in SEGMENTS:
-        both = segment["speechText"] + segment["captionText"]
-        assert not re.search(r"CHANGE-ME|FILL:|TODO|<[a-z]", both, re.IGNORECASE), segment["id"]
+    """Serialised, for the same reason as its sibling in test_claims_agree.
+
+    Both guards read two named fields, and the template instructions that
+    shipped for months lived in a third key neither of them looked at.
+    """
+    import json
+
+    everything = json.dumps(SPEC)
+
+    assert not re.search(r"CHANGE-ME|FILL:|TODO|<[a-z]", everything, re.IGNORECASE), (
+        "a placeholder survives in video/narration.json"
+    )

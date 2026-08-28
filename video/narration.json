@@ -1,7 +1,5 @@
 {
-  "_comment": "Copy this to <your repo>/video/narration.json, then replace every <PLACEHOLDER>. generate-narration.py refuses to synthesize while any < or > remains. Keys starting with an underscore are ignored by the pipeline.",
   "schemaVersion": "archon.submission-video/v1",
-  "_comment_provider": "elevenlabs reads the key from ELEVENLABS_API_KEY, then XI_API_KEY, then ELEVEN_LABS_KEY. google uses the gcloud access token of whoever is logged in, and reads languageCode, voice and speakingRate instead.",
   "provider": "elevenlabs",
   "elevenLabs": {
     "voiceId": "pNInz6obpgDQGcFmaJgB",
@@ -11,49 +9,42 @@
   "languageCode": "en-GB",
   "voice": "en-GB-Neural2-B",
   "speakingRate": 0.98,
-  "_comment_beats": "Seven beats, one per thing a judge has to be told, in the order the capture in video/capture-production.mjs holds them. captionText is what the viewer reads; speechText is what the voice says. They are separate on purpose: the caption carries exact names and figures a judge will check, and the speech carries the spelled-out form a text-to-speech engine pronounces correctly, so ADK is A D K and 2026-07 is July twenty twenty six. Deliberately no test count or any other number that moves: voicing one means re-rendering audio and re-cutting to the frame every time a test is added. Those live in the README, where each carries the command that produced it. Contract: each field 20 to 800 characters, ids matching [a-z][a-z-]{1,24}, each beat 3 to 40 seconds of measured speech, whole video 90 to 174 seconds. The measured total is not known until the generator runs once; read the figure it prints and cut or add words then, rather than guessing.",
   "segments": [
     {
       "id": "hook",
-      "_beat": "The problem, in the buyer's words. Name a segment, never a market. Nigerian poultry and catfish farms, not SMBs.",
       "captionText": "An owner-operator trucking firm running three to twelve trucks cannot close its books, because a broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight.",
       "speechText": "An owner operator trucking firm running three to twelve trucks cannot close its books, because a broker does not pay per load. It pays once a fortnight. One bank credit, covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight."
     },
     {
       "id": "surface",
-      "_beat": "The surface the buyer already opens. If the answer only ever appears on a page we built, this beat is a lie and the entry has shipped a twelfth tab.",
       "captionText": "The close ends as a letter for the owner: the month in the shape they would read it, composed and filed with a delivery receipt. Wire a mail channel and it is delivered; this public demo files it, and says so.",
       "speechText": "The close ends as a letter for the owner: the month in the shape they would read it, composed and filed with a delivery receipt. Wire a mail channel and it is delivered. This public demo files it, and says so."
     },
     {
       "id": "trigger",
-      "_beat": "What fires without anyone asking. A product nobody has to remember to open beats a product with a better interface.",
       "captionText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, the bucket notifies a Pub/Sub topic, its push subscription wakes a Cloud Run container, and a Google ADK agent closes the month.",
       "speechText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, the bucket notifies a Pub Sub topic, its push subscription wakes a Cloud Run container, and a Google A D K agent closes the month."
     },
     {
       "id": "live",
-      "_beat": "The anonymous path executing the flagship claim, not a neighbour of it. This is the beat the browser capture must actually be showing.",
       "captionText": "Eleven steps, unattended. It classifies 27 artifacts, posts the journal, splits the remittance across the eight loads it settles, and proves it: what landed equals what the lines pay, less the fee charged once. Then it finds a broker that paid 200 dollars light, a truck stop that charged 412.85 twice, and 1,865 dollars that left the account with nothing behind it.",
       "speechText": "Eleven steps, unattended. It classifies twenty seven artifacts, posts the journal, splits the remittance across the eight loads it settles, and proves it. What landed equals what the lines pay, less the fee charged once. Then it finds a broker that paid two hundred dollars light, a truck stop that charged four hundred and twelve dollars twice, and one thousand eight hundred and sixty five dollars that left the account with nothing behind it."
     },
     {
       "id": "sponsor",
-      "_beat": "One sentence naming how the sponsor's product is load-bearing. If removing it leaves the app working, it is not the hero and the entry will not place.",
       "captionText": "Remove Google ADK and the judgement goes with it: the trigger would still fire arithmetic, but nothing would weigh the exceptions or withhold a bad close. Remove Firestore and a container that scales to zero has nowhere to keep the trail. Gemini sequences and judges. It never touches a figure.",
       "speechText": "Remove Google A D K and the judgement goes with it: the trigger would still fire arithmetic, but nothing would weigh the exceptions or withhold a bad close. Remove Firestore and a container that scales to zero has nowhere to keep the trail. Gemini sequences and judges. It never touches a figure."
     },
     {
       "id": "evidence",
-      "_beat": "What a judge can check without asking us. Every claimed capability is reachable by an anonymous judge, or labelled not-deployed in the same sentence.",
       "captionText": "Every number came from a deterministic ledger, not from a model. The suite runs with no key and no network. Each of the seven gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
       "speechText": "Every number came from a deterministic ledger, not from a model. The test suite runs with no key and no network, and each of the seven gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
     },
     {
       "id": "close",
-      "_beat": "The one sentence to be republished. One mechanism, one consequence, nothing else. Organizers quote this almost verbatim, so write it first and cut it last.",
       "captionText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April.",
       "speechText": "Archon splits one broker payment back across the eight loads it settles, and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written, instead of a shoebox they will get to in April."
     }
-  ]
+  ],
+  "note": "No count of anything is voiced here on purpose: not tests, not detectors, not gates. Voicing a number that moves means re-synthesising audio and re-cutting to the frame every time the code changes. Numbers live in the README, where each one carries the command that produced it."
 }

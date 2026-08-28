@@ -128,6 +128,29 @@ jobs:
       - name: Test pyramid
         run: python -m pytest --cov=archon --cov-report=term-missing --cov-report=xml
 
+      # The sponsor's product, asserted to be LOAD-BEARING rather than present.
+      #
+      # The ADK tests guard themselves with `pytest.importorskip("google.adk")`,
+      # which is correct for a machine that has not installed an optional
+      # dependency and catastrophic as the only thing standing between this
+      # entry and a false claim. Measured: with `google.adk` made unimportable
+      # the whole suite still passed, zero failures, exit 0. Eighteen tests
+      # moved from passed to skipped and nothing went red, so a build that had
+      # lost the framework this entry is ABOUT would have reported success.
+      #
+      # Same shape as the Firestore emulator job below, and for the same
+      # reason: a skipped test proves exactly as much as no test.
+      - name: Google ADK is installed and its tests actually ran
+        run: |
+          set -o pipefail
+          python -c "import google.adk; print('google-adk', google.adk.__name__, 'importable')"
+          python -m pytest tests/integration/test_agents.py -v --no-header -rs             | tee /tmp/adk-tests.log
+          if grep -q "SKIPPED" /tmp/adk-tests.log; then
+            echo "an ADK test skipped; the sponsor claim proved nothing"
+            exit 1
+          fi
+          grep -qE "[0-9]+ passed" /tmp/adk-tests.log
+
       # The claim the entry is judged on, asserted as its own step so it is
       # visible in the run summary rather than buried in a dot.
       - name: The agent closes the month unattended

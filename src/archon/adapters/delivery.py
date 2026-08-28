@@ -149,9 +149,23 @@ def get_deliverer() -> Deliverer:
     )
 
 
+#: Where the digest is addressed when nothing else says. A real address on a
+#: reserved example domain, so it is obviously synthetic and obviously not a
+#: person's inbox.
+DEFAULT_OWNER = "owner@bellridgehaulage.example"
+
+
 def owner_address() -> str:
-    """Where the owner reads their mail."""
-    return os.getenv("ARCHON_OWNER_EMAIL", "owner@bellridgehaulage.example")
+    """Where the owner reads their mail.
+
+    `or` rather than a getenv default, and the difference is not stylistic.
+    Terraform declares `ARCHON_OWNER_EMAIL` and its variable defaults to the
+    empty string, so on the deployed service the variable is SET AND EMPTY.
+    `os.getenv(name, default)` returns the default only when the name is
+    ABSENT, so the live digest was addressed to nothing and the receipt read
+    "composed for  and filed", with the gap where a recipient should be.
+    """
+    return os.getenv("ARCHON_OWNER_EMAIL", "").strip() or DEFAULT_OWNER
 
 
 class RehearsalDelivery:

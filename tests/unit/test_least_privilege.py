@@ -188,3 +188,29 @@ def test_claims_that_are_not_a_mapping_are_refused(monkeypatch):
     monkeypatch.setenv(auth.AUDIENCE_ENV, "aud")
 
     assert not auth.verify_push_request("Bearer t", verifier=lambda t, a: "nope").allowed
+
+
+def test_an_env_var_that_is_set_and_empty_still_falls_back(monkeypatch):
+    """The trap that put a gap where a recipient should be.
+
+    Terraform declares `ARCHON_OWNER_EMAIL` and its variable defaults to the
+    empty string, so on the deployed service the variable was SET AND EMPTY.
+    `os.getenv(name, default)` returns the default only when the name is
+    ABSENT, so the live digest was addressed to nothing and its receipt read
+    "composed for  and filed" with a hole in the sentence.
+
+    Both states are asserted, because only one of them was ever tested.
+    """
+    from archon.adapters.delivery import DEFAULT_OWNER, owner_address
+
+    monkeypatch.delenv("ARCHON_OWNER_EMAIL", raising=False)
+    assert owner_address() == DEFAULT_OWNER
+
+    monkeypatch.setenv("ARCHON_OWNER_EMAIL", "")
+    assert owner_address() == DEFAULT_OWNER, "set-and-empty must not win"
+
+    monkeypatch.setenv("ARCHON_OWNER_EMAIL", "   ")
+    assert owner_address() == DEFAULT_OWNER, "whitespace is not an address"
+
+    monkeypatch.setenv("ARCHON_OWNER_EMAIL", "books@example.test")
+    assert owner_address() == "books@example.test"

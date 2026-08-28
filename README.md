@@ -301,9 +301,9 @@ uvicorn archon.adapters.service:app --reload
 
 Then open `http://localhost:8000`, press one button, and watch it run.
 
-The console has eight sections behind the tab rail: overview, open items,
-allocation, exceptions, letters, trends, fleet and checks. A switcher offers
-every month with mail on file. The tiles are controls rather than ornaments,
+The console has ten sections behind the tab rail: what Archon does, watch the
+agent, documents read, the allocation, open items, exceptions, letters, trends,
+fleet and checks. A switcher offers every month with mail on file. The tiles are controls rather than ornaments,
 because each one opens the ledger its number came out of.
 
 **Let the ADK agent drive it** (needs a Gemini key):
@@ -326,31 +326,39 @@ Over the bundled month, `python run.py`:
 
 ```
  + 1. Take in the month's mail
-     27 artifacts: bank transaction x6, broker remittance x1, driver settlement x3,
-     fuel card statement x1, insurance invoice x1, load confirmation x9,
-     maintenance invoice x2, toll invoice x3, unreadable x1
+     27 artifacts: bank transaction x6, broker remittance x1, driver
+     settlement x3, fuel card statement x1, insurance invoice x1, load
+     confirmation x9, maintenance invoice x2, toll invoice x3, unreadable
+     x1
  + 2. Post the double-entry journal
-     26 entries posted from 27 artifacts, 1 deliberately left unposted
+     25 entries posted from 27 artifacts, 2 deliberately left unposted
  + 3. Split each remittance across the loads it settles
      1 remittance(s) split across 8 loads; every one reconciles
  + 4. Reconcile loads against what the brokers paid
-     8 of 9 loads settled, 2 still outstanding
+     8 of 9 loads settled, 2 still outstanding; 5,100.00 owed to the firm
+     across 3 item(s), 3,564.75 owed by it across 5
  + 5. Find what is missing or does not add up
      10 exception(s), 3 of them errors, 2,477.85 at stake
- + 6. Write the corrective documents
+ + 6. Decide what to do about each exception
+     5 draft, 2 escalate, 3 note (standing policy)
+ + 7. Write the corrective documents
      5 document(s) drafted and filed unsent: 612.85 that would have leaked
-     away, 4,900.00 already owed and unpaid; 2 put in front of the owner instead
- + 7. Check the close against its own gates
+     away, 4,900.00 already owed and unpaid; 2 put in front of the owner
+     instead
+ + 8. Check the close against its own gates
      7/7 gates passed
- + 8. Write the month-end summary
-     summary written from a 60-line fact sheet; no figure was phrased by a model
- + 9. File the close and mark the period
-     period 2026-07 marked closed
- + 10. Write the owner their month-end letter
-     "2026-07 closed. 612.85 was quietly leaking, N letters ready" -> composed for
-     owner@bellridgehaulage.example and filed; no channel is configured, so
-     nothing left this machine
- = closed
+ + 9. Write the month-end summary
+     summary written from a 63-line fact sheet (deterministic); no figure
+     was phrased by a model
+ + 10. File the close and mark the period
+     period 2026-07 marked closed (closed with an unreadable document
+     escalated to the owner); books, 5 draft(s) and a 11-step trail
+     persisted to memory
+ + 11. Write the owner their month-end letter
+     "2026-07 closed. 612.85 was quietly leaking, 5 letters ready" ->
+     composed for owner@bellridgehaulage.example and filed; no channel is
+     configured, so nothing left this machine
+ = closed in 16 ms
 ```
 
 The month it found: 23,005.00 billed over 10,810 miles, 20,598.16 spent,
@@ -358,7 +366,7 @@ The month it found: 23,005.00 billed over 10,810 miles, 20,598.16 spent,
 the 0.223 a mile left over is why the 612.85 that was quietly leaking matters
 at all. On a fatter margin it would be noise.
 
-### The nine things it looks for
+### The ten things it looks for
 
 Every one has a deterministic detector, and every one fires on the bundled
 month, asserted by a test:
@@ -374,6 +382,7 @@ month, asserted by a test:
 | Unreconciled remittance | A remittance paying a load with no confirmation on file |
 | Out of period | A June toll invoice arriving in July's mail |
 | Unreadable document | A cab-phone scan with no text layer, left unposted rather than estimated |
+| Unrecognised document | An artifact that read perfectly and matched no family, so nothing was posted from it. Blocks the month at G6 rather than drafting a letter: the remedy is a parser, not a dispute |
 
 Every threshold is learned from the firm's own books. A charge is an outlier
 because it is far above what **this** firm normally pays **that** supplier, not
@@ -531,7 +540,7 @@ documents. An email to a broker cannot be un-sent.
 **Towards the owner, the close does not stop.** Step 10 writes them a letter and
 delivers it. That is their own books arriving at them, and holding it back until
 they remember to open a console we built is how an unattended agent becomes a tab
-nobody clicks. `archon/delivery.py` carries both a real SMTP deliverer on the
+nobody clicks. `src/archon/adapters/delivery.py` carries both a real SMTP deliverer on the
 standard library and a filing one that composes and sends nothing; the filing one
 is the default, which is why the demo and CI need no credential and why a judge
 sees the exact bytes that would arrive without anything leaving the machine.
@@ -543,7 +552,7 @@ is still unsent. If either half of that ever drifts, it goes red.
 ## What Google is doing here
 
 **Remove Google ADK and the judgement goes with it.** The tools in
-`archon/agents.py` are the close, one step each, and it is the ADK `Agent` that
+`src/archon/adapters/agents.py` are the close, one step each, and it is the ADK `Agent` that
 decides to call them, weighs each exception's disposition and can withhold a
 close every gate passed. To be precise about what remains: the bucket
 notification and Pub/Sub push still fire, and the deterministic engine can
@@ -557,13 +566,13 @@ filed letters, and the owner who looks on Monday has nothing to look at.
 
 | Concern | Google service | Where | Fallback |
 |---|---|---|---|
-| Agent framework | **Google ADK** `Agent` | `archon/agents.py` | none: no agent without it |
-| Multi-agent reporting | **ADK `SequentialAgent`** | `archon/agents.py` | deterministic narrator |
+| Agent framework | **Google ADK** `Agent` | `src/archon/adapters/agents.py` | none: no agent without it |
+| Multi-agent reporting | **ADK `SequentialAgent`** | `src/archon/adapters/agents.py` | deterministic narrator |
 | Model | **Gemini** | extraction and reporting | deterministic parser and narrator |
-| Memory | **Firestore** | `archon/store.py` | in-memory, for the demo and tests |
+| Memory | **Firestore** | `src/archon/adapters/store.py` | in-memory, for the demo and tests |
 | Serving | **Cloud Run** | `Dockerfile`, `scripts/deploy.sh` | local uvicorn |
 | Trigger | **Cloud Storage notification + Pub/Sub push** | `POST /events` | the button on the page |
-| Reaching the owner | SMTP, standard library | `archon/delivery.py` | compose and file, sending nothing |
+| Reaching the owner | SMTP, standard library | `src/archon/adapters/delivery.py` | compose and file, sending nothing |
 
 Firestore rather than a managed SQL instance, on purpose: what Archon persists
 is a document with a nested trail, written from a stateless container that is
@@ -604,7 +613,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 712 | `python -m pytest` |
+| Tests, all offline | 715 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -807,7 +816,7 @@ require the disclosure.
 | Carried across | From | What changed |
 |---|---|---|
 | `tests/adk_fakes.py` | an earlier Archon GCP build by the same author | unchanged in substance; re-headed |
-| The Firestore-or-local store seam in `archon/store.py` | the same build | widened from one collection to four |
+| The Firestore-or-local store seam in `src/archon/adapters/store.py` | the same build | widened from one collection to four |
 | The shape of the offline-first agent layer, and the injectable-model pattern | the same build | rewritten for this domain |
 
 Everything else in this repository was written for this entry: the trucking

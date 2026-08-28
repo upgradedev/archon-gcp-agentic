@@ -357,3 +357,38 @@ def test_the_release_stamp_and_the_image_tag_cannot_disagree():
     assert 'rev-parse --short HEAD)"\n' not in script.split("IMAGE=")[1][:120], (
         "the image tag computes its own SHA again instead of reusing RELEASE"
     )
+
+
+def test_google_adk_is_a_production_dependency_and_not_an_optional_one():
+    """The sponsor's product must be installed where the claim is made.
+
+    The ADK tests guard themselves with `pytest.importorskip("google.adk")`,
+    which is right for a contributor who has not installed an optional extra
+    and was, for a while, the ONLY thing standing between this entry and a
+    false claim. Measured by a reviewer: with `google.adk` made unimportable
+    the whole suite still passed, zero failures, exit 0. Eighteen tests moved
+    from the passed column to the skipped one and nothing went red.
+
+    Two things now stop that. CI imports `google.adk` explicitly and fails the
+    build if the ADK tests skipped, the same shape as the Firestore emulator
+    job. And this asserts the dependency is DECLARED for production rather
+    than for tests, so an image that ships without it cannot be built.
+    """
+    import tomllib
+
+    declared = tomllib.loads(
+        (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["dependencies"]
+    pinned = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+
+    assert any(d.replace("_", "-").startswith("google-adk") for d in declared), (
+        "google-adk is not in the runtime dependencies, so the agent path this "
+        "entry is judged on would be absent from a built image"
+    )
+    assert "google-adk" in pinned.replace("_", "-")
+
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "an ADK test skipped; the sponsor claim proved nothing" in workflow, (
+        "CI no longer fails when the ADK tests skip, which is the only thing "
+        "that turns a missing framework from quiet into red"
+    )

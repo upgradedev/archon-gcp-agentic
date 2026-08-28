@@ -407,7 +407,14 @@ function renderStats(d) {
      errs ? [`${errs} error${errs > 1 ? "s" : ""}`, "err"] : null],
     ["letters", "Leaking away", usd(d.leakage), "found by the checks, not by a person",
      d.drafts.length ? [`${d.drafts.length} letters ready`, "warn"] : null],
-    ["register", "Invoiced, unpaid", usd(d.outstanding), "letters drafted, none sent"],
+    // From the REGISTER, not from the letters. It used to read
+    // `usd(d.outstanding)`, which sums the payment-reminder drafts, so the
+    // headline said 0.00 on any run where the agent decided those exceptions
+    // were the owner's to chase rather than a broker's to answer, while the
+    // register two taps away still showed the money. A number on the front
+    // page must not depend on what got written about it.
+    ["register", "Owed to us", usd((d.register && d.register.owed_to_us) || 0),
+     "receivables still open"],
     ["checks", "Close", title(d.outcome),
      `${d.gates.filter((g) => g.passed).length}/${d.gates.length} gates passed`],
   ];

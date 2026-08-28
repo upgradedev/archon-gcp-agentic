@@ -365,6 +365,7 @@ def test_the_counts_this_repository_states_in_prose_match_the_code():
         ("README.md", 'exc["exceptions<br/>' + d + ' detectors"]'),
         ("README.md", 'val["validation<br/>' + g + ' gates"]'),
         ("README.md", "all " + d + " detectors"),
+        ("README.md", "The " + d + " things it looks for"),
         ("README.md", "against " + g + " gates"),
         ("src/archon/domain/exceptions.py", d.capitalize() + " detectors run over"),
         ("src/archon/runtime/close.py", d.capitalize() + " detectors, ranked"),
@@ -379,6 +380,18 @@ def test_the_counts_this_repository_states_in_prose_match_the_code():
     root = pathlib.Path(__file__).resolve().parents[2]
     missing = [f"{name}: {phrase!r}" for name, phrase in claims
                if phrase not in (root / name).read_text(encoding="utf-8")]
+
+    # The README's detector TABLE has to have a row per detector, not just the
+    # right word in the heading above it. It said nine and listed nine while
+    # the code ran ten, so the heading and the table agreed with each other and
+    # not with the product.
+    table = (root / "README.md").read_text(encoding="utf-8")
+    table = table.split("things it looks for")[1].split("Every threshold")[0]
+    rows = [ln for ln in table.splitlines() if ln.startswith("| ") and "---" not in ln]
+    assert len(rows) - 1 == len(detectors), (
+        f"the README lists {len(rows) - 1} detectors in its table and the code "
+        f"has {len(detectors)}"
+    )
 
     assert not missing, (
         f"the code has {len(detectors)} detectors, {len(gates)} gates and "

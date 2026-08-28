@@ -330,12 +330,27 @@ def test_the_readme_never_claims_compliance():
 
 
 def test_the_video_script_carries_no_placeholder():
+    """The WHOLE file, not the two fields anybody thought to name.
 
-    for segment in NARRATION["segments"]:
+    This checked `captionText` and `speechText` and passed for months over a
+    file whose first line read "Copy this to <your repo>/video/narration.json,
+    then replace every <PLACEHOLDER>". The kit's instructions to whoever filled
+    the template in shipped inside the submission, and the guard against
+    exactly that was looking at two keys that never contained them.
 
-        both = segment["captionText"] + segment["speechText"]
+    So it reads the serialised file. A placeholder anywhere is a placeholder.
+    """
+    import json
 
-        assert "<" not in both and ">" not in both, f"{segment['id']} still has a placeholder"
+    everything = json.dumps(NARRATION)
+
+    assert "<" not in everything and ">" not in everything, (
+        "a placeholder survives somewhere in video/narration.json"
+    )
+    for banned in ("CHANGE-ME", "TODO", "FILL:", "your repo", "Copy this to"):
+        assert banned.lower() not in everything.lower(), (
+            f"video/narration.json still carries the kit's {banned!r}"
+        )
 
 
 
@@ -693,3 +708,42 @@ def test_the_quickstart_names_a_module_that_can_actually_be_imported():
 
     for module in re.findall(r"uvicorn\s+([a-z_.]+):app", readme):
         importlib.import_module(module)
+
+
+def test_the_readme_console_block_is_what_the_command_actually_prints():
+    """The block a judge reads before they run anything.
+
+    It was hand-maintained and had drifted: it showed nine numbered steps where
+    the close runs eleven, "26 entries posted" where the ledger posts 25, and a
+    step 6 that skipped the agent's decision entirely. A reader who ran the
+    command got a different program than the one the README described, which is
+    the cheapest possible way to lose their trust.
+
+    Asserted step by step rather than as one string, because the run id and the
+    elapsed time move every run and a byte comparison would fail for the wrong
+    reason. What must match is the shape: the same numbered steps, in the same
+    order, with the same figures.
+    """
+    import subprocess
+    import sys
+
+    printed = subprocess.run(
+        [sys.executable, "run.py"], cwd=ROOT, capture_output=True, text=True,
+    ).stdout
+
+    block = README.split("Over the bundled month, `python run.py`")[1]
+    block = block.split("```")[1]
+
+    steps = [ln.strip() for ln in block.splitlines() if ln.startswith(" + ")]
+    assert len(steps) == 11, f"the README shows {len(steps)} steps; the close runs 11"
+
+    for step in steps:
+        assert step in printed, (
+            f"the README claims a step the command does not print: {step!r}"
+        )
+
+    # And the figures under them, which are the part a judge checks.
+    for figure in ("27 artifacts", "7/7 gates passed", "2,477.85 at stake"):
+        assert figure in printed and figure in block, (
+            f"{figure!r} disagrees between the README and the command"
+        )
