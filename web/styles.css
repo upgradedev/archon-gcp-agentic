@@ -517,3 +517,16 @@
   .skip-link:focus { left: 12px; top: 12px; }
   .panel:focus { outline: none; }
   .panel:focus-visible { outline: 2px solid var(--primary-hi); outline-offset: 6px; }
+
+  /* The one human gate, operable. Buttons sit under the letter they act on, so
+     a judge who scrolls to a draft has the decision in the same eyeline. */
+  .draft-actions {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+  }
+  .draft-actions button { font-size: 12.5px; padding: 7px 12px; }
+  .draft-actions .approve { border-color: var(--positive); color: var(--positive); }
+  .draft-audit {
+    flex: 1 1 100%; color: var(--text-3); font-size: 11.5px; line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }

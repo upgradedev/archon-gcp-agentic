@@ -522,3 +522,46 @@ def test_a_tile_badge_never_lands_on_top_of_its_own_label(browser, base_url, wid
         )
     finally:
         context.close()
+
+
+def test_a_visitor_can_work_the_one_human_gate(page, base_url):
+    """The control the page claims, made operable and honest about its limits.
+
+    The letters panel said "a person presses send" and gave nobody anything to
+    press. A control claim with nothing to control is the worst version of it:
+    a judge reads the sentence, looks for the button, and concludes the
+    approval boundary is a paragraph.
+
+    So it is a real decision with a real state change and a real audit line,
+    and it says three true things about itself in the copy beside it: no
+    message is sent, the decision is not kept, and the approver on a configured
+    deployment would be a person rather than "sandbox visitor".
+    """
+    page.goto(base_url, wait_until="networkidle")
+    expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
+    page.locator('.tab[data-panel="letters"]').click()
+
+    drafts = page.locator("[data-draft]")
+    expect(drafts.first).to_be_visible()
+    expect(page.locator('[data-state="0"]')).to_have_text("filed, not sent")
+
+    page.locator('[data-decide="approve"][data-index="0"]').click()
+    expect(page.locator('[data-state="0"]')).to_have_text("approved, not sent")
+
+    audit = page.locator('[data-audit="0"]')
+    expect(audit).to_contain_text("approved by sandbox visitor")
+    expect(audit).to_contain_text("nothing was sent")
+
+    page.locator('[data-decide="reject"][data-index="1"]').click()
+    expect(page.locator('[data-state="1"]')).to_have_text("rejected")
+    expect(page.locator('[data-audit="1"]')).to_contain_text("rejected by sandbox visitor")
+    expect(page.locator('[data-audit="1"]')).to_contain_text("no letter leaves")
+
+    # The claim the whole gate rests on: a decision on this page cannot reach a
+    # third party. Asserted by what the page says, because the page is what a
+    # judge reads, and by the absence of any request leaving on the click.
+    posts = []
+    page.on("request", lambda r: posts.append(r.url) if r.method == "POST" else None)
+    page.locator('[data-decide="approve"][data-index="2"]').click()
+    expect(page.locator('[data-state="2"]')).to_have_text("approved, not sent")
+    assert posts == [], f"an approval reached the server: {posts}"

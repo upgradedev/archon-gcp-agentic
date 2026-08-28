@@ -491,7 +491,7 @@ function renderDigest(digest, receipt) {
 // letter the owner has to take on trust.
 function renderDrafts(list, findings) {
   const byRef = new Map((findings || []).map((f) => [f.reference, f]));
-  $("drafts").innerHTML = list.map((d) => {
+  $("drafts").innerHTML = list.map((d, i) => {
     const f = byRef.get(d.reference);
     const cause = f ? `<div class="dispute">
         <h4>${esc(words(f.kind))} · ${esc(f.reference)}</h4>
@@ -501,13 +501,66 @@ function renderDrafts(list, findings) {
         <h4>no single finding</h4>
         <div class="d-msg">This letter summarises more than one line of the books.</div>
       </div>`;
-    return `<div class="dispute-pair">${cause}<div class="draft">
-      <h3>${esc(d.subject)} <span class="pill warn">filed, not sent</span></h3>
+    return `<div class="dispute-pair">${cause}<div class="draft" data-draft="${i}">
+      <h3>${esc(d.subject)} <span class="pill warn" data-state="${i}">filed, not sent</span></h3>
       <div class="to">${esc(words(d.kind))} · to ${esc(d.recipient)} · ${usd(d.amount)}</div>
       <pre>${esc(d.body)}</pre>
+      <div class="draft-actions">
+        <button class="approve" data-decide="approve" data-index="${i}">Approve</button>
+        <button class="ghost" data-decide="reject" data-index="${i}">Reject</button>
+        <button class="ghost" data-copy="${i}">Copy the letter</button>
+        <span class="draft-audit" data-audit="${i}"></span>
+      </div>
     </div></div>`;
   }).join("");
 }
+
+// The one human gate, made operable rather than described.
+//
+// The page said "a person presses send" and gave nobody anything to press,
+// which is the worst version: a control claim with no control. It is a
+// SANDBOX approval and it says so in as many words. Nothing is sent, because
+// the deliverer the public routes are handed has no code path that sends, and
+// nothing is kept, because an anonymous visitor may not write to the owner's
+// store. What it demonstrates is the state a real deployment records: who
+// decided, when, and what happened next.
+function decideDraft(index, decision) {
+  const pill = document.querySelector(`[data-state="${index}"]`);
+  const audit = document.querySelector(`[data-audit="${index}"]`);
+  if (!pill || !audit) return;
+
+  const approved = decision === "approve";
+  pill.textContent = approved ? "approved, not sent" : "rejected";
+  pill.className = `pill ${approved ? "ok" : "err"}`;
+
+  // An ISO timestamp, because an audit line with a friendly date is not an
+  // audit line. `sandbox` stands where an authenticated deployment records the
+  // approver, and saying so is the point.
+  audit.textContent =
+    `${new Date().toISOString()} · ${approved ? "approved" : "rejected"} by sandbox visitor · `
+    + (approved
+        ? "a configured deployment would deliver here, exactly once, and record the receipt"
+        : "no letter leaves, and the exception stays open for the owner")
+    + " · nothing was sent and this decision is not kept";
+}
+
+document.addEventListener("click", (event) => {
+  const decide = event.target.closest("[data-decide]");
+  if (decide) {
+    decideDraft(decide.dataset.index, decide.dataset.decide);
+    return;
+  }
+  const copy = event.target.closest("[data-copy]");
+  if (copy) {
+    const letter = document.querySelector(`[data-draft="${copy.dataset.copy}"] pre`);
+    if (letter && navigator.clipboard) {
+      navigator.clipboard.writeText(letter.textContent).then(() => {
+        copy.textContent = "Copied";
+        setTimeout(() => { copy.textContent = "Copy the letter"; }, 2000);
+      }).catch(() => { copy.textContent = "Select the text above"; });
+    }
+  }
+});
 
 function renderGates(list) {
   const rows = list.map((g) => `<tr>
