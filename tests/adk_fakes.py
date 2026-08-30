@@ -27,6 +27,7 @@ class ScriptedLlm(BaseLlm):
     Each action is either:
       ("call", tool_name, args_dict)  → emit a function call
       ("text", "some final text")     → emit a text response (ends the turn)
+      ("raise", SomeError("..."))     → the model dies mid-conversation
 
     ADK re-invokes the model after each tool result, so a turn's actions should
     end with a ("text", ...) action. Once the script is exhausted the model
@@ -53,6 +54,11 @@ class ScriptedLlm(BaseLlm):
             _, name, args = action
             part = types.Part(function_call=types.FunctionCall(name=name, args=dict(args)))
             yield LlmResponse(content=types.Content(role="model", parts=[part]))
+        elif kind == "raise":
+            # A model that dies mid-conversation, which is the only way to
+            # exercise what happens to work the agent has ALREADY committed
+            # when the call after it fails.
+            raise action[1]
         else:
             yield LlmResponse(content=types.Content(
                 role="model", parts=[types.Part(text=action[1])]))

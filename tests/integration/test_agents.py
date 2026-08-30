@@ -416,3 +416,49 @@ def test_an_agent_that_stops_early_does_not_publish_its_rehearsal_as_the_close()
         "a rehearsal was returned as the close; the caller cannot tell it apart")
     assert store.load_close("Bell Ridge Haulage", PERIOD) is None, (
         "nothing should be filed when the agent never filed anything")
+
+
+def test_a_model_that_dies_after_filing_does_not_file_and_deliver_a_second_time():
+    """`verify_and_file` is the one step with side effects: it writes the books
+    and hands the owner their digest. If the model then fails -- the stream
+    drops, the final text errors, the quota runs out one call later -- the
+    exception used to propagate out of `run_agent_close`, and the service's
+    fallback ran the WHOLE deterministic close again.
+
+    That files a second copy of the month over the agent's, replacing its
+    decisions with standing policy, and composes the owner a second digest that
+    contradicts the first one they already have.
+
+    The agent's work was finished. The failure happened after it, and a failure
+    after the last step is not a reason to redo the last step.
+    """
+    pytest.importorskip("google.adk")
+    from archon.adapters.agents import run_agent_close
+    from tests.adk_fakes import ScriptedLlm
+
+    store = LocalStore()
+    delivered: list = []
+
+    class CountingDelivery:
+        def send(self, message):
+            delivered.append(message)
+            return {"status": "delivered"}
+
+    model = ScriptedLlm([
+        ("call", "take_in_mail", {}),
+        ("call", "post_journal", {}),
+        ("call", "allocate_remittances", {}),
+        ("call", "triage_exceptions", {}),
+        ("call", "decide_actions", {"actions": {"0": "note"}}),
+        ("call", "draft_corrections", {}),
+        ("call", "verify_and_file", {}),
+        ("raise", RuntimeError("the model dropped after the books were filed")),
+    ])
+
+    result, _final = run_agent_close(
+        period=PERIOD, company="Bell Ridge Haulage", model=model,
+        store=store, clock=FixedClock(), deliverer=CountingDelivery())
+
+    assert result is not None, (
+        "the filed close was thrown away because the model died after filing")
+    assert len(delivered) <= 1, f"the owner got {len(delivered)} digests for one month"
