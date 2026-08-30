@@ -469,3 +469,29 @@ def test_an_uppercase_extension_is_still_a_text_file():
 
     assert [s for s in manifest.get("skipped", []) if "not text" in s["reason"]] == []
     assert len(documents) == 1, "an uppercase extension is still text"
+
+
+def test_a_folder_placeholder_does_not_block_the_month():
+    """Clicking "create folder" in the Cloud Console writes a zero-byte object
+    whose name ends in a slash. The extension test called it "not text" and
+    blocked the period -- permanently, because this bucket's owner holds
+    `legacyBucketOwner`, which carries no object permissions, so they cannot
+    delete it either. An ordinary click in Google's own UI, and the month
+    stops closing with no way back.
+
+    A file the product genuinely cannot read must still block. That is G6's
+    whole job, and the two cases are told apart by zero bytes and a trailing
+    slash, which no real document has.
+    """
+    client = FakeClient([
+        blob("load-1.txt", load_text("L-9001", 1234.0)),
+        blob("scans/", b""),
+        blob("receipt.pdf", b"%PDF-1.7 not text"),
+    ])
+
+    documents, _raw, manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
+
+    blocking = [s for s in manifest["skipped"] if s["blocking"]]
+    assert [s["object"] for s in blocking] == [f"mail/{PERIOD}/receipt.pdf"], (
+        "the folder placeholder blocked the month, or the pdf stopped blocking it")
+    assert any("folder placeholder" in s["reason"] for s in manifest["skipped"])

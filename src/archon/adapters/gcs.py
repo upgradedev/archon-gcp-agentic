@@ -127,6 +127,22 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
             skipped.append({"object": blob.name, "blocking": False,
                             "reason": "batch-complete marker, not a document"})
             continue
+        # A folder placeholder is not an artifact the owner sent. Clicking
+        # "create folder" in the Cloud Console writes a zero-byte object whose
+        # name ends in a slash, and the extension test called it "not text" and
+        # blocked the period -- permanently, because the bucket's owner holds
+        # `legacyBucketOwner`, which carries no object permissions, so they
+        # cannot delete it either. An ordinary click in Google's own UI could
+        # stop a month closing with no way back.
+        #
+        # Narrow on purpose: zero bytes AND a trailing slash. A real document
+        # has neither, and `receipt.pdf` or `notes.md` must keep blocking --
+        # those are artifacts somebody sent that the product cannot read, which
+        # is exactly what G6 is for.
+        if name.endswith("/") and not (blob.size or 0):
+            skipped.append({"object": blob.name, "blocking": False,
+                            "reason": "folder placeholder, not a document"})
+            continue
         # Case-folded, because the extension is the bookkeeper's typing and not
         # a protocol. `INVOICE.TXT` off a Windows scanner is a text file; the
         # exact-case test called it "not text" and blocked the month over it.
