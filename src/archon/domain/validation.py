@@ -246,7 +246,17 @@ def validate(ledger, results: list[AllocationResult]) -> list[ValidationResult]:
     return [
         g1_entries_balance(ledger),
         g2_remittances_reconcile(results),
-        g3_bank_movement_agrees(ledger, ledger.documents),
+        # `posted`, not `documents`, and the distinction is the whole gate.
+        # `booked` below comes from `ledger.balances()`, which only sees what
+        # `_post` accepted, and `_post` already refuses anything dated outside
+        # the period. Passing everything that ARRIVED put the two sides of one
+        # equality over two different populations: a June bank line in July's
+        # mail entered `observed` and could never enter `booked`, so the drift
+        # refused a month whose profit was correct to the cent. It cancelled
+        # the other way too -- an out-of-period amount could offset a genuine
+        # in-period error and make G3 report zero drift over wrong books.
+        # G7 already uses `posted` for exactly this reason.
+        g3_bank_movement_agrees(ledger, ledger.posted),
         g4_no_double_posting(ledger),
         g5_unreadable_left_unposted(ledger),
         g6_every_document_was_accounted_for(ledger),

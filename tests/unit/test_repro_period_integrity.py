@@ -29,10 +29,13 @@ it replaces.
 """
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 
 from archon.adapters.store import LocalStore
 from archon.domain import validation as validation_mod
+from archon.domain.extract import extract_document
 from archon.domain.ledger import Ledger
 from archon.domain.models import DocType, Document, ExceptionKind
 from archon.domain.policy import Disposition
@@ -286,3 +289,42 @@ def test_december_edges_are_kept_too(period, date):
             if f.kind is ExceptionKind.OUT_OF_PERIOD] == []
     assert result.statements.tolls == 250.00
     assert result.outcome == "closed"
+
+
+def test_a_late_bank_page_does_not_block_a_month_whose_books_are_right():
+    """G3 compared a period-scoped ledger against an unfiltered document list.
+
+    `booked` comes from `ledger.balances()`, which only sees what `_post`
+    accepted, and `_post` already refuses anything dated outside the period.
+    `observed` was built from `ledger.documents`, which is everything that
+    ARRIVED. Two populations, one equality.
+
+    So an ordinary late statement page -- a June bank line in July's mail, which
+    this product's own README lists as a normal detected exception and which its
+    own detector rates a warning -- put an amount into `observed` that could
+    never reach `booked`, and the drift refused the month.
+
+    The books are not wrong. Net profit is identical to the cent either way.
+    A gate that blocks a correct month is worse than no gate: it teaches the
+    owner that a refusal means nothing.
+
+    It runs the other way too, which is worse still: an out-of-period document
+    can cancel an equal genuine in-period discrepancy, and G3 then reports zero
+    drift over books that really are wrong.
+    """
+    june = pathlib.Path("corpus/2026-06/bank-2026-06-30-1.txt")
+    july = sorted(pathlib.Path("corpus/2026-07").glob("*.txt"))
+    documents = [extract_document(p.read_text(encoding="utf-8"),
+                                  source_file=p.name, period=JULY)
+                 for p in july]
+    documents.append(extract_document(june.read_text(encoding="utf-8"),
+                                      source_file=june.name, period=JULY))
+
+    result = run_close(period=JULY, documents=documents,
+                       company="Bell Ridge Haulage", store=LocalStore(),
+                       commit=False)
+
+    g3 = next(g for g in result.gates if g.rule.startswith("G3"))
+    assert g3.passed, "a correct month was refused over a document dated last month"
+    assert result.outcome == "closed"
+    assert result.statements.net_profit == 2406.84
