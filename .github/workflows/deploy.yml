@@ -114,13 +114,47 @@ jobs:
       # widening a deployment identity so a log line can be printed is the wrong
       # direction. gcloud still WAITS for the build and still fails this step if
       # the build fails; the logs stay in Cloud Build, linked from the output.
+      # Submit, then poll. NOT `gcloud builds submit` on its own, and not
+      # `--suppress-logs` either -- that was tried on 22ec4ec and failed
+      # identically. This gcloud checks whether it CAN stream the build log
+      # before it decides not to, that check needs Viewer on the project, and
+      # without it the command exits 1 with
+      #
+      #   This tool can only stream logs if you are Viewer/Owner of the project
+      #
+      # while the build it started runs to completion and pushes a correct
+      # image. Twice now a green artifact has sat behind a red pipeline for a
+      # reason that had nothing to do with the deployment.
+      #
+      # `--async` never opens the log path at all, so the exit code becomes
+      # ours to decide from the build's own terminal status. That is stricter
+      # than the original: every non-SUCCESS state is named and fails the step,
+      # including the ones a stream would have scrolled past.
+      #
+      # The alternative was `roles/viewer` on the deploy account. Rejected: it
+      # is the one credential here that can change production, and widening it
+      # so a log line can be printed is the wrong direction.
       - name: Build the image
         run: |
           set -euo pipefail
-          gcloud builds submit . \
-            --tag "gcr.io/${PROJECT_ID}/${SERVICE}:${{ steps.target.outputs.short }}" \
+          IMAGE="gcr.io/${PROJECT_ID}/${SERVICE}:${{ steps.target.outputs.short }}"
+          BUILD_ID="$(gcloud builds submit . \
+            --tag "${IMAGE}" \
             --project "${PROJECT_ID}" \
-            --suppress-logs
+            --async \
+            --format='value(id)')"
+          echo "build ${BUILD_ID}: https://console.cloud.google.com/cloud-build/builds/${BUILD_ID}?project=${PROJECT_ID}"
+          for _ in $(seq 1 180); do
+            STATUS="$(gcloud builds describe "${BUILD_ID}" \
+              --project "${PROJECT_ID}" --format='value(status)')"
+            case "${STATUS}" in
+              SUCCESS) echo "build ${BUILD_ID} SUCCESS -> ${IMAGE}"; exit 0 ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                echo "::error::build ${BUILD_ID} ended ${STATUS}"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::build ${BUILD_ID} still ${STATUS} after 30 minutes"; exit 1
 
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
         with:
