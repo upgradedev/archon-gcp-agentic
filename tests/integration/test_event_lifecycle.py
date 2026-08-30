@@ -23,7 +23,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -204,7 +204,7 @@ def test_a_holder_that_died_with_its_instance_does_not_block_the_month_forever(
     than the lease cannot still be working."""
     store, closes = wired
     env = load_event("503")
-    stale = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    stale = (datetime.now(UTC) - timedelta(hours=2)).isoformat()
     store.save_close(service.COMPANY, gcs.dedupe_key(env, PERIOD),
                      {"period": PERIOD, "status": "processing", "claimed_at": stale})
 
@@ -219,7 +219,7 @@ def test_a_live_holder_is_still_told_to_come_back(wired):
     """The guard on the fix. A claim taken seconds ago IS someone working."""
     store, closes = wired
     env = load_event("504")
-    fresh = datetime.now(timezone.utc).isoformat()
+    fresh = datetime.now(UTC).isoformat()
     store.save_close(service.COMPANY, gcs.dedupe_key(env, PERIOD),
                      {"period": PERIOD, "status": "processing", "claimed_at": fresh})
 
@@ -254,7 +254,7 @@ def test_a_permanently_failing_event_is_recorded_and_acked_not_retried_to_expiry
 # -- the decision itself, without a store, a bucket or a route ---------------
 
 def verdict(marker: dict, age_seconds: int = 0) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if "claimed_at" not in marker and marker.get("status") == "processing":
         marker = dict(marker, claimed_at=(
             now - timedelta(seconds=age_seconds)).isoformat())

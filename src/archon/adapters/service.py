@@ -26,7 +26,7 @@ import binascii
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -99,7 +99,7 @@ def _lease_expired(claimed_at, now: datetime, lease: int) -> bool:
     except (TypeError, ValueError):
         return True
     if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
+        when = when.replace(tzinfo=UTC)
     return (now - when).total_seconds() > lease
 
 
@@ -132,7 +132,9 @@ def claim_verdict(marker: dict, now: datetime, lease: int = EVENT_LEASE_SECONDS,
     if status == "failed":
         return "dead-letter" if attempt >= max_attempts else "retake"
     if status == "processing":
-        return "wait" if not _lease_expired(marker.get("claimed_at"), now, lease)             else "retake"
+        if _lease_expired(marker.get("claimed_at"), now, lease):
+            return "retake"
+        return "wait"
     # An unrecognised status is not a reason to refuse a month forever.
     return "retake"
 
@@ -551,7 +553,7 @@ async def events(request: Request) -> JSONResponse:
         # a lock in memory, `create()` in Firestore, which fails when the
         # document exists. Losing the race is now indistinguishable from
         # arriving second, which is what it always was.
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mine = get_store().claim(COMPANY, marker_key,
                                  {"period": period, "status": "processing",
                                   "claimed_at": now.isoformat(), "attempt": 1})
@@ -671,7 +673,7 @@ async def events(request: Request) -> JSONResponse:
                 {"period": period,
                  "status": "dead-letter" if spent else "failed",
                  "attempt": attempt, "reason": reason,
-                 "failed_at": datetime.now(timezone.utc).isoformat()})
+                 "failed_at": datetime.now(UTC).isoformat()})
         return JSONResponse(
             {"status": "dead-letter" if spent else "failed", "period": period,
              "attempt": attempt, "reason": reason},
@@ -680,7 +682,7 @@ async def events(request: Request) -> JSONResponse:
         get_store().save_close(COMPANY, marker_key,
                                {"period": period, "status": "closed",
                                 "run_id": result["run_id"], "attempt": attempt,
-                                "closed_at": datetime.now(timezone.utc).isoformat()})
+                                "closed_at": datetime.now(UTC).isoformat()})
     return JSONResponse(
         {
             "status": "closed",

@@ -132,7 +132,7 @@ def compose(result, recipient: str, company: str | None = None) -> Digest:
                          f"part you would not have caught.")
         if owed:
             lines.append(f"  {_money(owed):>14}  is work you invoiced and nobody has paid. "
-                         f"Owed already, now chased.")
+                         f"The letter chasing it is written and waiting on you.")
         if undocd:
             lines.append(f"  {_money(undocd):>14}  left the account with no paperwork. "
                          f"Recovers nothing; it is a tax and completeness problem.")
@@ -152,8 +152,8 @@ def compose(result, recipient: str, company: str | None = None) -> Digest:
         )
     elif result.drafts:
         lines.append(
-            f"  Read the {len(result.drafts)} letters and press send on the ones you agree "
-            f"with. I have not sent any of them, and I will not."
+            f"  Read the {len(result.drafts)} letters and approve the ones you agree with. "
+            f"I have not sent any of them, and I will not."
         )
     else:
         lines.append("  Nothing. The month is closed and there is nothing outstanding.")

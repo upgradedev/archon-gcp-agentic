@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from datetime import UTC
 
 import pytest
 
@@ -293,14 +294,14 @@ def test_a_redelivery_during_a_running_close_is_told_to_come_back(wired):
     container that died mid-close used to block its month until the message
     expired. `test_a_holder_that_died_with_its_instance_does_not_block_the_month_forever`
     is the other side of this assertion."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     store, _runs = wired
     env = envelope(generation="777")
     key = gcs.dedupe_key(env, PERIOD)
     store.save_close(service.COMPANY, key,
                      {"period": PERIOD, "status": "processing", "attempt": 1,
-                      "claimed_at": datetime.now(timezone.utc).isoformat()})
+                      "claimed_at": datetime.now(UTC).isoformat()})
 
     response = _post(env)
 

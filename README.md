@@ -4,10 +4,11 @@
 [![Readiness](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-*The readiness badge is red on purpose and will stay red until the demo URL
-below is real. It is a submission gate, not a build gate: it fetches the live
-judge URL and refuses to pass while that URL is a placeholder. The CI badge
-covers the secret scan, the build and the tests.*
+*The readiness badge is a submission gate, not a build gate: it fetches the
+live judge URL below and refuses to pass while that URL is a placeholder or
+down. It was red for most of this build, on purpose, and it is green now
+because the URL is real and answering. The CI badge covers the secret scan, the
+build, the tests and the browser journey.*
 
 > **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April.**
 
@@ -242,8 +243,12 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
     seam**, recording delivered or filed on the receipt, because a haulier does
     not open a bookkeeping console on the first of the month, they are driving
 
-Nobody is asked anything at any point. The one thing a person does is press send
-on the letters that leave for a third party.
+Nobody is asked anything at any point. The one thing a person does is approve
+the letters that would leave for a third party. On this deployment that
+approval is a SANDBOX: the page records who decided and when, and nothing is
+sent, because no delivery channel is configured in any file under `infra/` and
+the deliverer the public routes are handed has no code path that sends. A
+configured deployment is where the approval would actually release a letter.
 
 **The trigger**: an object landing in the Cloud Storage bucket. The bucket
 notifies a Pub/Sub topic, and its push subscription calls the service with an
@@ -361,6 +366,18 @@ Over the bundled month, `python run.py`:
  = closed in 16 ms
 ```
 
+**The live demo prints two of these lines differently, and that is the point.**
+`python run.py` is the deterministic path: standing policy decides each
+exception, and step 6 reads `5 draft, 2 escalate, 3 note` over a 63-line fact
+sheet. The deployed service runs with `ARCHON_AGENT_CLOSE=1`, so the ADK agent
+makes those dispositions itself, and it reads `5 draft, 3 escalate, 2 note`
+over 66 lines -- it escalates one thing policy would only have noted. Same
+month, same books, same 2,406.84, same seven gates: the agent's judgement moves
+the DISPOSITIONS and cannot move the arithmetic. If the two blocks agreed
+exactly, the agent would be decorative. You can see which one produced a given
+payload without asking: `/api/close/2026-07` is stamped `driver`, and it says
+`adk-agent` live and `deterministic` on the cold-start path.
+
 The month it found: 23,005.00 billed over 10,810 miles, 20,598.16 spent,
 2,406.84 of profit. That is 2.128 a mile earned against 1.905 a mile spent, and
 the 0.223 a mile left over is why the 612.85 that was quietly leaking matters
@@ -473,7 +490,7 @@ not done.
 | Pillar | What this build does | Residual gap |
 |---|---|---|
 | Operational excellence | Every run writes an eleven-step journal to Firestore with counts per step, so an unattended close can be retraced. `POST /api/close/{period}` re-runs it deterministically | No alerting and no SLO. Nobody is paged if a month fails to close |
-| Security | The domain layer holds no credential and reaches no network. Secrets come from environment only, and the SMTP password never reaches a receipt or a stored document, asserted by a test | `POST /events` is unauthenticated so the demo needs no account. A forged Pub/Sub envelope can trigger a close |
+| Security | The domain layer holds no credential and reaches no network. Secrets come from environment only, and the SMTP password never reaches a receipt or a stored document, asserted by a test. `POST /events` verifies an OIDC token for this service's own audience and answers 403 to anyone else | The page and `/api/close/{period}` are open to anyone, deliberately, so a judge needs no account. There is no tenancy: one company, one bucket, one set of books |
 | Reliability | A model outage, a mail server outage or a deliverer raising cannot fail a close: each is caught and the deterministic path continues. Seven gates block a close that cannot verify its own books | Single region, no retry budget, no dead-letter topic on the push subscription |
 | Cost optimisation | Firestore and Cloud Run both cost nothing when idle, which is the shape of a business that closes its books twelve times a year | No budget alert configured |
 | Performance efficiency | The close is 27 artifacts and finishes in about 15 ms locally, because the engine is pure Python over in-memory structures | Never load tested. A firm with 40 trucks and 400 fuel lines is untested |
