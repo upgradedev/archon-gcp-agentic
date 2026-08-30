@@ -116,17 +116,25 @@ def unreadable(name: str = "scan.pdf", reason: str = "no text layer") -> Documen
 
 
 @pytest.fixture(autouse=True)
-def _forget_public_rate_limit():
-    """The public close limiter is process-wide, so it leaks between tests.
+def _forget_process_wide_state():
+    """Two things outlive a test because they are process-wide, so clear both.
 
-    Three presses per address per ten minutes is the production bound. In a
-    suite, the fourth test to press the anonymous button would get a 429 from
-    the presses of the three before it, and which three depends on collection
-    order. Cleared before and after every test so a limit test measures the
-    limit and nothing else measures it by accident.
+    The public close limiter: three presses per address per ten minutes is the
+    production bound, so in a suite the fourth test to press the anonymous
+    button would get a 429 from the presses of the three before it, and which
+    three depends on collection order.
+
+    The in-memory store: it is now one instance per process, deliberately --
+    `get_store()` used to hand every caller a NEW `LocalStore`, so on the memory
+    backend nothing written was ever read back and the events route claimed a
+    marker in one throwaway and looked for it in another. Making it durable is
+    the fix, and it means a close one test files is visible to the next unless
+    it is cleared here.
     """
-    from archon.adapters import ratelimit
+    from archon.adapters import ratelimit, store
 
     ratelimit.PUBLIC_CLOSES.reset()
+    store.reset_local_store()
     yield
     ratelimit.PUBLIC_CLOSES.reset()
+    store.reset_local_store()

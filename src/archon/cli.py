@@ -32,8 +32,11 @@ def _print_close(result) -> None:
         print(f"  cost per mile    {statements.cost_per_mile:>12,.3f}")
         print(f"  revenue per mile {statements.revenue_per_mile:>12,.3f}")
     print()
+    # "being chased" was a lie by one tense. The letters are written and filed
+    # unsent; nobody has chased anybody. The figure is what the letters would
+    # recover if the owner approved them, which is a different sentence.
     print(f"  {len(result.findings)} exception(s), {len(result.drafts)} draft(s) filed, "
-          f"{result.recoverable:,.2f} being chased")
+          f"{result.recoverable:,.2f} recoverable once you approve them")
     for draft in result.drafts:
         print(f"    [{draft.status}] {draft.kind.value} to {draft.recipient}: {draft.subject}")
 

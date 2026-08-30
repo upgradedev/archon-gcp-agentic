@@ -26,6 +26,7 @@ import binascii
 import json
 import logging
 import os
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
@@ -59,6 +60,83 @@ USE_GEMINI = os.getenv("ARCHON_USE_GEMINI", "").lower() in ("1", "true", "yes")
 USE_AGENT = os.getenv("ARCHON_AGENT_CLOSE", "").lower() in ("1", "true", "yes")
 
 COMPANY = os.getenv("ARCHON_COMPANY", "Bell Ridge Haulage")
+
+#: How long a claim on an object generation is believed. Cloud Run kills the
+#: request at 600s (`infra/main.tf`), so a container CANNOT still be working
+#: after that, and a claim older than this was left by a worker that no longer
+#: exists. The margin is deliberate and one-directional: too long and a dead
+#: holder blocks its month for a few extra minutes; too short and a live close
+#: gets stolen and the month runs twice, which is the failure an entire earlier
+#: round of this work existed to remove.
+EVENT_LEASE_SECONDS = int(os.getenv("ARCHON_EVENT_LEASE_SECONDS", "900"))
+
+#: How many attempts one object generation gets before its failure is recorded
+#: and the message acknowledged. Pub/Sub redelivers a 503 for as long as the
+#: subscription allows -- days -- and every redelivery is another close, which
+#: with the agent on is another model conversation. A poison event is worth
+#: three tries and then a durable record naming the month and the exception.
+#:
+#: This is an APPLICATION-level dead letter, not a Pub/Sub dead-letter topic.
+#: What it amounts to is precisely three things and no more: a `dead-letter`
+#: status on the marker document in Firestore carrying the period, the attempt
+#: count, the exception and when it happened; an ERROR line in Cloud Logging;
+#: and a response body that says the same. There is no route that lists them
+#: and no alert that fires. A real DLQ needs a subscription change and an IAM
+#: binding, neither of which this account can apply.
+EVENT_MAX_ATTEMPTS = int(os.getenv("ARCHON_EVENT_MAX_ATTEMPTS", "3"))
+
+
+def _lease_expired(claimed_at, now: datetime, lease: int) -> bool:
+    """Is the claim older than a container is allowed to live?"""
+    if not claimed_at:
+        # A claim written before this field existed. Expired, not immortal: an
+        # undated holder is precisely the marker that used to block its month
+        # until the message died, and the safe reading of "I cannot tell how
+        # old this is" is that nothing is holding it.
+        return True
+    try:
+        when = datetime.fromisoformat(str(claimed_at))
+    except (TypeError, ValueError):
+        return True
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return (now - when).total_seconds() > lease
+
+
+def claim_verdict(marker: dict, now: datetime, lease: int = EVENT_LEASE_SECONDS,
+                  max_attempts: int = EVENT_MAX_ATTEMPTS) -> str:
+    """What a delivery that did NOT win the claim should do about it.
+
+    Pure, so the decision that governs whether a month can ever close again is
+    testable without a store, a bucket or a clock. Four answers:
+
+        duplicate    somebody finished this exact object generation
+        dead-letter  it has failed enough times; record it and stop retrying
+        retake       whoever held it is gone or failed; this delivery may try
+        wait         somebody is working on it right now; come back
+
+    The interesting one is `retake`. The route used to answer `wait` to
+    everything it did not win, which is correct only while the holder is alive.
+    A container killed mid-close runs no except clause and no finally, so the
+    marker it left says `processing` forever, every redelivery is told to come
+    back, and the month CANNOT close until the message expires days later --
+    after which it is simply gone, and the marker refuses re-uploads too.
+    """
+    marker = marker or {}
+    status = marker.get("status")
+    attempt = int(marker.get("attempt") or 1)
+    if status == "closed":
+        return "duplicate"
+    if status == "dead-letter":
+        return "dead-letter"
+    if status == "failed":
+        return "dead-letter" if attempt >= max_attempts else "retake"
+    if status == "processing":
+        if _lease_expired(marker.get("claimed_at"), now, lease):
+            return "retake"
+        return "wait"
+    # An unrecognised status is not a reason to refuse a month forever.
+    return "retake"
 
 app = FastAPI(
     title="Archon",
@@ -437,12 +515,20 @@ async def events(request: Request) -> JSONResponse:
     if batch_marker:
         obj = ((envelope.get("message") or {}).get("attributes") or {}).get("objectId", "")
         name = obj.rsplit("/", 1)[-1]
-        # STARTSWITH, not equals. A marker cannot always be overwritten: on
-        # this project's own bucket the owner holds bucket-level roles only and
-        # `gcloud storage cp` over an existing object returns 403 on
-        # `storage.objects.get`. Re-closing a month then needs a NEW object, so
-        # `_READY2` and `_READY-2026-08-28` have to count. Found by doing it.
-        if name and not name.lower().startswith(batch_marker.lower()):
+        # `gcs.is_marker`, not a bare `startswith`, and not `==` either. A
+        # marker cannot always be overwritten: on this project's own bucket the
+        # owner holds bucket-level roles only and `gcloud storage cp` over an
+        # existing object returns 403 on `storage.objects.get`, so re-closing a
+        # month needs a NEW object and `_READY2` has to count. Found by doing it.
+        #
+        # But `startswith` was too wide, and the two halves of this product
+        # disagreed about one object: the INGESTION was narrowed to the marker
+        # plus a suffix that could not be a filename, so `_READYish.txt` is
+        # mail and gets read into the books -- while this route still called it
+        # the batch-complete signal and closed the month on it. One object read
+        # two ways, and the trigger was simultaneously a line in the ledger.
+        # Both halves now ask the same function.
+        if name and not gcs.is_marker(name, batch_marker):
             log.info("collecting %s for %s; waiting for %s", name, period, batch_marker)
             return JSONResponse(
                 {"status": "collecting", "period": period, "object": name,
@@ -455,6 +541,7 @@ async def events(request: Request) -> JSONResponse:
                 status_code=200)
 
     marker_key = gcs.dedupe_key(envelope, period)
+    attempt = 1
     if marker_key:
         # ONE operation, not three. This used to read the marker, decide it was
         # absent, and then write it, with a gap in the middle that two Pub/Sub
@@ -466,25 +553,54 @@ async def events(request: Request) -> JSONResponse:
         # a lock in memory, `create()` in Firestore, which fails when the
         # document exists. Losing the race is now indistinguishable from
         # arriving second, which is what it always was.
+        now = datetime.now(UTC)
         mine = get_store().claim(COMPANY, marker_key,
-                                 {"period": period, "status": "processing"})
+                                 {"period": period, "status": "processing",
+                                  "claimed_at": now.isoformat(), "attempt": 1})
         if not mine:
             marker = get_store().load_close(COMPANY, marker_key) or {}
-            if marker.get("status") == "closed":
+            verdict = claim_verdict(marker, now)
+            if verdict == "duplicate":
                 return JSONResponse(
                     {"status": "duplicate", "reason":
                      "this object generation already closed the period"},
                     status_code=200)
-            # Someone else holds it and has not finished. A 200 here would ack
-            # work that has not been done; a 503 makes Pub/Sub come back, by
-            # which time the marker is either closed (duplicate) or still held
-            # (come back again). If the holder died with its instance, the
-            # retries land here until the message expires, each answered in
-            # milliseconds.
-            return JSONResponse(
-                {"status": "in-progress", "reason":
-                 "this object generation is being closed right now"},
-                status_code=503)
+            if verdict == "dead-letter":
+                # Acknowledged, not retried. The marker holds which month
+                # failed and on what, and this body says it too, so the failure
+                # is a durable record rather than a week of silent redelivery.
+                return JSONResponse(
+                    {"status": "dead-letter", "period": period,
+                     "attempt": marker.get("attempt"),
+                     "reason": marker.get("reason") or
+                     f"failed {EVENT_MAX_ATTEMPTS} times; not retried again"},
+                    status_code=200)
+            if verdict == "wait":
+                # Someone else holds it and is still inside their lease. A 200
+                # here would ack work that has not been done; a 503 makes
+                # Pub/Sub come back, by which time the marker is closed
+                # (duplicate), still held (come back again), or expired (taken
+                # over below).
+                return JSONResponse(
+                    {"status": "in-progress", "reason":
+                     "this object generation is being closed right now"},
+                    status_code=503)
+
+            # `retake`: the holder is gone or gave up. Take the claim FROM THE
+            # ATTEMPT WE READ, so that two redeliveries arriving at the same
+            # expired lease do not both write the same next number and leave
+            # the cap unreachable forever. Losing this race is the same
+            # condition as arriving while someone works: come back.
+            attempt = int(marker.get("attempt") or 1) + 1
+            if not get_store().retake(
+                    COMPANY, marker_key, marker.get("attempt"),
+                    {"period": period, "status": "processing",
+                     "claimed_at": now.isoformat(), "attempt": attempt,
+                     "retook_from": marker.get("status")}):
+                return JSONResponse(
+                    {"status": "in-progress", "reason":
+                     "another delivery took this claim first"},
+                    status_code=503)
 
     # The mail is the actual objects in the bucket the event names, not the
     # bundled corpus. The event used to pick only the *period* and the close
@@ -533,12 +649,52 @@ async def events(request: Request) -> JSONResponse:
     # all out at once, and Pub/Sub answers the 504s with redeliveries. That is
     # not a theory: it took the deployed service down for half an hour on
     # 2026-08-24 and the fix was this line.
-    result = await run_in_threadpool(
-        _close, period, documents=documents, raw=raw, source=source)
-    if marker_key:
-        get_store().save_close(COMPANY, marker_key,
-                               {"period": period, "status": "closed",
-                                "run_id": result["run_id"]})
+    #
+    # And guarded, because the claim above is taken BEFORE this line and was
+    # released nowhere. A raise here propagated out of the route as a 500,
+    # Pub/Sub answered with redeliveries, and every one of them read a marker
+    # that said `processing` and was told to come back -- so a month that had
+    # crashed once could never close again, not even from a fresh upload of the
+    # same object. The failure is recorded on the marker instead, which both
+    # frees the next delivery to try and leaves something a human can read.
+    try:
+        result = await run_in_threadpool(
+            _close, period, documents=documents, raw=raw, source=source)
+    except Exception as exc:                           # noqa: BLE001 - push handler
+        log.error("close failed for %s on attempt %s (%s: %s)",
+                  period, attempt, type(exc).__name__, exc)
+        reason = f"{type(exc).__name__}: {exc}"
+        # Without a marker there is nowhere to count attempts, so there is no
+        # honest way to stop retrying: ack, and let the log be the record.
+        spent = attempt >= EVENT_MAX_ATTEMPTS or not marker_key
+        if marker_key:
+            get_store().save_close(
+                COMPANY, marker_key,
+                {"period": period,
+                 "status": "dead-letter" if spent else "failed",
+                 "attempt": attempt, "reason": reason,
+                 "failed_at": datetime.now(UTC).isoformat()})
+        return JSONResponse(
+            {"status": "dead-letter" if spent else "failed", "period": period,
+             "attempt": attempt, "reason": reason},
+            status_code=200 if spent else 503)
+    # A compare-and-set, not a write, for the same reason the take-over is one.
+    # A holder whose lease expired can still be alive -- unlikely, since Cloud
+    # Run kills the request at 600s and the lease is 900s, but unlikely is not
+    # impossible -- and by then somebody else has retaken the claim, closed the
+    # month and written the result. Writing unconditionally would put this
+    # superseded attempt back on top of the worker that actually holds it.
+    if marker_key and not get_store().retake(
+            COMPANY, marker_key, attempt,
+            {"period": period, "status": "closed", "run_id": result["run_id"],
+             "attempt": attempt,
+             "closed_at": datetime.now(UTC).isoformat()}):
+        log.warning("close of %s finished after its claim was taken over; "
+                    "leaving the holder's record alone", period)
+        return JSONResponse(
+            {"status": "superseded", "period": period, "attempt": attempt,
+             "reason": "another delivery took this claim over and finished it"},
+            status_code=200)
     return JSONResponse(
         {
             "status": "closed",

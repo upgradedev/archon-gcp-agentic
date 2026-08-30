@@ -443,7 +443,13 @@ function renderTrail(j) {
 // figure they have to take on trust.
 function renderStats(d) {
   const s = d.statements;
-  const errs = d.findings.filter((f) => f.severity === "error").length;
+  const errors = d.findings.filter((f) => f.severity === "error");
+  const errs = errors.length;
+  // The money behind the errors, the same figure step 5 of the close reports.
+  // The caption used to read "3 of them errors" beside a badge already reading
+  // "3 errors": the card said one fact twice and the second-most useful number
+  // on the page -- what is actually at stake -- was two taps away.
+  const atStake = errors.reduce((sum, f) => sum + (f.amount || 0), 0);
   const margin = (s.revenue_per_mile ?? 0) - (s.cost_per_mile ?? 0);
   const cards = [
     ["trends", "Net profit", usd(s.net_profit),
@@ -452,7 +458,8 @@ function renderStats(d) {
      `${num(s.revenue_per_mile, 3)} earned, ${num(s.cost_per_mile, 3)} spent`],
     ["trucks", "Miles run", num(s.total_miles),
      `${Object.keys(s.per_truck).length} trucks`],
-    ["findings", "Exceptions", String(d.findings.length), `${errs} of them errors`,
+    ["findings", "Exceptions", String(d.findings.length),
+     errs ? `${usd(atStake)} at stake` : "none of them errors",
      errs ? [`${errs} error${errs > 1 ? "s" : ""}`, "err"] : null],
     ["letters", "Leaking away", usd(d.leakage), "found by the checks, not by a person",
      d.drafts.length ? [`${d.drafts.length} letters ready`, "warn"] : null],

@@ -78,6 +78,8 @@ class Store(Protocol):
     def save_drafts(self, run_id: str, drafts: list, company: str | None = None,
                     period: str | None = None) -> list[str]: ...
     def claim(self, company: str | None, key: str, payload: dict) -> bool: ...
+    def retake(self, company: str | None, key: str, expected_attempt,
+               payload: dict) -> bool: ...
     def load_close(self, company: str | None, period: str) -> dict | None: ...
     def load_run(self, run_id: str) -> dict | None: ...
 
@@ -123,6 +125,24 @@ class LocalStore:
         full = close_key(company, key)
         with self._claims:
             if full in self._closes:
+                return False
+            self._closes[full] = _plain(payload)
+        return True
+
+    def retake(self, company: str | None, key: str, expected_attempt,
+               payload: dict) -> bool:
+        """Take a claim whose holder is gone, but only from the attempt we read.
+
+        The compare-and-set is on the attempt counter and it is what makes the
+        attempt CAP real. Two redeliveries that both find an expired lease both
+        read attempt 3 and both write 4, so the count never reaches the cap and
+        the poison event retries until the message expires -- which is the
+        failure the cap exists to end. Only one of them gets to write.
+        """
+        full = close_key(company, key)
+        with self._claims:
+            held = self._closes.get(full) or {}
+            if held.get("attempt") != expected_attempt:
                 return False
             self._closes[full] = _plain(payload)
         return True
@@ -193,6 +213,30 @@ class FirestoreStore:
             return False
         return True
 
+    def retake(self, company: str | None, key: str, expected_attempt,
+               payload: dict) -> bool:
+        """The same compare-and-set, inside a Firestore transaction.
+
+        A transaction rather than a conditional write because the read and the
+        write have to be one operation across instances, not just across
+        threads: the whole point is that the previous holder was a DIFFERENT
+        container, and so are the deliveries racing to replace it.
+        """
+        from google.cloud import firestore
+
+        ref = self._db.collection("closes").document(close_key(company, key))
+
+        @firestore.transactional
+        def take(transaction) -> bool:
+            snapshot = ref.get(transaction=transaction)
+            held = snapshot.to_dict() if snapshot.exists else {}
+            if held.get("attempt") != expected_attempt:
+                return False
+            transaction.set(ref, _plain(payload))
+            return True
+
+        return take(self._db.transaction())
+
     def load_close(self, company: str | None, period: str) -> dict | None:
         snapshot = self._db.collection("closes").document(close_key(company, period)).get()
         return snapshot.to_dict() if snapshot.exists else None
@@ -206,20 +250,46 @@ class FirestoreStore:
         return [doc.to_dict() for doc in query.stream()]
 
 
+#: The process's one memory-backed store. It has to be one, and it was not.
+_LOCAL_STORE: LocalStore | None = None
+
+
+def reset_local_store() -> None:
+    """Throw away the in-memory store. For tests that want a clean process."""
+    global _LOCAL_STORE
+    _LOCAL_STORE = None
+
+
 def get_store() -> Store:
     """Firestore when the project and the library are both there; else local.
 
     The fallback is silent by design. A demo that dies because a credential is
     missing is a demo that does not run on a judge's machine, and the books are
     identical either way.
+
+    The local branch returns ONE store, not a new one per call, and that is a
+    correction rather than an optimisation. `return LocalStore()` handed every
+    caller its own empty store, so on the memory backend nothing written was
+    ever read back: `/events` claimed a marker in one throwaway and looked for
+    it in another, the claim never held, the duplicate branch was unreachable,
+    and one Pub/Sub message delivered twice closed the month twice. `claim` on
+    a store that is always empty always says yes, which is why it read as
+    working.
+
+    Firestore was never affected -- it is durable by construction and the live
+    service sets `GOOGLE_CLOUD_PROJECT` -- so this was broken precisely where
+    the tests and the bundled demo run and nowhere a deployment would show it.
     """
+    global _LOCAL_STORE
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
     if project:
         try:
             return FirestoreStore(project)
         except Exception:  # pragma: no cover - library or credential absent
             pass
-    return LocalStore()
+    if _LOCAL_STORE is None:
+        _LOCAL_STORE = LocalStore()
+    return _LOCAL_STORE
 
 
 class RehearsalStore:
@@ -261,6 +331,10 @@ class RehearsalStore:
     def claim(self, company: str | None, key: str, payload: dict) -> bool:
         # A rehearsal claims nothing, because it is not going to do anything
         # that would need protecting from a second attempt.
+        return True
+
+    def retake(self, company: str | None, key: str, expected_attempt,
+               payload: dict) -> bool:
         return True
 
     def load_close(self, company: str | None, period: str) -> dict | None:

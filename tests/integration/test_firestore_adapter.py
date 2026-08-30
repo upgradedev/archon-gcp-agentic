@@ -168,3 +168,68 @@ def test_re_closing_the_same_month_overwrites_rather_than_accumulates(store):
 
     assert len([c for c in closes if c.id.endswith("::2026-07")]) == 1
     assert len([r for r in runs if r.id == first.run_id]) == 1
+
+
+# -- the claim and its take-over, against the real transaction ---------------
+#
+# Every one of the event-lifecycle tests drives `LocalStore`, whose claim is a
+# threading lock and whose take-over is a dict swap. Neither of those is the
+# code that runs in production: the live service sets `GOOGLE_CLOUD_PROJECT`,
+# so the thing deciding whether a month can ever close again is `create()`
+# raising `AlreadyExists` and a `@firestore.transactional` closure. A wrong
+# `ref.get(transaction=...)` or a misused decorator fails only here.
+
+def test_a_second_claim_on_the_same_key_loses(store):
+    """`create()`, not `set()`. The route relies on the loser being told it
+    lost, atomically, inside Firestore -- two Pub/Sub deliveries of one message
+    both reading 'absent' is how a month got closed twice."""
+    key = "2026-07#event-mail/2026-07/x.txt@1"
+
+    first = store.claim("acme", key, {"period": "2026-07", "status": "processing",
+                                      "attempt": 1})
+    second = store.claim("acme", key, {"period": "2026-07", "status": "processing",
+                                       "attempt": 1})
+
+    assert (first, second) == (True, False)
+    assert store.load_close("acme", key)["attempt"] == 1
+
+
+def test_a_take_over_from_the_attempt_we_read_succeeds(store):
+    key = "2026-07#event-mail/2026-07/y.txt@1"
+    store.claim("acme", key, {"period": "2026-07", "status": "failed", "attempt": 1})
+
+    took = store.retake("acme", key, 1,
+                        {"period": "2026-07", "status": "processing", "attempt": 2})
+
+    assert took is True
+    held = store.load_close("acme", key)
+    assert (held["attempt"], held["status"]) == (2, "processing")
+
+
+def test_a_take_over_from_a_stale_attempt_is_refused(store):
+    """The compare-and-set that makes the attempt CAP real. Two deliveries
+    finding the same expired lease must not both write the next number, or the
+    cap is never reached and the poison event retries until it expires."""
+    key = "2026-07#event-mail/2026-07/z.txt@1"
+    store.claim("acme", key, {"period": "2026-07", "status": "failed", "attempt": 2})
+
+    refused = store.retake("acme", key, 1,
+                           {"period": "2026-07", "status": "processing", "attempt": 2})
+
+    assert refused is False
+    held = store.load_close("acme", key)
+    assert (held["attempt"], held["status"]) == (2, "failed"), "the loser wrote anyway"
+
+
+def test_only_one_of_two_racing_take_overs_wins(store):
+    """Both read attempt 1. One writes 2. The other is told no."""
+    key = "2026-07#event-mail/2026-07/race.txt@1"
+    store.claim("acme", key, {"period": "2026-07", "status": "failed", "attempt": 1})
+
+    results = [store.retake("acme", key, 1,
+                            {"period": "2026-07", "status": "processing",
+                             "attempt": 2, "worker": who})
+               for who in ("a", "b")]
+
+    assert results == [True, False]
+    assert store.load_close("acme", key)["worker"] == "a"
