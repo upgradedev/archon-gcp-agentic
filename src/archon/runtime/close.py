@@ -468,7 +468,7 @@ def run_close(period: str,
             comparison=comparison, driver=driver, source=source,
         )
         stored["close"] = store.save_close(company, period, result.to_dict())
-        stored["drafts"] = store.save_drafts(run.run_id, filed)
+        stored["drafts"] = store.save_drafts(run.run_id, filed, company, period)
         stored["run"] = store.save_run(run.to_dict())
         step.note(
             f"period {period} marked {outcome} ({outcome_reason}); books, "

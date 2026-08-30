@@ -417,7 +417,47 @@ def find_out_of_period(documents: list[Document], period: str) -> list[Finding]:
     findings: list[Finding] = []
     for doc in documents:
         when = parse_date(doc.date)
-        if when is None or first <= when < next_first:
+        if when is None:
+            if doc.doc_type in (DocType.UNKNOWN, DocType.UNREADABLE):
+                # Already reported, by `find_unrecognised` and `find_unreadable`
+                # respectively, and a document nobody could READ has no date by
+                # definition. This module's rule is that detectors do not
+                # overlap: reporting the same file twice is how an exception
+                # list becomes noise, and a noisy list is one the owner stops
+                # reading.
+                continue
+            # A document nobody could date. It used to `continue`, so it raised
+            # nothing, and `belongs_to` used to return True, so it posted into
+            # whatever month was closing. Silent, and on the one field that
+            # decides which month owns the money.
+            #
+            # An ERROR rather than a warning: a late invoice is ordinary and a
+            # dateless one is a document somebody has to look at. It posts
+            # nothing, and G6 refuses the month.
+            findings.append(
+                Finding(
+                    kind=ExceptionKind.OUT_OF_PERIOD,
+                    severity="error",
+                    reference=(doc.document_number or doc.load_ref
+                               or doc.source_file or "document"),
+                    amount=round(
+                        doc.gross_amount or doc.net_amount
+                        or doc.remittance_total or 0.0, 2),
+                    message=(
+                        f"{doc.doc_type.value.replace('_', ' ')} "
+                        f"{doc.source_file or ''} carries no date this product "
+                        f"can read"
+                        + (f" ({doc.date!r})" if doc.date else "")
+                        + f", so it cannot be placed in {period} or any other "
+                        f"month. Nothing was posted from it."
+                    ),
+                    counterparty=doc.counterparty,
+                    source_file=doc.source_file,
+                    currency=doc.currency or "USD",
+                )
+            )
+            continue
+        if first <= when < next_first:
             continue
         amount = round(
             doc.gross_amount or doc.net_amount or doc.remittance_total or 0.0, 2

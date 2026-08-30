@@ -12,8 +12,21 @@
 // eleven steps landed at once. A rect's `width` attribute is not a style
 // attribute; a div's computed width is.
 const $ = (id) => document.getElementById(id);
+// The currency the close on screen is denominated in. G7 refuses a month that
+// mixes currencies, so there is exactly one, and it is read from the payload
+// rather than assumed. It was hard-coded to USD in the formatter, so a euro
+// month would have rendered every figure with a dollar sign: the number right
+// and the unit wrong, on every tile at once.
+let money = "USD";
+
+function setMoney(payload) {
+  const first = (payload && payload.findings || []).find((f) => f.currency);
+  money = (first && first.currency) || "USD";
+}
+
 const usd = (n) => (n === null || n === undefined) ? "–"
-  : n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+  : n.toLocaleString("en-US", { style: "currency", currency: money,
+                                maximumFractionDigits: 2 });
 const num = (n, d = 0) => (n === null || n === undefined) ? "–"
   : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
@@ -138,6 +151,7 @@ async function close() {
 }
 
 function render(d) {
+  setMoney(d);
   renderHero(d);
   renderOrigin(d);
   renderTrail(d.journal);
