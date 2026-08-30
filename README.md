@@ -637,7 +637,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 753 | `python -m pytest` |
+| Tests, all offline | 754 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
@@ -871,6 +871,18 @@ its persistence model is deliberately not used here.
   repository. `SmtpDelivery` is real, runs on the standard library, and is
   exercised in tests against an injected transport. Set `ARCHON_SMTP_HOST` and
   it sends.
+- **Two documents with identical bytes are read as one.** Intake hashes every
+  object and skips a repeat digest, non-blocking, because forwarding the same
+  file twice under two names is the common case and refusing a month over it
+  would be wrong. The cost is the rare opposite: two GENUINELY distinct
+  documents whose text happens to be byte-identical -- two identical toll
+  charges carrying no reference of their own -- are folded into one, and
+  because the skip is non-blocking the month closes without the second. It is
+  named on the receipt as "identical bytes already read as X", so it is visible
+  rather than silent, but no gate stops the close over it. Deduping on name and
+  bytes together would trade this for the more common failure, which is the
+  wrong trade for this corpus.
+
 - **One period, one company.** There is no multi-tenancy, no authentication and
   no billing here. Those exist in commercial products and would be noise in a
   submission about whether an agent can finish a chore.

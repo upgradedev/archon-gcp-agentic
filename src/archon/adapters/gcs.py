@@ -127,7 +127,13 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
             skipped.append({"object": blob.name, "blocking": False,
                             "reason": "batch-complete marker, not a document"})
             continue
-        if not name.endswith(".txt"):
+        # Case-folded, because the extension is the bookkeeper's typing and not
+        # a protocol. `INVOICE.TXT` off a Windows scanner is a text file; the
+        # exact-case test called it "not text" and blocked the month over it.
+        # Blocking rather than dropping meant it was never silently lost, which
+        # is why this reads as a nuisance rather than a hole -- but a month
+        # refused over a capital letter is still a month refused.
+        if not name.lower().endswith(".txt"):
             skipped.append({"object": blob.name, "reason": "not text",
                             "blocking": True})
             continue

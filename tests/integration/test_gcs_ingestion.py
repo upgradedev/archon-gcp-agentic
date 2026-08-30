@@ -453,3 +453,19 @@ def test_a_renamed_copy_never_displaces_the_document_it_was_copied_from():
     folded = {s["object"].rsplit("/", 1)[-1] for s in manifest["skipped"]}
     assert folded == {"load-L-7105-redelivery-3.txt", "zz-another-copy.txt"}
     assert all("load-L-7105.txt" in s["reason"] for s in manifest["skipped"])
+
+
+def test_an_uppercase_extension_is_still_a_text_file():
+    """`INVOICE.TXT` off a Windows scanner was refused as "not text".
+
+    Blocking, so it was never silently dropped -- the month came back refused
+    rather than wrong, which is the right direction to fail. But the extension
+    is the bookkeeper's typing, not a protocol, and a close refused over a
+    capital letter is a close refused.
+    """
+    client = FakeClient([blob("LOAD-1.TXT", load_text("L-9001", 1234.0))])
+
+    documents, _raw, manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
+
+    assert [s for s in manifest.get("skipped", []) if "not text" in s["reason"]] == []
+    assert len(documents) == 1, "an uppercase extension is still text"
