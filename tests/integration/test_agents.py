@@ -378,3 +378,41 @@ def test_a_value_the_agent_invents_is_ignored_rather_than_crashing():
 
     assert "0='obliterate'" in reply["unreadable_values_ignored"]
     assert tools.result.outcome == "closed"
+
+
+def test_an_agent_that_stops_early_does_not_publish_its_rehearsal_as_the_close():
+    """Every tool before `verify_and_file` runs the close as a REHEARSAL: the
+    books are computed against a throwaway store and a deliverer that cannot
+    send, because the agent has not decided yet and may still withhold the
+    month. `verify_and_file` is the only step with side effects.
+
+    But `run_agent_close` returned `session.result` whether or not that last
+    step ever ran. A model that stops early -- hits a limit, decides it is
+    finished, drops out of the loop -- left a rehearsal in `session.result`,
+    and the service published it with `driver: adk-agent` as the filed close.
+
+    Nothing was in the store. No digest was composed. No trail was persisted.
+    And on the event path the marker was then written `closed` against that
+    run id, so the month was considered done and would never be run again. A
+    month that silently never closed, reported as closed with 7/7 gates.
+    """
+    pytest.importorskip("google.adk")
+    from archon.adapters.agents import run_agent_close
+    from tests.adk_fakes import ScriptedLlm
+
+    store = LocalStore()
+    model = ScriptedLlm([
+        ("call", "take_in_mail", {}),
+        ("call", "post_journal", {}),
+        ("call", "triage_exceptions", {}),
+        # and then it simply stops, without calling verify_and_file
+        ("text", "That looks like everything."),
+    ])
+
+    result, _final = run_agent_close(period=PERIOD, company="Bell Ridge Haulage",
+                                     model=model, store=store, clock=FixedClock())
+
+    assert result is None, (
+        "a rehearsal was returned as the close; the caller cannot tell it apart")
+    assert store.load_close("Bell Ridge Haulage", PERIOD) is None, (
+        "nothing should be filed when the agent never filed anything")

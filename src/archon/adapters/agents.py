@@ -44,6 +44,7 @@ sheet as text. There is no path from this file to a number in the books.
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 from ..domain.models import Document
@@ -109,6 +110,9 @@ estimate a number yourself.
 """
 
 
+log = logging.getLogger("archon.agents")
+
+
 class CloseSession:
     """Holds one close while an agent walks through it, step by step.
 
@@ -160,6 +164,15 @@ class CloseSession:
         self._findings: list = []
         #: Set by `_commit`, so the one run with side effects cannot happen twice.
         self._committed = False
+
+    @property
+    def committed(self) -> bool:
+        """Whether the one step with side effects actually ran.
+
+        Read by `run_agent_close` to tell a filed close from a rehearsal, which
+        are otherwise the same object.
+        """
+        return self._committed
 
     # ── the seven tools, in the order the agent is told to call them ────────
 
@@ -434,6 +447,25 @@ def run_agent_close(period: str, company: str | None = None, model=None,
             text = event.content.parts[0].text
             if text:
                 final = text
+    # A rehearsal is not a close, and from the outside the two are identical
+    # objects. Every tool before `verify_and_file` runs the month against a
+    # throwaway store and a deliverer that cannot send, precisely so the agent
+    # can still withhold it; `_commit` is the only step that files anything.
+    # Returning `session.result` unconditionally meant a model that stopped
+    # early -- hit a limit, decided it was done, fell out of the loop -- handed
+    # back a rehearsal that the service published with `driver: adk-agent` as
+    # the filed close. Nothing was in the store, no digest was composed, no
+    # trail was persisted, and on the event path the marker was then written
+    # `closed` against that run id, so the month was considered done and would
+    # never be run again. A month that silently never closed, reported closed
+    # with seven of seven gates passed.
+    #
+    # `None` is the honest answer, and the caller already knows what to do with
+    # it: log that the agent produced no result and run the deterministic path.
+    if not session.committed:
+        log.warning("agent for %s stopped before filing; discarding its rehearsal",
+                    period)
+        return None, final
     return session.result, final
 
 
