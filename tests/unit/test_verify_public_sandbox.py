@@ -646,3 +646,28 @@ def test_neither_public_route_writes_anything_durable(monkeypatch):
     client.get(f"/api/close/{PERIOD}")
 
     assert recording.writes == []
+
+
+def test_a_period_that_is_a_path_cannot_reach_the_filesystem():
+    """`GET /api/close/%2e%2e` answered 200 and ran a close over `corpus/..`.
+
+    The period segment went from an anonymous URL to a directory join with
+    nothing in between asserting it is a period. `..` is not a month, it is a
+    traversal, and the route read whatever `.txt` files sat above the corpus and
+    reported them as a company's books. Nothing here needed authentication.
+
+    The shape of the fix matters more than this one input: the check is on the
+    format a period HAS, not on the characters a traversal happens to use, so
+    it closes the encodings nobody thought to enumerate as well.
+    """
+    from fastapi.testclient import TestClient
+
+    from archon.adapters.service import app
+
+    client = TestClient(app)
+
+    for hostile in ("%2e%2e", "..", "%2e%2e%2f", "2026-13", "2026-7", "not-a-month"):
+        response = client.get(f"/api/close/{hostile}")
+        assert response.status_code == 404, (
+            f"{hostile!r} was accepted as a period and answered "
+            f"{response.status_code}")

@@ -16,6 +16,7 @@ it.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from .. import paths
@@ -26,12 +27,27 @@ from ..domain.models import Document
 CORPUS_ROOT = paths.CORPUS_ROOT
 
 
+#: A period is a month, and this is the only shape one has. The check is on the
+#: format a period HAS rather than on the characters a traversal happens to use,
+#: because enumerating the second is how you miss the encoding nobody thought
+#: of: `%2e%2e` arrives here already decoded as `..`.
+PERIOD = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
 def read_period(period: str, root: Path | None = None) -> tuple[list[Document], dict[str, str]]:
     """Every artifact for one period, structured, plus the raw text of each.
 
     Returns the documents in filename order, which is deterministic across
     platforms and is what keeps a run id stable for the same month.
+
+    The period is validated here, at the filesystem boundary, rather than only
+    in the route that happens to be public today. `GET /api/close/%2e%2e`
+    answered 200 and ran a close over `corpus/..`: the segment went from an
+    anonymous URL to a directory join with nothing in between asserting it was
+    a month. Every caller gets the check, not just the one that was attacked.
     """
+    if not PERIOD.fullmatch(period or ""):
+        raise FileNotFoundError(f"{period!r} is not a period")
     directory = (root or CORPUS_ROOT) / period
     if not directory.is_dir():
         raise FileNotFoundError(f"no mail for period {period} at {directory}")
