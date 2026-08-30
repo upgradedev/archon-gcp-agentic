@@ -103,12 +103,24 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@77e7a554d41e2ee56fc945c52dfd3f33d12def9a
 
+      # `--suppress-logs` is load-bearing, not tidiness. Without it gcloud tries
+      # to STREAM the build log, which needs Viewer on the project. The deploy
+      # service account has only what it needs to build and deploy, so gcloud
+      # printed "This tool can only stream logs if you are Viewer/Owner" and
+      # exited 1 -- while the build itself carried on and SUCCEEDED. A green
+      # image behind a red pipeline is the worst of both.
+      #
+      # The fix is the flag rather than `roles/viewer` on the deploy account:
+      # widening a deployment identity so a log line can be printed is the wrong
+      # direction. gcloud still WAITS for the build and still fails this step if
+      # the build fails; the logs stay in Cloud Build, linked from the output.
       - name: Build the image
         run: |
           set -euo pipefail
           gcloud builds submit . \
             --tag "gcr.io/${PROJECT_ID}/${SERVICE}:${{ steps.target.outputs.short }}" \
-            --project "${PROJECT_ID}"
+            --project "${PROJECT_ID}" \
+            --suppress-logs
 
       - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
         with:
