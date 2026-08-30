@@ -14,7 +14,7 @@ gone. Nobody is told, and the marker is poisoned permanently: even re-uploading
 the same object generation is refused.
 
 That is the failure mode this file drives. It also drives the asymmetry Phase 1
-opened and did not finish: `gcs._is_marker` was narrowed so a document called
+opened and did not finish: `gcs.is_marker` was narrowed so a document called
 `_READYish.txt` is INGESTED, and this route still decides the same name is the
 batch-complete signal with a bare `startswith`. One object, read two ways.
 """
@@ -127,7 +127,7 @@ def marker_of(store, env) -> dict:
 
 def test_a_document_that_merely_starts_like_the_marker_does_not_trigger_the_close(
         wired, monkeypatch):
-    """`gcs._is_marker` says `_READYish.txt` is a DOCUMENT and ingests it. This
+    """`gcs.is_marker` says `_READYish.txt` is a DOCUMENT and ingests it. This
     route said `startswith('_ready')` and closed the month on it. One object,
     read two ways: the trigger for the batch is simultaneously a line in the
     books, and a bookkeeper mid-upload gets an early close."""
@@ -176,13 +176,17 @@ def test_a_month_whose_close_crashed_can_be_closed_by_the_next_delivery(
     attempt must actually run, not read `processing` and 503 forever."""
     _store, _closes = wired
     env = load_event("502")
+    working = service._close
+    broken = [True]
 
-    def explode(period, **kwargs):
-        raise RuntimeError("transient")
+    def flaky(period, **kwargs):
+        if broken[0]:
+            raise RuntimeError("transient")
+        return working(period, **kwargs)
 
-    monkeypatch.setattr(service, "_close", explode)
+    monkeypatch.setattr(service, "_close", flaky)
     post(env)
-    monkeypatch.undo()
+    broken[0] = False
 
     second = post(env)
 
@@ -245,3 +249,38 @@ def test_a_permanently_failing_event_is_recorded_and_acked_not_retried_to_expiry
     assert codes[-1] == 200, f"still asking Pub/Sub to retry after {len(codes)}: {codes}"
     assert marker_of(store, env).get("status") == "dead-letter"
     assert "ValueError" in str(marker_of(store, env).get("reason", ""))
+
+
+# -- the decision itself, without a store, a bucket or a route ---------------
+
+def verdict(marker: dict, age_seconds: int = 0) -> str:
+    now = datetime.now(timezone.utc)
+    if "claimed_at" not in marker and marker.get("status") == "processing":
+        marker = dict(marker, claimed_at=(
+            now - timedelta(seconds=age_seconds)).isoformat())
+    return service.claim_verdict(marker, now, lease=900, max_attempts=3)
+
+
+@pytest.mark.parametrize("marker, age, expected", [
+    ({"status": "closed"}, 0, "duplicate"),
+    ({"status": "dead-letter"}, 0, "dead-letter"),
+    ({"status": "processing"}, 10, "wait"),
+    ({"status": "processing"}, 899, "wait"),
+    ({"status": "processing"}, 901, "retake"),
+    ({"status": "failed", "attempt": 1}, 0, "retake"),
+    ({"status": "failed", "attempt": 2}, 0, "retake"),
+    ({"status": "failed", "attempt": 3}, 0, "dead-letter"),
+    ({"status": "failed", "attempt": 9}, 0, "dead-letter"),
+    # Written before the lease existed. Expired, not immortal.
+    ({"status": "processing", "claimed_at": None}, 0, "retake"),
+    ({"status": "processing", "claimed_at": "not a date"}, 0, "retake"),
+    # Nothing recognisable is not a reason to refuse a month forever.
+    ({}, 0, "retake"),
+    ({"status": "something new"}, 0, "retake"),
+])
+def test_the_claim_decision_table(marker, age, expected):
+    """The rule that decides whether a month can ever close again, checked
+    directly. Every route test above exercises one row of this; the table is
+    here so the boundary cases are stated rather than implied -- in particular
+    that the lease boundary is 900s and that attempt 3 of 3 is the last one."""
+    assert verdict(marker, age) == expected

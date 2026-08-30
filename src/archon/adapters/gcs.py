@@ -50,7 +50,7 @@ MAX_OBJECT_BYTES = 1_000_000
 _MARKER_SUFFIX = re.compile(r"^[0-9._-]*$")
 
 
-def _is_marker(name: str, marker: str) -> bool:
+def is_marker(name: str, marker: str) -> bool:
     """Is this object the batch-complete signal rather than mail?
 
     Deliberately NOT "starts with an underscore". That was the rule for one
@@ -117,7 +117,7 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
         name = blob.name[len(prefix):]
         if not name:                                   # the prefix placeholder
             continue
-        if _is_marker(name, marker):
+        if is_marker(name, marker):
             # The batch-complete signal is a CONTROL object, not a document.
             # It has no extension and no content, so the fail-closed intake
             # below read it as an unreadable artifact, G6 refused the month and

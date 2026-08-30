@@ -285,11 +285,22 @@ def test_an_unreadable_bucket_is_acknowledged_and_named_not_retried_forever(
 def test_a_redelivery_during_a_running_close_is_told_to_come_back(wired):
     """503, not 200. A 200 acks work that has not finished; if the first
     attempt then dies with its instance, the event is gone and the month never
-    closes. A 503 makes Pub/Sub retry until the marker says closed."""
+    closes. A 503 makes Pub/Sub retry until the marker says closed.
+
+    "Running" is now a claim inside its lease, which is why the marker carries
+    when it was taken. It has to: a claim with no timestamp is one whose holder
+    cannot be shown to be alive, and answering 503 to those forever is how a
+    container that died mid-close used to block its month until the message
+    expired. `test_a_holder_that_died_with_its_instance_does_not_block_the_month_forever`
+    is the other side of this assertion."""
+    from datetime import datetime, timezone
+
     store, _runs = wired
     env = envelope(generation="777")
     key = gcs.dedupe_key(env, PERIOD)
-    store.save_close(service.COMPANY, key, {"period": PERIOD, "status": "processing"})
+    store.save_close(service.COMPANY, key,
+                     {"period": PERIOD, "status": "processing", "attempt": 1,
+                      "claimed_at": datetime.now(timezone.utc).isoformat()})
 
     response = _post(env)
 
