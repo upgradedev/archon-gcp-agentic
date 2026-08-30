@@ -470,6 +470,7 @@ _MONEY_OUT = frozenset({
     "out", "outgoing", "outbound", "outward",
     "debit", "dr", "withdrawal", "withdrawn",
     "sent", "paid", "payment_sent", "charge", "charged", "fee",
+    "payment", "purchase", "purchased",
 })
 _MONEY_IN = frozenset({
     "in", "incoming", "inbound", "inward",
@@ -493,10 +494,23 @@ def _direction(written: str | None, amount: float | None) -> str | None:
     document is left unposted and the close raises it instead.
     """
     words = re.findall(r"[a-z]+", (written or "").lower())
-    if any(w in _MONEY_OUT for w in words):
-        return "out"
+    # Incoming first, and that order is the whole fix for `payment received`.
+    # `payment` and `purchase` belong in the outgoing vocabulary -- statements
+    # print both with a POSITIVE amount, so without them the sign fallback
+    # below booked a payment as cash arriving, which inflates revenue and hides
+    # a cost on the one number a haulier reads first. But adding `payment` to
+    # the outgoing set while testing outgoing first would invert
+    # `payment received` the other way. Reading the incoming word first settles
+    # it: `received` wins over `payment`, `payment` alone still means out, and
+    # `sent`, `debit` and `charge` are unaffected because none of them appear
+    # in the incoming set.
+    #
+    # `transfer` is deliberately left out of both. It genuinely goes either way
+    # and the sign is a better witness than the word.
     if any(w in _MONEY_IN for w in words):
         return "in"
+    if any(w in _MONEY_OUT for w in words):
+        return "out"
     # No vocabulary matched. A signed amount is the statement's other way of
     # saying it: -250.00 and (250.00) both mean money left.
     if amount is not None and amount != 0:
