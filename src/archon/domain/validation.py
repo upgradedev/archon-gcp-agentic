@@ -30,6 +30,7 @@ from .models import (
     Document,
     ValidationResult,
 )
+from .periods import parse_date
 
 
 def _skipped(rule: str, why: str) -> ValidationResult:
@@ -90,7 +91,8 @@ def g3_bank_movement_agrees(ledger, documents: list[Document]) -> ValidationResu
     # not extra money. Counting both was what made this gate agree with the
     # double posting it exists to catch: booked and observed committed the same
     # error, so the drift between them was always zero.
-    duplicated = [d for d in bank_lines if matching_remittance(d, documents) is not None]
+    duplicated = [d for d in bank_lines
+                  if matching_remittance(d, documents, ledger.period) is not None]
     independent = [d for d in bank_lines if d not in duplicated]
 
     observed = round(
@@ -171,14 +173,39 @@ def g6_every_document_was_accounted_for(ledger) -> ValidationResult:
     """
     rule = "G6: every document was recognised and accounted for"
     unknown = ledger.documents_of(DocType.UNKNOWN)
-    if not unknown:
-        return _skipped(rule, "every document matched a known family")
-    names = sorted({d.source_file or "?" for d in unknown})
-    return ValidationResult(
-        rule, False, "error",
-        f"{len(unknown)} document(s) matched no known family and posted nothing: "
-        + ", ".join(names[:3]) + ("" if len(names) <= 3 else f", and {len(names) - 3} more"),
-    )
+
+    # Accounted for means two things, and only one of them was checked. A
+    # document can match a family perfectly and still carry no date this
+    # product can read, and then nobody can say which month owns it. It used to
+    # post into whatever month was closing, because `belongs_to` returned True
+    # on an unreadable date; it now posts nothing, which would have made it
+    # INVISIBLE instead of wrong. So the gate looks for it.
+    #
+    # UNREADABLE is excluded because G5 owns it and a document nobody could read
+    # has no date by definition; reporting it twice is noise.
+    undated = [d for d in ledger.documents
+               if d.doc_type not in (DocType.UNKNOWN, DocType.UNREADABLE)
+               and parse_date(d.date) is None]
+
+    if not unknown and not undated:
+        return _skipped(rule, "every document matched a known family and a month")
+
+    parts = []
+    if unknown:
+        names = sorted({d.source_file or "?" for d in unknown})
+        parts.append(
+            f"{len(unknown)} matched no known family and posted nothing: "
+            + ", ".join(names[:3])
+            + ("" if len(names) <= 3 else f", and {len(names) - 3} more")
+        )
+    if undated:
+        names = sorted({d.source_file or "?" for d in undated})
+        parts.append(
+            f"{len(undated)} carry no readable date, so no month can own them: "
+            + ", ".join(names[:3])
+            + ("" if len(names) <= 3 else f", and {len(names) - 3} more")
+        )
+    return ValidationResult(rule, False, "error", "; ".join(parts))
 
 
 def g7_one_currency_per_month(ledger) -> ValidationResult:

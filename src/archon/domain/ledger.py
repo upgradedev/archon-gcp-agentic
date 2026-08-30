@@ -57,7 +57,8 @@ _SIMPLE_EXPENSES = {
 #: produced are the same money, and the factor sends the advice for the exact
 #: figure it deposits, so there is nothing to tolerate here. A near-miss is a
 #: DIFFERENT payment and must stay a separate line.
-def matching_remittance(bank_line: Document, documents: list[Document]) -> Document | None:
+def matching_remittance(bank_line: Document, documents: list[Document],
+                        period: str) -> Document | None:
     """The remittance a given inbound bank line is the arrival of, if any.
 
     The defect this closes: a broker remittance posted Dr Bank / Cr AR, and the
@@ -85,7 +86,18 @@ def matching_remittance(bank_line: Document, documents: list[Document]) -> Docum
         return None
 
     reference = (bank_line.reference or "").strip().lower()
-    candidates = [d for d in documents if d.doc_type == DocType.BROKER_REMITTANCE]
+
+    # THIS month's remittances only. It considered every arrived document, and
+    # a late-arriving June advice sitting in July's mail then swallowed July's
+    # own bank credit: factors reuse their reference numbering, so the match
+    # succeeded, the credit posted nothing, and July's cash was short by the
+    # whole amount. G3 agreed, because it reconciles against the same reading.
+    #
+    # A remittance from another month cannot be the thing this month's credit
+    # is the arrival of. Its own month already posted it, or will.
+    candidates = [d for d in documents
+                  if d.doc_type == DocType.BROKER_REMITTANCE
+                  and belongs_to(period, d.date)]
 
     if reference:
         for remittance in candidates:
@@ -253,7 +265,7 @@ class Ledger:
         amount = doc.net_amount or 0.0
         reference = doc.reference or ""
         if doc.direction == "in":
-            already = matching_remittance(doc, self.documents)
+            already = matching_remittance(doc, self.documents, self.period)
             if already is not None:
                 # The remittance already posted this cash. Posting it again is
                 # the same money twice, and G3 agreed with the doubled figure

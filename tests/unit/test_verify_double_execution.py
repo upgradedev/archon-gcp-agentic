@@ -59,7 +59,7 @@ class RecordingStore:
             self.close_payloads.append((period, len(payload["drafts"])))
         return self._inner.save_close(company, period, payload)
 
-    def save_drafts(self, run_id, drafts):
+    def save_drafts(self, run_id, drafts, company=None, period=None):
         # One call per completed `run_close`, so this counts whole executions.
         self.calls["save_drafts"] += 1
         return self._inner.save_drafts(run_id, drafts)

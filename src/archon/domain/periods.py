@@ -59,7 +59,22 @@ def belongs_to(period: str, when: str | None) -> bool:
     """
     bounds = period_bounds(period)
     parsed = parse_date(when)
-    if bounds is None or parsed is None:
+    if bounds is None:
+        # The PERIOD is unparseable, which is a programming error rather than a
+        # document problem, and refusing every document over it would turn a
+        # bad argument into an empty month. Nothing to place documents against,
+        # so place them.
         return True
+    if parsed is None:
+        # The DOCUMENT has no date this product can read. It returned True
+        # here, which is fail-open on the one question that decides whether
+        # money lands in this month or another: an invoice dated "sometime in
+        # July" was posted into whatever month happened to be closing.
+        #
+        # Refusing is the honest answer and it is not the end of the story.
+        # `find_out_of_period` raises an error finding naming the file, and G6
+        # refuses the month, so an undated document stops the close rather than
+        # quietly joining it.
+        return False
     first, next_first = bounds
     return first <= parsed < next_first

@@ -634,7 +634,7 @@ def test_neither_public_route_writes_anything_durable(monkeypatch):
             self.writes.append(("save_close", company, period))
             return super().save_close(company, period, payload)
 
-        def save_drafts(self, run_id, drafts):
+        def save_drafts(self, run_id, drafts, company=None, period=None):
             self.writes.append(("save_drafts", run_id))
             return super().save_drafts(run_id, drafts)
 

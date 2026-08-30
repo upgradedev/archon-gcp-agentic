@@ -30,6 +30,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 
 from ..domain.extract import extract_document
 from ..domain.models import DocType, Document
@@ -38,6 +39,39 @@ log = logging.getLogger("archon.gcs")
 
 #: Nothing in a month's mail is this large. A fuel card statement is ~2 KB.
 MAX_OBJECT_BYTES = 1_000_000
+
+
+#: What a marker may be called, beyond the configured name itself. A marker
+#: cannot always be overwritten -- on this project's own bucket the owner holds
+#: bucket-level roles only, so `cp` over an existing object returns 403 and
+#: re-closing a month needs a NEW object -- so a suffix has to be allowed. What
+#: is allowed is a suffix of digits, dashes, underscores or dots: `_READY2`,
+#: `_READY-2026-08-28`, `_READY.3`.
+_MARKER_SUFFIX = re.compile(r"^[0-9._-]*$")
+
+
+def _is_marker(name: str, marker: str) -> bool:
+    """Is this object the batch-complete signal rather than mail?
+
+    Deliberately NOT "starts with an underscore". That was the rule for one
+    commit and it is a convention, not a guarantee: an export that names files
+    `_invoice.txt` would have had every one of them silently dropped as a
+    control object, non-blocking, so the month closed green over a purchase
+    invoice nobody opened. Fail-closed intake exists to stop exactly that, and
+    the widened rule walked straight through it.
+
+    So: the configured marker, or the configured marker followed by a suffix
+    that could not be a filename anybody means. `_READY2` counts. `_READY.txt`
+    does not, because a `.txt` is mail.
+    """
+    if not marker:
+        return False
+    lowered, wanted = name.lower(), marker.lower()
+    if lowered == wanted:
+        return True
+    if not lowered.startswith(wanted):
+        return False
+    return bool(_MARKER_SUFFIX.match(name[len(marker):]))
 
 
 def read_gcs_period(bucket_name: str, period: str, client=None,
@@ -83,12 +117,7 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
         name = blob.name[len(prefix):]
         if not name:                                   # the prefix placeholder
             continue
-        # An underscore prefix is the convention for a control object, and
-        # every marker this deployment has ever used carries one. Matching the
-        # convention rather than one exact name means a marker that had to be
-        # suffixed, because the bucket would not allow an overwrite, does not
-        # come back as an unreadable document and block the month.
-        if name.startswith("_") or (marker and name.lower().startswith(marker.lower())):
+        if _is_marker(name, marker):
             # The batch-complete signal is a CONTROL object, not a document.
             # It has no extension and no content, so the fail-closed intake
             # below read it as an unreadable artifact, G6 refused the month and
@@ -96,7 +125,7 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
             # service, because it is the interaction of two changes that are
             # each correct on their own.
             skipped.append({"object": blob.name, "blocking": False,
-                            "reason": "control object, not a document"})
+                            "reason": "batch-complete marker, not a document"})
             continue
         if not name.endswith(".txt"):
             skipped.append({"object": blob.name, "reason": "not text",

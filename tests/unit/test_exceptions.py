@@ -265,10 +265,30 @@ def test_december_rolls_the_year_over_correctly():
     assert find_out_of_period(docs, "2026-12") == []
 
 
-def test_an_unparseable_date_is_not_reported_as_out_of_period():
-    """Not knowing when something happened is different from knowing it is late."""
+def test_an_unparseable_date_is_reported_and_blocks_rather_than_passing_quietly():
+    """Not knowing when something happened is different from knowing it is late,
+    and it used to mean saying nothing at all.
+
+    This asserted an empty list, and the sentence above it was the argument: an
+    undated document is not an out-of-period one. True, and it left the document
+    with no finding of any kind while `belongs_to` returned True for it, so the
+    figures went into whatever month happened to be closing. The distinction was
+    real and the consequence was silence.
+
+    Both halves are now covered. It is still not "late": the severity is error
+    and the message says the date could not be read rather than that the
+    document belongs elsewhere. And G6 refuses the month, because no month can
+    own a document nobody can date.
+    """
     docs = [expense(DocType.TOLL_INVOICE, "T-1", 100.0, 8.0, date="sometime in July")]
-    assert find_out_of_period(docs, PERIOD) == []
+
+    findings = find_out_of_period(docs, PERIOD)
+
+    assert len(findings) == 1
+    assert findings[0].severity == "error"
+    assert findings[0].source_file == "exp-T-1.txt"
+    assert "no date this product can read" in findings[0].message
+    assert "cannot be placed in 2026-07" in findings[0].message
 
 
 def test_parse_date_returns_none_rather_than_guessing():

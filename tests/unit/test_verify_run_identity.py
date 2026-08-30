@@ -102,7 +102,8 @@ class WitnessStore(LocalStore):
         self.run_writes.append(run["run_id"])
         return super().save_run(run)
 
-    def save_drafts(self, run_id: str, drafts: list) -> list[str]:
+    def save_drafts(self, run_id: str, drafts: list, company=None,
+                    period=None) -> list[str]:
         self.draft_writes.append(run_id)
         return super().save_drafts(run_id, drafts)
 

@@ -45,13 +45,38 @@ def close_key(company: str | None, period: str) -> str:
     return f"{company or 'default'}::{period}"
 
 
+def draft_record(run_id: str, index: int, draft, company: str | None = None,
+                 period: str | None = None) -> dict:
+    """One draft as it is stored, carrying what reads it back.
+
+    `load_drafts` queries `where("run_id", "==", ...)` and `save_drafts` wrote
+    `_plain(draft)`, which has no such field, so on Firestore the query matched
+    nothing and the drafts were unreachable by the only method that reads them.
+    The local store hid it by keying a dict on the run id, which is why the
+    suite never noticed.
+
+    `draft_id` is stable across re-runs of the same month: same run, same
+    position, same key, so a retry overwrites its own row instead of
+    accumulating a second copy of every letter.
+    """
+    return {
+        **_plain(draft),
+        "run_id": run_id,
+        "index": index,
+        "draft_id": f"{run_id}::{index}",
+        "company": company,
+        "period": period or run_id.rsplit("-", 1)[0],
+    }
+
+
 class Store(Protocol):
     """What the close needs from persistence, and nothing more."""
 
     def put_document(self, name: str, content: str) -> str: ...
     def save_run(self, run: dict) -> str: ...
     def save_close(self, company: str | None, period: str, payload: dict) -> str: ...
-    def save_drafts(self, run_id: str, drafts: list) -> list[str]: ...
+    def save_drafts(self, run_id: str, drafts: list, company: str | None = None,
+                    period: str | None = None) -> list[str]: ...
     def claim(self, company: str | None, key: str, payload: dict) -> bool: ...
     def load_close(self, company: str | None, period: str) -> dict | None: ...
     def load_run(self, run_id: str) -> dict | None: ...
@@ -82,8 +107,10 @@ class LocalStore:
         self._closes[key] = _plain(payload)
         return f"memory://closes/{key}"
 
-    def save_drafts(self, run_id: str, drafts: list) -> list[str]:
-        self._drafts[run_id] = [_plain(d) for d in drafts]
+    def save_drafts(self, run_id: str, drafts: list, company: str | None = None,
+                    period: str | None = None) -> list[str]:
+        self._drafts[run_id] = [draft_record(run_id, i, d, company, period)
+                                for i, d in enumerate(drafts)]
         return [f"memory://drafts/{run_id}::{i}" for i in range(len(drafts))]
 
     def claim(self, company: str | None, key: str, payload: dict) -> bool:
@@ -135,12 +162,13 @@ class FirestoreStore:
         self._db.collection("closes").document(key).set(_plain(payload))
         return f"firestore://closes/{key}"
 
-    def save_drafts(self, run_id: str, drafts: list) -> list[str]:
+    def save_drafts(self, run_id: str, drafts: list, company: str | None = None,
+                    period: str | None = None) -> list[str]:
         paths = []
         batch = self._db.batch()
         for index, draft in enumerate(drafts):
             ref = self._db.collection("drafts").document(f"{run_id}::{index}")
-            batch.set(ref, _plain(draft))
+            batch.set(ref, draft_record(run_id, index, draft, company, period))
             paths.append(f"firestore://drafts/{run_id}::{index}")
         batch.commit()
         return paths
@@ -226,7 +254,8 @@ class RehearsalStore:
     def save_close(self, company: str | None, period: str, payload: dict) -> str:
         return self._key(f"closes/{company}::{period}")
 
-    def save_drafts(self, run_id: str, drafts: list) -> list[str]:
+    def save_drafts(self, run_id: str, drafts: list, company: str | None = None,
+                    period: str | None = None) -> list[str]:
         return [self._key(f"drafts/{run_id}/{i}") for i, _ in enumerate(drafts)]
 
     def claim(self, company: str | None, key: str, payload: dict) -> bool:

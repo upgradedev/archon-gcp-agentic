@@ -61,7 +61,8 @@ class CountingStore:
         self.close_keys.append(period)
         return self._inner.save_close(company, period, payload)
 
-    def save_drafts(self, run_id: str, drafts: list) -> list[str]:
+    def save_drafts(self, run_id: str, drafts: list, company=None,
+                    period=None) -> list[str]:
         # Exactly one call per completed `run_close`, so this is the cleanest
         # available count of "how many times did the whole chore execute".
         self.calls["save_drafts"] += 1

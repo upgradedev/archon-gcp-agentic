@@ -363,19 +363,55 @@ def test_the_batch_marker_is_not_read_as_a_document(monkeypatch):
         # re-closing a month needs a new object name. It must not come back as
         # an unreadable document either.
         blob("_READY2", b""),
+        # NOT a marker, and the distinction is the whole point. An underscore
+        # is a convention, not a guarantee: for one commit every name starting
+        # with one was waved through as a control object, which would have
+        # dropped an export named `_invoice.txt` silently and closed the month
+        # green over it. Only the configured marker and a suffix that could not
+        # be a filename anybody means are controls.
         blob("_notes", b"scratch"),
     ])
 
     documents, _raw, manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
 
-    assert [d.doc_type for d in documents] == [DocType.LOAD_CONFIRMATION]
+    # `_notes` is not a marker, so it is mail the intake could not read, and it
+    # arrives as an UNKNOWN document that G6 will refuse the month over. That
+    # is the correct outcome: a control object is waved through and everything
+    # else that cannot be read stops the close.
+    assert [d.doc_type for d in documents] == [
+        DocType.LOAD_CONFIRMATION, DocType.UNKNOWN]
     controls = [s for s in manifest["skipped"] if not s["blocking"]]
-    assert {c["object"].rsplit("/", 1)[-1] for c in controls} == {
-        "_READY", "_READY2", "_notes"}
+    assert {c["object"].rsplit("/", 1)[-1] for c in controls} == {"_READY", "_READY2"}
     assert all("not a document" in c["reason"] for c in controls)
 
-    gates = validate(_ledger_of(documents), [])
-    assert next(g for g in gates if g.rule.startswith("G6")).passed is True
+    blocked = [s for s in manifest["skipped"] if s["blocking"]]
+    assert {b["object"].rsplit("/", 1)[-1] for b in blocked} == {"_notes"}
+
+    # The marker passes through and everything else that could not be read
+    # stops the close. Both halves matter: a control object must not block a
+    # month, and nothing else may be waved through with it.
+    g6 = next(g for g in validate(_ledger_of(documents), []) if g.rule.startswith("G6"))
+    assert g6.passed is False
+    assert "_notes" in g6.message
+
+
+def test_the_marker_alone_does_not_block_the_month():
+    """The half this gate exists for: a batch marker is not an unread document."""
+    import os
+
+    os.environ["ARCHON_BATCH_MARKER"] = "_READY"
+    try:
+        client = FakeClient([
+            blob("load-1.txt", load_text("L-9001", 1000.0)),
+            blob("_READY", b""),
+        ])
+        documents, _raw, _manifest = gcs.read_gcs_period(BUCKET, PERIOD, client=client)
+    finally:
+        os.environ.pop("ARCHON_BATCH_MARKER", None)
+
+    assert [d.doc_type for d in documents] == [DocType.LOAD_CONFIRMATION]
+    g6 = next(g for g in validate(_ledger_of(documents), []) if g.rule.startswith("G6"))
+    assert g6.passed is True
 
 
 def test_a_renamed_copy_never_displaces_the_document_it_was_copied_from():
