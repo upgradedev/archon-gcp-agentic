@@ -442,11 +442,31 @@ def run_agent_close(period: str, company: str | None = None, model=None,
         parts=[types.Part(text=f"Close the books for {period}. Do not ask me anything.")],
     )
     final = ""
-    for event in runner.run(user_id=user, session_id=session_id, new_message=message):
-        if event.is_final_response() and event.content and event.content.parts:
-            text = event.content.parts[0].text
-            if text:
-                final = text
+    try:
+        for event in runner.run(user_id=user, session_id=session_id,
+                                new_message=message):
+            if event.is_final_response() and event.content and event.content.parts:
+                text = event.content.parts[0].text
+                if text:
+                    final = text
+    except Exception as exc:                       # noqa: BLE001 - see below
+        # A model can die at any point, including on the call AFTER
+        # `verify_and_file` -- the stream drops, the quota runs out, the final
+        # text errors. Letting that propagate meant the service's fallback ran
+        # the WHOLE deterministic close again: a second copy of the month filed
+        # over the agent's with standing policy in place of its decisions, and
+        # a second digest to an owner who already has the first.
+        #
+        # A failure after the last step is not a reason to redo the last step.
+        # Before it, nothing is durable and nothing was sent, so falling back
+        # is exactly right and `None` asks for it.
+        if not session.committed:
+            log.warning("agent for %s failed before filing (%s: %s); falling back",
+                        period, type(exc).__name__, exc)
+            return None, final
+        log.warning("agent for %s failed AFTER filing (%s: %s); keeping the "
+                    "close it already filed", period, type(exc).__name__, exc)
+        return session.result, final
     # A rehearsal is not a close, and from the outside the two are identical
     # objects. Every tool before `verify_and_file` runs the month against a
     # throwaway store and a deliverer that cannot send, precisely so the agent
