@@ -461,17 +461,19 @@ sequenceDiagram
     A->>D: take_in_mail
     D-->>A: 27 artifacts classified
     A->>D: post_journal
-    D-->>A: 26 entries, all balanced
+    D-->>A: 25 entries balanced, 2 left unposted
     A->>D: allocate_remittances
     D-->>A: 8 loads settled, identity closes
     A->>D: triage_exceptions
     D-->>A: 10 exceptions, 3 errors
+    A->>D: decide_actions
+    D-->>A: draft / escalate / note, per exception
     A->>D: draft_corrections
     D-->>A: letters, status=filed
     A->>D: verify_and_file
     D-->>F: books, drafts, 11-step trail
     A->>O: month-end digest, composed and filed
-    Note over A,X: the letters to brokers stop here.<br/>a human presses send.
+    Note over A,X: the letters to brokers stop here.<br/>a human approves; no channel is configured.
     X--xA: nothing is sent unattended
 ```
 
