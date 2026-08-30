@@ -73,6 +73,13 @@ class RecordingStore:
         self.calls["claim"] += 1
         return self._inner.claim(company, key, payload)
 
+    def retake(self, company, key, expected_attempt, payload):
+        # Same reasoning as `claim`: the route's compare-and-set on the attempt
+        # counter is what stops a superseded worker overwriting the one that
+        # holds the claim, so the double has to be the real one.
+        self.calls["retake"] += 1
+        return self._inner.retake(company, key, expected_attempt, payload)
+
     def load_close(self, company, period):
         return self._inner.load_close(company, period)
 

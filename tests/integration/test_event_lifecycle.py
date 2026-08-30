@@ -251,6 +251,68 @@ def test_a_permanently_failing_event_is_recorded_and_acked_not_retried_to_expiry
     assert "ValueError" in str(marker_of(store, env).get("reason", ""))
 
 
+def test_a_close_that_finishes_after_its_lease_was_stolen_does_not_overwrite(
+        wired, monkeypatch):
+    """The other end of the take-over, and the reason the success write is a
+    compare-and-set too.
+
+    A holder whose lease expired can still be alive -- it is unlikely, because
+    Cloud Run kills the request at 600s and the lease is 900s, but "unlikely"
+    is not "cannot". If it is, a second worker has already retaken the claim,
+    run the month and written `closed`. The original then finishes and, writing
+    unconditionally, would put its own run back on top of the winner's.
+
+    So the last write checks it still holds what it took."""
+    store, _ = wired
+    env = load_event("506")
+    key = gcs.dedupe_key(env, PERIOD)
+    working = service._close
+
+    def close_and_get_robbed(period, **kwargs):
+        result = working(period, **kwargs)
+        # While this attempt was working, somebody else's lease take-over won.
+        store.save_close(service.COMPANY, key,
+                         {"period": PERIOD, "status": "closed", "attempt": 2,
+                          "run_id": "the-other-workers-run"})
+        return result
+
+    monkeypatch.setattr(service, "_close", close_and_get_robbed)
+
+    response = post(env)
+
+    assert store.load_close(service.COMPANY, key)["run_id"] == "the-other-workers-run", (
+        "the superseded attempt wrote over the worker that actually holds the claim")
+    assert body(response)["status"] == "superseded"
+    assert response.status_code == 200, "the work was done, just not by the holder"
+
+
+# -- the store the route actually gets ---------------------------------------
+
+def test_the_memory_backend_remembers_between_two_calls(monkeypatch):
+    """`get_store()` built a NEW `LocalStore` on every call, so on the memory
+    backend nothing the route wrote was ever read back by anything.
+
+    Every marker write went into a throwaway and every marker read came out of
+    a different empty one, which means the claim never held, the duplicate
+    branch was unreachable, and one Pub/Sub message delivered twice ran the
+    month twice. It looked correct because `claim` on an empty store always
+    says yes.
+
+    Firestore hid it -- that store is durable by construction, and the live
+    service sets `GOOGLE_CLOUD_PROJECT` -- so the defect was invisible exactly
+    where the tests run and the demo runs."""
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    from archon.adapters import store as store_mod
+
+    store_mod.reset_local_store()
+    first = store_mod.get_store()
+    first.save_close("acme", "2026-07", {"status": "closed"})
+
+    assert store_mod.get_store().load_close("acme", "2026-07") is not None, (
+        "the second caller got a different store and saw nothing")
+    assert store_mod.get_store() is first
+
+
 # -- the decision itself, without a store, a bucket or a route ---------------
 
 def verdict(marker: dict, age_seconds: int = 0) -> str:

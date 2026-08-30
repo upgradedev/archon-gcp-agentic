@@ -678,11 +678,23 @@ async def events(request: Request) -> JSONResponse:
             {"status": "dead-letter" if spent else "failed", "period": period,
              "attempt": attempt, "reason": reason},
             status_code=200 if spent else 503)
-    if marker_key:
-        get_store().save_close(COMPANY, marker_key,
-                               {"period": period, "status": "closed",
-                                "run_id": result["run_id"], "attempt": attempt,
-                                "closed_at": datetime.now(UTC).isoformat()})
+    # A compare-and-set, not a write, for the same reason the take-over is one.
+    # A holder whose lease expired can still be alive -- unlikely, since Cloud
+    # Run kills the request at 600s and the lease is 900s, but unlikely is not
+    # impossible -- and by then somebody else has retaken the claim, closed the
+    # month and written the result. Writing unconditionally would put this
+    # superseded attempt back on top of the worker that actually holds it.
+    if marker_key and not get_store().retake(
+            COMPANY, marker_key, attempt,
+            {"period": period, "status": "closed", "run_id": result["run_id"],
+             "attempt": attempt,
+             "closed_at": datetime.now(UTC).isoformat()}):
+        log.warning("close of %s finished after its claim was taken over; "
+                    "leaving the holder's record alone", period)
+        return JSONResponse(
+            {"status": "superseded", "period": period, "attempt": attempt,
+             "reason": "another delivery took this claim over and finished it"},
+            status_code=200)
     return JSONResponse(
         {
             "status": "closed",

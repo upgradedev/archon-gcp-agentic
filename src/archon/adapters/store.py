@@ -250,20 +250,46 @@ class FirestoreStore:
         return [doc.to_dict() for doc in query.stream()]
 
 
+#: The process's one memory-backed store. It has to be one, and it was not.
+_LOCAL_STORE: LocalStore | None = None
+
+
+def reset_local_store() -> None:
+    """Throw away the in-memory store. For tests that want a clean process."""
+    global _LOCAL_STORE
+    _LOCAL_STORE = None
+
+
 def get_store() -> Store:
     """Firestore when the project and the library are both there; else local.
 
     The fallback is silent by design. A demo that dies because a credential is
     missing is a demo that does not run on a judge's machine, and the books are
     identical either way.
+
+    The local branch returns ONE store, not a new one per call, and that is a
+    correction rather than an optimisation. `return LocalStore()` handed every
+    caller its own empty store, so on the memory backend nothing written was
+    ever read back: `/events` claimed a marker in one throwaway and looked for
+    it in another, the claim never held, the duplicate branch was unreachable,
+    and one Pub/Sub message delivered twice closed the month twice. `claim` on
+    a store that is always empty always says yes, which is why it read as
+    working.
+
+    Firestore was never affected -- it is durable by construction and the live
+    service sets `GOOGLE_CLOUD_PROJECT` -- so this was broken precisely where
+    the tests and the bundled demo run and nowhere a deployment would show it.
     """
+    global _LOCAL_STORE
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
     if project:
         try:
             return FirestoreStore(project)
         except Exception:  # pragma: no cover - library or credential absent
             pass
-    return LocalStore()
+    if _LOCAL_STORE is None:
+        _LOCAL_STORE = LocalStore()
+    return _LOCAL_STORE
 
 
 class RehearsalStore:
