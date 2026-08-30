@@ -313,6 +313,70 @@ def test_the_memory_backend_remembers_between_two_calls(monkeypatch):
     assert store_mod.get_store() is first
 
 
+def test_a_container_killed_over_and_over_eventually_dead_letters(wired, monkeypatch):
+    """The attempt cap was only checked on the `failed` branch, so the one
+    scenario it exists for did not reach it.
+
+    A container that is KILLED -- OOM, instance reclaim, the 600s deadline --
+    runs no except clause, so the marker it leaves says `processing`, not
+    `failed`. The next delivery finds the lease expired and retakes. Killed
+    again: `processing` again. The counter climbs and nothing ever consults it,
+    so a close that reliably kills its container retries until the Pub/Sub
+    message expires days later. That is exactly the poison event the dead
+    letter was built to end, and it was the one case that could not reach it.
+    """
+    store, _ = wired
+    env = load_event("601")
+    key = gcs.dedupe_key(env, PERIOD)
+    stale = (datetime.now(UTC) - timedelta(seconds=1000)).isoformat()
+    # Three attempts have already been killed mid-close. Nothing wrote `failed`,
+    # because nothing got the chance to.
+    store.save_close(service.COMPANY, key,
+                     {"period": PERIOD, "status": "processing", "attempt": 3,
+                      "claimed_at": stale})
+
+    response = post(env)
+
+    assert body(response)["status"] == "dead-letter", (
+        "a killed container is retried forever; the cap never sees it")
+    assert response.status_code == 200, "a dead letter must be acked, not retried"
+
+
+def test_a_failing_close_does_not_write_over_the_worker_that_holds_the_claim(
+        wired, monkeypatch):
+    """The success write was made a compare-and-set and the FAILURE write was
+    left a bare one, sixteen lines apart, under a comment explaining why the
+    first needed it.
+
+    The reasoning is identical and the consequence is worse. A holder whose
+    lease expired can still be alive; by the time it raises, the worker that
+    took the claim over may have CLOSED the month. Writing `failed`
+    unconditionally puts that back on top of `closed`, and the next redelivery
+    reads `failed`, retakes, and closes a month that is already closed. Double
+    execution, produced by the mechanism that exists to prevent it -- and it
+    resets the attempt counter on the way past.
+    """
+    store, _ = wired
+    env = load_event("602")
+    key = gcs.dedupe_key(env, PERIOD)
+
+    def die_after_being_robbed(period, **kwargs):
+        store.save_close(service.COMPANY, key,
+                         {"period": PERIOD, "status": "closed", "attempt": 2,
+                          "run_id": "the-holder's-run"})
+        raise RuntimeError("this attempt lost its claim and then fell over")
+
+    monkeypatch.setattr(service, "_close", die_after_being_robbed)
+
+    response = post(env)
+
+    held = store.load_close(service.COMPANY, key)
+    assert held["status"] == "closed", (
+        "a superseded failure overwrote the holder's closed month")
+    assert held["run_id"] == "the-holder's-run"
+    assert response.status_code == 200, "the holder owns it now; do not retry this one"
+
+
 # -- the decision itself, without a store, a bucket or a route ---------------
 
 def verdict(marker: dict, age_seconds: int = 0) -> str:

@@ -15,7 +15,12 @@ build, the tests and the browser journey.*
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
 - **Live demo**: [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/). No account, no install, one button.
-- **Demo video**: not yet recorded.
+- **Demo video**: recorded by CI against the deployed release, gated on the
+  live service reporting that exact release and the `adk-agent` close path
+  before a frame was taken, and bound to the green CI and Security runs for
+  the same commit. It is a build artifact -- 1080p, seven scenes, sha256 in a
+  receipt checked against the file -- and has **no public URL yet**; the
+  submission link is the owner's to add.
 - **Who it is for**: owner-operator trucking firms running three to twelve trucks.
 
 ---
@@ -632,7 +637,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 751 | `python -m pytest` |
+| Tests, all offline | 753 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

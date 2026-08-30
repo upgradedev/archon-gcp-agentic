@@ -132,9 +132,15 @@ def claim_verdict(marker: dict, now: datetime, lease: int = EVENT_LEASE_SECONDS,
     if status == "failed":
         return "dead-letter" if attempt >= max_attempts else "retake"
     if status == "processing":
-        if _lease_expired(marker.get("claimed_at"), now, lease):
-            return "retake"
-        return "wait"
+        if not _lease_expired(marker.get("claimed_at"), now, lease):
+            return "wait"
+        # The cap belongs here too, and this is the branch it was written for.
+        # A container that is KILLED runs no except clause, so what it leaves
+        # behind is `processing`, never `failed`. Checking the cap only on
+        # `failed` meant the one failure the dead letter exists to stop -- a
+        # close that reliably takes its container down -- was the one that
+        # could retry until the message expired.
+        return "dead-letter" if attempt >= max_attempts else "retake"
     # An unrecognised status is not a reason to refuse a month forever.
     return "retake"
 
@@ -667,13 +673,26 @@ async def events(request: Request) -> JSONResponse:
         # Without a marker there is nowhere to count attempts, so there is no
         # honest way to stop retrying: ack, and let the log be the record.
         spent = attempt >= EVENT_MAX_ATTEMPTS or not marker_key
-        if marker_key:
-            get_store().save_close(
-                COMPANY, marker_key,
+        # A compare-and-set, for the same reason the success write below is one,
+        # and with a worse consequence if it is not. A holder whose lease
+        # expired can still be alive, and by the time it raises the worker that
+        # took the claim over may have CLOSED the month. Writing `failed`
+        # unconditionally puts that back on top of `closed`; the next
+        # redelivery then reads `failed`, retakes, and closes a month that is
+        # already closed -- double execution, produced by the mechanism built to
+        # prevent it, and the attempt counter reset on the way past.
+        if marker_key and not get_store().retake(
+                COMPANY, marker_key, attempt,
                 {"period": period,
                  "status": "dead-letter" if spent else "failed",
                  "attempt": attempt, "reason": reason,
-                 "failed_at": datetime.now(UTC).isoformat()})
+                 "failed_at": datetime.now(UTC).isoformat()}):
+            log.warning("close of %s failed after its claim was taken over; "
+                        "leaving the holder's record alone", period)
+            return JSONResponse(
+                {"status": "superseded", "period": period, "attempt": attempt,
+                 "reason": "another delivery took this claim over"},
+                status_code=200)
         return JSONResponse(
             {"status": "dead-letter" if spent else "failed", "period": period,
              "attempt": attempt, "reason": reason},
