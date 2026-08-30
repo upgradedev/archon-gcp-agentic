@@ -130,11 +130,22 @@ def _forget_process_wide_state():
     marker in one throwaway and looked for it in another. Making it durable is
     the fix, and it means a close one test files is visible to the next unless
     it is cleared here.
-    """
-    from archon.adapters import ratelimit, store
 
-    ratelimit.PUBLIC_CLOSES.reset()
-    store.reset_local_store()
+    The cold-start cache: `service._COLD_START_CLOSES` memoises the anonymous
+    GET's deterministic close for the life of the process, which is right in
+    production -- one container, one bundled corpus, an answer that cannot go
+    stale -- and wrong in a suite, where it means the second test to ask about
+    a period gets the first test's payload instead of exercising the path. A
+    guard asserting what a GET does on a cold container is inert once anything
+    has warmed it.
+    """
+    from archon.adapters import ratelimit, service, store
+
+    def clear():
+        ratelimit.PUBLIC_CLOSES.reset()
+        store.reset_local_store()
+        service._COLD_START_CLOSES.clear()
+
+    clear()
     yield
-    ratelimit.PUBLIC_CLOSES.reset()
-    store.reset_local_store()
+    clear()

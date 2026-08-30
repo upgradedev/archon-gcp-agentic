@@ -390,8 +390,13 @@ at all. On a fatter margin it would be noise.
 
 ### The ten things it looks for
 
-Every one has a deterministic detector, and every one fires on the bundled
-month, asserted by a test:
+Every one has a deterministic detector. **Nine of the ten fire on the bundled
+month**, and a test asserts exactly that -- including which one does not.
+`Unrecognised document` is deliberately absent from the corpus: an artifact that
+reads perfectly and matches no family blocks the month at G6, so an instance in
+the bundled month would mean the demo never closes. It has its own tests; what
+it does not have is an example here, and saying "every one fires" was claiming
+a tenth that the test it pointed at asserts must stay absent.
 
 | What | Example from the bundled month |
 |---|---|
@@ -503,7 +508,7 @@ not done.
 | Performance efficiency | The close is 27 artifacts and finishes in about 15 ms locally, because the engine is pure Python over in-memory structures | Never load tested. A firm with 40 trucks and 400 fuel lines is untested |
 | Sustainability | Scale to zero between months; no idle compute | Not measured |
 | **Agentic lens: bounded autonomy** | Two edges with different rules. The agent acts freely on state it owns and stops at a third party's inbox. Enforced by there being no send path to a counterparty, asserted by two tests | The boundary is enforced by absence, not by a policy engine. Adding a send path is a code review away |
-| **Agentic lens: grounding** | The model is handed a fact sheet of computed figures as text. It never sees a document and cannot introduce a number. The agent path and the deterministic path are asserted byte-identical | No automated check that the model's prose agrees with the fact sheet; the deterministic summary is the reference, not a judge |
+| **Agentic lens: grounding** | The model is handed a fact sheet of computed figures as text. It never sees a document and cannot introduce a number. The FIGURES are asserted identical whoever decided, while the dispositions are free to differ -- byte-identical output was the old assertion and it was dropped, because it could only hold while the agent changed nothing | No automated check that the model's prose agrees with the fact sheet; the deterministic summary is the reference, not a judge |
 
 ### EU AI Act (Regulation (EU) 2024/1689)
 
@@ -623,8 +628,14 @@ computes.**
 - The model is handed a fact sheet of already-computed figures as text. It is
   never handed the documents and never asked for a total.
 - The agent's tools return counts and summaries. There is no path from the
-  agent to a number in the books, and a test asserts that the agent path and the
-  deterministic path produce byte-identical output.
+  agent to a number in the books, and
+  `test_the_figures_are_identical_whoever_decided_and_the_decisions_may_differ`
+  asserts the boundary: run the month under standing policy and again under an
+  agent that chases nothing -- the most extreme decision available -- and every
+  figure is identical while the dispositions differ. An earlier test asserted
+  the two paths were byte-IDENTICAL, and it was replaced on purpose: that held
+  only while the agent could not affect anything, which is a description of a
+  decorative agent rather than a safe one.
 - An artifact nobody could read is reported as an exception and posted as
   nothing. A gate fails the whole close if an unreadable document is ever given
   a figure, because that is the one failure that would not announce itself: an
