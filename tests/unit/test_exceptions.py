@@ -392,7 +392,7 @@ def test_the_counts_this_repository_states_in_prose_match_the_code():
         ("src/archon/runtime/close.py", "against " + g + " gates"),
         ("web/index.html", d.capitalize() + " detectors, worst first"),
         ("web/index.html", g + " close gates"),
-        ("web/index.html", g.capitalize() + " gates run before"),
+        ("web/index.html", g.capitalize() + " gates stand between"),
         ("README.md", t + " tools, one per step"),
         ("src/archon/adapters/agents.py", "the " + t + " tools, in the order"),
     ]

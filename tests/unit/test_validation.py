@@ -158,7 +158,13 @@ def test_a_clean_month_passes_every_gate():
     gates = validate(_ledger(*docs), allocate_all(docs))
 
     assert all_passed(gates)
-    assert summary(gates) == "7/7 gates passed"
+    # Four run on a two-document month. The other three have no unreadable
+    # scan, nothing of an unknown family and one currency, so they check
+    # nothing. They pass -- a thin month is not a failed month -- and the
+    # summary says how many actually ran rather than folding the three into a
+    # "7/7" that would overstate what was verified.
+    assert summary(gates) == "4/4 gates passed, 3 skipped"
+    assert [g.rule.split(":")[0] for g in gates if g.skipped] == ["G5", "G6", "G7"]
 
 
 def test_one_broken_gate_fails_the_set():
@@ -231,3 +237,64 @@ def test_the_unrecognised_finding_is_reported_and_is_not_actionable():
     assert findings[0].severity == "error"
     assert findings[0].amount == 0.0, "Archon does not guess what it could not classify"
     assert ExceptionKind.UNRECOGNISED_DOCUMENT not in ACTIONABLE_KINDS
+
+
+# --- The gate summary, and what the two document gates say about each other ---
+
+def _bundled_gates():
+    from archon.cli import read_period
+    from archon.runtime.close import run_close
+    documents, raw = read_period("2026-07", root=None)
+    result = run_close(period="2026-07", documents=documents,
+                       company="Bell Ridge Haulage", raw_texts=raw)
+    return documents, result
+
+
+def test_g4_and_g5_agree_about_the_unreadable_document():
+    """Two gates on the same screen must not contradict each other.
+
+    G5 reports the unreadable scan as "none posted", and it is right: the
+    document carries a zero-line memo entry so the trail records that it
+    arrived at all. G4 counted that memo among the documents that "each posted
+    once", so the checks panel said 27 documents posted and, two rows down,
+    that one of them had not. A judge reading both rows is entitled to conclude
+    one of the gates is decorative.
+    """
+    documents, result = _bundled_gates()
+    gates = {g.rule.split(":")[0]: g for g in result.gates}
+    unreadable = [d for d in documents if d.failure_reason]
+    assert unreadable, "the bundled month is supposed to contain one"
+
+    posted = {e.source_doc for e in result.ledger.entries
+              if e.source_doc and e.lines}
+    for document in unreadable:
+        assert document.source_file not in posted
+    assert str(len(posted)) in gates["G4"].message
+    assert str(len(documents)) not in gates["G4"].message.split(",")[0]
+
+
+def test_a_skipped_gate_is_not_reported_as_one_that_ran():
+    """`7/7 gates passed` when two had no inputs is a stronger claim than the
+    run can carry. A gate whose inputs are absent still passes -- a thin month
+    is not a failed month -- but it did not check anything, and the headline
+    figure said it did."""
+    from archon.domain import validation
+    from archon.domain.models import ValidationResult
+
+    ran = ValidationResult("G1: x", True, "info", "27 entries, all balanced")
+    skipped = validation._skipped("G7: y", "one currency in the month")
+
+    assert skipped.passed is True
+    assert skipped.skipped is True
+    assert ran.skipped is False
+
+    line = validation.summary([ran, skipped])
+    assert "1/1" in line, f"only one gate ran: {line}"
+    assert "skipped" in line, f"the skipped one must be visible: {line}"
+
+
+def test_gate_messages_read_as_english():
+    """`1 remittance(s) reconcile to 8 load lines` is on camera."""
+    _, result = _bundled_gates()
+    for gate in result.gates:
+        assert "(s)" not in gate.message, gate.message

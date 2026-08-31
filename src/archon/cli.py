@@ -16,6 +16,8 @@ import os
 import pathlib
 import sys
 
+from archon.domain.text import plural
+
 from . import PERIOD
 from .runtime.close import run_close
 from .runtime.mailbox import read_period
@@ -37,7 +39,8 @@ def _print_close(result) -> None:
     # "being chased" was a lie by one tense. The letters are written and filed
     # unsent; nobody has chased anybody. The figure is what the letters would
     # recover if the owner approved them, which is a different sentence.
-    print(f"  {len(result.findings)} exception(s), {len(result.drafts)} draft(s) filed, "
+    print(f"  {plural(len(result.findings), 'exception')}, "
+          f"{plural(len(result.drafts), 'draft')} filed, "
           f"{result.recoverable:,.2f} recoverable once you approve them")
     for draft in result.drafts:
         print(f"    [{draft.status}] {draft.kind.value} to {draft.recipient}: {draft.subject}")
@@ -90,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
             narrator=gemini_narrator(),
             documents=documents, raw=raw,
             source=({"mailbox": "local-directory",
-                     "detail": f"{len(documents)} document(s) from {root}"}
+                     "detail": f"{plural(len(documents), 'document')} from {root}"}
                     if root is not None else None),
         )
         if result is None:

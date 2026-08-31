@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 
 from .drafts import leakage, outstanding, undocumented
 from .models import Draft, ExceptionKind
+from .text import plural
 
 #: How many actions the digest names before it stops listing. A digest that
 #: lists everything is a report, and a report is the thing this replaces.
@@ -172,7 +173,8 @@ def compose(result, recipient: str, company: str | None = None) -> Digest:
     else:
         lines.append("  Nothing. The month is closed and there is nothing outstanding.")
 
-    lines += ["", f"  {len(errors)} error(s), {len(result.findings)} exception(s) in total.",
+    lines += ["", f"  {plural(len(errors), 'error')}, "
+              f"{plural(len(result.findings), 'exception')} in total.",
               f"  Run {result.run_id}, {len(result.journal.steps) + 1} steps, "
               f"every one on the record.", "", f"  {company}"]
 

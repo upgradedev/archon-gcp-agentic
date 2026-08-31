@@ -32,6 +32,7 @@ from .models import (
     Finding,
 )
 from .periods import parse_date, period_bounds
+from .text import plural
 
 #: Two charges to the same counterparty for the same amount inside this window
 #: are a probable double-billing rather than a coincidence.
@@ -162,7 +163,8 @@ def find_unreconciled_remittances(results: list[AllocationResult]) -> list[Findi
                     message=(
                         f"Remittance {result.remittance_ref} credited "
                         f"{result.remittance_total:,.2f}, but its {len(result.allocations)} "
-                        f"load line(s) total {result.allocated_gross:,.2f} less a "
+                        f"{plural(len(result.allocations), 'load line')} total "
+                        f"{result.allocated_gross:,.2f} less a "
                         f"{result.factoring_fee:,.2f} factoring fee, leaving "
                         f"{result.residual:,.2f} unaccounted for."
                     ),

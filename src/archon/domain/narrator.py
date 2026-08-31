@@ -16,6 +16,7 @@ sentence disagree about a figure, the offline sentence is right.
 from __future__ import annotations
 
 from .models import Draft, ExceptionKind, Finding, Statements, ValidationResult
+from .text import plural
 
 #: How many findings the owner-facing summary names before it stops listing.
 TOP_FINDINGS = 5
@@ -152,13 +153,16 @@ def narrate(statements: Statements, findings: list[Finding],
         worst = "; ".join(f"{f.reference} ({f.amount:,.2f})" for f in errors[:TOP_FINDINGS])
         if no_paperwork and chaseable:
             sentences.append(
-                f"{len(errors)} problem(s) need attention, worst first: {worst}. "
+                f"{plural(len(errors), 'problem')} "
+                f"{'needs' if len(errors) == 1 else 'need'} attention, "
+                f"worst first: {worst}. "
                 f"{chaseable:,.2f} of that you can get back; {no_paperwork:,.2f} left "
                 f"the account with no paperwork behind it and recovers nothing."
             )
         else:
             sentences.append(
-                f"{len(errors)} problem(s) worth {at_stake:,.2f} need attention, "
+                f"{plural(len(errors), 'problem')} worth {at_stake:,.2f} "
+                f"{'needs' if len(errors) == 1 else 'need'} attention, "
                 f"worst first: {worst}."
             )
     else:
@@ -166,7 +170,8 @@ def narrate(statements: Statements, findings: list[Finding],
 
     if drafts:
         sentences.append(
-            f"{len(drafts)} corrective document(s) were drafted and filed, none sent; "
+            f"{plural(len(drafts), 'corrective document')} "
+            f"{'was' if len(drafts) == 1 else 'were'} drafted and filed, none sent; "
             f"they are waiting for you to approve and send them."
         )
 

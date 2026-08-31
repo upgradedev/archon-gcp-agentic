@@ -36,6 +36,11 @@ const num = (n, d = 0) => (n === null || n === undefined) ? "–"
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
   (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const words = (s) => String(s ?? "").replace(/_/g, " ");
+// "1 load", not "1 loads". Bell Ridge's July has several of everything, so
+// this reads identically on the demo month -- it earns its keep on an owner's
+// own upload, which can legitimately contain one of anything.
+const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+
 const title = (s) => { const w = words(s); return w.charAt(0).toUpperCase() + w.slice(1); };
 
 let period = "2026-07";
@@ -275,7 +280,7 @@ function renderMileChart(s) {
 function renderHero(d) {
   const first = (d.allocations && d.allocations[0]) || null;
   const parts = [];
-  if (first) parts.push(`One payment. ${first.lines.length} loads.`);
+  if (first) parts.push(`One payment. ${plural(first.lines.length, "load")}.`);
   if (d.leakage > 0) parts.push(`${usd(d.leakage)} was quietly leaking.`);
   else if (d.outstanding > 0) parts.push(`${usd(d.outstanding)} invoiced and unpaid.`);
   else parts.push("Nothing was leaking.");
@@ -373,7 +378,7 @@ function renderWaterfall(allocations) {
   }
   const linesPay = a.lines.reduce((t, l) => t + (l.paid || 0), 0);
   const rows = [
-    { label: `${a.lines.length} lines pay`, value: linesPay, tone: "primary",
+    { label: plural(a.lines.length, "line pays", "lines pay"), value: linesPay, tone: "primary",
       display: usd(linesPay) },
     { label: "factoring fee", value: -a.factoring_fee, tone: "warn",
       display: `− ${usd(a.factoring_fee)}` },
@@ -501,12 +506,12 @@ function renderStats(d) {
     ["trucks", "Margin per mile", num(margin, 3),
      `${num(s.revenue_per_mile, 3)} earned, ${num(s.cost_per_mile, 3)} spent`],
     ["trucks", "Miles run", num(s.total_miles),
-     `${Object.keys(s.per_truck).length} trucks`],
+     plural(Object.keys(s.per_truck).length, "truck")],
     ["findings", "Exceptions", String(d.findings.length),
      errs ? `${usd(atStake)} at stake` : "none of them errors",
      errs ? [`${errs} error${errs > 1 ? "s" : ""}`, "err"] : null],
     ["letters", "Leaking away", usd(d.leakage), "found by the checks, not by a person",
-     d.drafts.length ? [`${d.drafts.length} letters ready`, "warn"] : null],
+     d.drafts.length ? [`${plural(d.drafts.length, "letter")} ready`, "warn"] : null],
     // From the REGISTER, not from the letters. It used to read
     // `usd(d.outstanding)`, which sums the payment-reminder drafts, so the
     // headline said 0.00 on any run where the agent decided those exceptions
@@ -516,7 +521,7 @@ function renderStats(d) {
     ["register", "Owed to us", usd((d.register && d.register.owed_to_us) || 0),
      "receivables still open"],
     ["checks", "Close", title(d.outcome),
-     `${d.gates.filter((g) => g.passed).length}/${d.gates.length} gates passed`],
+     gateLine(d.gates)],
   ];
   $("stats").innerHTML = cards.map(([go, k, v, sub, badge]) =>
     `<button class="card" data-goto="${esc(go)}">
@@ -537,7 +542,7 @@ function renderAlloc(list) {
       <b>${esc(a.remittance_ref)}</b> from ${esc(a.broker)}:
       <span class="num">${usd(a.remittance_total)}</span> landed,
       <span class="num">${usd(a.factoring_fee)}</span> factoring fee,
-      <span class="num">${usd(a.allocated_gross)}</span> across ${a.lines.length} loads.
+      <span class="num">${usd(a.allocated_gross)}</span> across ${plural(a.lines.length, "load")}.
       <span class="pill ${a.reconciles ? "ok" : "err"}">
         ${a.reconciles ? "identity closes, residual 0.00" : `residual ${usd(a.residual)}`}</span>
       </td></tr>`;
@@ -669,11 +674,27 @@ document.addEventListener("click", (event) => {
   }
 });
 
+// The same sentence the CLI prints, built from the same two counts, so the
+// page and the terminal cannot drift apart on the number a judge writes down.
+function gateLine(gates) {
+  const ran = gates.filter((g) => !g.skipped);
+  const line = `${ran.filter((g) => g.passed).length}/${ran.length} gates passed`;
+  const skipped = gates.length - ran.length;
+  return skipped ? `${line}, ${skipped} skipped` : line;
+}
+
+// A skipped gate passed and did not check anything, and those are different
+// claims. Painting it the same green as a gate that ran over 27 entries made
+// the panel report seven verifications when five had happened.
 function renderGates(list) {
-  const rows = list.map((g) => `<tr>
-    <td><span class="pill ${g.passed ? "ok" : "err"}">${g.passed ? "pass" : "fail"}</span></td>
+  const tone = (g) => g.skipped ? ["info", "skip"] : g.passed ? ["ok", "pass"] : ["err", "fail"];
+  const rows = list.map((g) => {
+    const [cls, label] = tone(g);
+    return `<tr>
+    <td><span class="pill ${cls}">${label}</span></td>
     <td>${esc(g.rule)}</td><td class="muted">${esc(g.message)}</td>
-  </tr>`).join("");
+  </tr>`;
+  }).join("");
   $("gates").innerHTML = `<thead><tr><th></th><th>Gate</th><th>Evidence</th></tr></thead>
     <tbody>${rows}</tbody>`;
 }
@@ -994,10 +1015,12 @@ const TOUR = [
   },
   {
     title: "It checks itself, and can refuse",
-    body: "Seven gates run over the finished books, and a close that cannot " +
-          "verify its own arithmetic is blocked rather than filed. Each gate is " +
-          "broken on purpose in the test suite and asserted red, because a gate " +
-          "nobody has watched fail is a gate nobody should believe.",
+    body: "Seven gates stand over the finished books, and a close that cannot " +
+          "verify its own arithmetic is blocked rather than filed. A gate with " +
+          "nothing to check reads skipped rather than passing quietly, so the " +
+          "count is what was verified. Each gate is broken on purpose in the " +
+          "test suite and asserted red, because a gate nobody has watched fail " +
+          "is a gate nobody should believe.",
     panel: "checks", focus: "#gates",
   },
   {

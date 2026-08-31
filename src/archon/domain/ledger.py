@@ -31,6 +31,7 @@ from .models import (
     Statements,
 )
 from .periods import belongs_to
+from .text import plural
 
 
 def _dr(account: Account, amount: float) -> JournalLine:
@@ -464,7 +465,8 @@ class Ledger:
         unposted = [d for d in self.documents if d.doc_type == DocType.UNREADABLE]
         if unposted:
             notes.append(
-                f"{len(unposted)} document(s) could not be read and were deliberately "
+                f"{plural(len(unposted), 'document')} could not be read and "
+                "were deliberately "
                 f"left unposted rather than estimated."
             )
 

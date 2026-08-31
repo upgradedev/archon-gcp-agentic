@@ -33,9 +33,15 @@ from .models import (
 from .periods import parse_date
 
 
+def _n(count: int, one: str, many: str | None = None) -> str:
+    """"1 remittance", not "1 remittance(s)". These strings are the evidence
+    column of the checks panel, which is on screen while a judge is reading."""
+    return f"{count} {one if count == 1 else (many or one + 's')}"
+
+
 def _skipped(rule: str, why: str) -> ValidationResult:
     return ValidationResult(rule=rule, passed=True, severity="info",
-                            message=f"Skipped: {why}")
+                            message=f"Skipped: {why}", skipped=True)
 
 
 def g1_entries_balance(ledger) -> ValidationResult:
@@ -68,8 +74,9 @@ def g2_remittances_reconcile(results: list[AllocationResult]) -> ValidationResul
         )
     return ValidationResult(
         rule, True, "info",
-        f"{len(results)} remittance(s) reconcile to "
-        f"{sum(len(r.allocations) for r in results)} load lines",
+        f"{_n(len(results), 'remittance')} "
+        f"{'reconciles' if len(results) == 1 else 'reconcile'} to "
+        f"{_n(sum(len(r.allocations) for r in results), 'load line')}",
     )
 
 
@@ -135,10 +142,19 @@ def g4_no_double_posting(ledger) -> ValidationResult:
     if repeats:
         return ValidationResult(
             rule, False, "error",
-            f"{len(repeats)} document(s) posted more than once: " + ", ".join(repeats[:3]),
+            f"{_n(len(repeats), 'document')} posted more than once: "
+            + ", ".join(repeats[:3]),
         )
+    # Counted on the entries that carry LINES, not on every entry with a
+    # source. An unreadable document gets a zero-line memo entry so the trail
+    # records that it arrived; G5 reports it, correctly, as "none posted".
+    # Counting it here as a document that "posted once" put two contradictory
+    # numbers for the same document in one panel.
+    posted = {e.source_doc for e in ledger.entries if e.source_doc and e.lines}
+    recorded = len(set(sources)) - len(posted)
+    tail = f"; {_n(recorded, 'document')} recorded without posting" if recorded else ""
     return ValidationResult(rule, True, "info",
-                            f"{len(set(sources))} documents, each posted once")
+                            f"{_n(len(posted), 'document')}, each posted once{tail}")
 
 
 def g5_unreadable_left_unposted(ledger) -> ValidationResult:
@@ -158,12 +174,13 @@ def g5_unreadable_left_unposted(ledger) -> ValidationResult:
     if offenders:
         return ValidationResult(
             rule, False, "error",
-            f"{len(offenders)} unreadable document(s) were posted with figures: "
+            f"{_n(len(offenders), 'unreadable document')} "
+            f"{'was' if len(offenders) == 1 else 'were'} posted with figures: "
             + "; ".join(offenders[:3]),
         )
     return ValidationResult(
         rule, True, "info",
-        f"{len(unreadable)} unreadable document(s), none posted",
+        f"{_n(len(unreadable), 'unreadable document')}, none posted",
     )
 
 
@@ -280,5 +297,13 @@ def all_passed(gates: list[ValidationResult]) -> bool:
 
 
 def summary(gates: list[ValidationResult]) -> str:
-    passed = sum(1 for g in gates if g.passed)
-    return f"{passed}/{len(gates)} gates passed"
+    """`7/7 gates passed` when two of them had no inputs claims more than the
+    run can carry. A gate whose inputs are absent still passes -- a thin month
+    is not a failed month -- but it checked nothing, and the headline said it
+    had. So the ratio counts the gates that RAN and the skipped ones are named
+    beside it rather than folded in."""
+    ran = [g for g in gates if not g.skipped]
+    passed = sum(1 for g in ran if g.passed)
+    line = f"{passed}/{len(ran)} gates passed"
+    skipped = len(gates) - len(ran)
+    return f"{line}, {skipped} skipped" if skipped else line

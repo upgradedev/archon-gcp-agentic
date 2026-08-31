@@ -40,6 +40,8 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from archon.domain.text import plural
+
 from ..adapters import delivery as delivery_mod
 from ..adapters.delivery import Deliverer, Receipt
 from ..adapters.store import RehearsalStore, Store, get_store
@@ -389,7 +391,8 @@ def run_close(period: str,
         lines = sum(len(r.allocations) for r in results)
         off = [r for r in results if not r.reconciles]
         step.note(
-            f"{len(results)} remittance(s) split across {lines} loads; "
+            f"{plural(len(results), 'remittance')} split across "
+            f"{plural(lines, 'load')}; "
             + (f"{len(off)} left a residual" if off else "every one reconciles"),
             remittances=len(results), load_lines=lines, unreconciled=len(off),
         )
@@ -403,7 +406,8 @@ def run_close(period: str,
         step.note(
             f"{len(settled)} of {loads} loads settled, {len(outstanding)} still "
             f"outstanding; {open_items.owed_to_us:,.2f} owed to the firm across "
-            f"{len(open_items.receivables)} item(s), {open_items.owed_by_us:,.2f} owed "
+            f"{plural(len(open_items.receivables), 'item')}, "
+            f"{open_items.owed_by_us:,.2f} owed "
             f"by it across {len(open_items.payables)}",
             loads=loads, settled=len(settled), outstanding=len(outstanding),
             owed_to_us=open_items.owed_to_us, owed_by_us=open_items.owed_by_us,
@@ -414,7 +418,7 @@ def run_close(period: str,
         findings = exceptions_mod.find_all(documents, results, period)
         errors = [f for f in findings if f.severity == "error"]
         step.note(
-            f"{len(findings)} exception(s), {len(errors)} of them errors, "
+            f"{plural(len(findings), 'exception')}, {len(errors)} of them errors, "
             f"{exceptions_mod.exposure(errors):,.2f} at stake",
             exceptions=len(findings), errors=len(errors),
             at_stake=exceptions_mod.exposure(errors),
@@ -456,7 +460,7 @@ def run_close(period: str,
             decisions, company or "Accounts", month_currency)
         escalated = [d for d in decisions if d.applied is Disposition.ESCALATE]
         step.note(
-            f"{len(filed)} document(s) drafted and filed unsent: "
+            f"{plural(len(filed), 'document')} drafted and filed unsent: "
             f"{drafts_mod.leakage(filed):,.2f} that would have leaked away, "
             f"{drafts_mod.outstanding(filed):,.2f} already owed and unpaid; "
             f"{len(escalated)} put in front of the owner instead",
@@ -528,7 +532,7 @@ def run_close(period: str,
         stored["run"] = store.save_run(run.to_dict())
         step.note(
             f"period {period} marked {outcome} ({outcome_reason}); books, "
-            f"{len(filed)} draft(s) and a "
+            f"{plural(len(filed), 'draft')} and a "
             f"{len(run.steps) + 2}-step trail persisted to {getattr(store, 'backend', 'store')}",
             outcome=outcome, backend=getattr(store, "backend", "store"),
         )

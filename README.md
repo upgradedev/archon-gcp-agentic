@@ -397,26 +397,26 @@ Over the bundled month, `python run.py`:
  + 2. Post the double-entry journal
      25 entries posted from 27 artifacts, 2 deliberately left unposted
  + 3. Split each remittance across the loads it settles
-     1 remittance(s) split across 8 loads; every one reconciles
+     1 remittance split across 8 loads; every one reconciles
  + 4. Reconcile loads against what the brokers paid
      8 of 9 loads settled, 2 still outstanding; 5,100.00 owed to the firm
-     across 3 item(s), 3,564.75 owed by it across 5
+     across 3 items, 3,564.75 owed by it across 5
  + 5. Find what is missing or does not add up
-     10 exception(s), 3 of them errors, 2,477.85 at stake
+     10 exceptions, 3 of them errors, 2,477.85 at stake
  + 6. Decide what to do about each exception
      5 draft, 2 escalate, 3 note (standing policy)
  + 7. Write the corrective documents
-     5 document(s) drafted and filed unsent: 612.85 that would have leaked
+     5 documents drafted and filed unsent: 612.85 that would have leaked
      away, 4,900.00 already owed and unpaid; 2 put in front of the owner
      instead
  + 8. Check the close against its own gates
-     7/7 gates passed
+     5/5 gates passed, 2 skipped
  + 9. Write the month-end summary
      summary written from a 63-line fact sheet (deterministic); no figure
      was phrased by a model
  + 10. File the close and mark the period
      period 2026-07 marked closed (closed with an unreadable document
-     escalated to the owner); books, 5 draft(s) and a 11-step trail
+     escalated to the owner); books, 5 drafts and a 11-step trail
      persisted to memory
  + 11. Write the owner their month-end letter
      "2026-07 closed. 612.85 was quietly leaking, 5 letters ready" ->
@@ -778,7 +778,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 843 | `python -m pytest` |
+| Tests, all offline | 846 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

@@ -34,6 +34,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
+from archon.domain.text import plural
+
 from .. import PERIOD, __version__, paths
 from ..domain.extract import extract_document
 from ..runtime import mailbox
@@ -580,7 +582,7 @@ def close_uploaded(payload: dict, request: Request) -> dict:
             public=True, allow_model=False,
             source={"mailbox": "uploaded",
                     "release": os.getenv("ARCHON_RELEASE") or None,
-                    "detail": f"{len(documents)} document(s) you sent, closed in memory "
+                    "detail": f"{plural(len(documents), 'document')} you sent, closed in memory "
                               f"and kept nowhere"},
         )
 

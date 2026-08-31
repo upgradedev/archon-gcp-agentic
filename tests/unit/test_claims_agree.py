@@ -743,7 +743,7 @@ def test_the_readme_console_block_is_what_the_command_actually_prints():
         )
 
     # And the figures under them, which are the part a judge checks.
-    for figure in ("27 artifacts", "7/7 gates passed", "2,477.85 at stake"):
+    for figure in ("27 artifacts", "5/5 gates passed, 2 skipped", "2,477.85 at stake"):
         assert figure in printed and figure in block, (
             f"{figure!r} disagrees between the README and the command"
         )

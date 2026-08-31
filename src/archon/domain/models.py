@@ -342,6 +342,10 @@ class ValidationResult:
     passed: bool
     severity: str                   # "info" | "warning" | "error"
     message: str
+    #: True when the gate had nothing to check. It still passes -- a thin month
+    #: is not a failed month -- but "passed" and "ran" are different claims and
+    #: the summary line was making the weaker one sound like the stronger.
+    skipped: bool = False
 
 
 @dataclass
