@@ -1041,6 +1041,18 @@ its persistence model is deliberately not used here.
   those is still Google Cloud. `infra/main.tf` remains the only thing that
   builds the judged deployment.
 
+- **The persistence fence narrows the window, it does not close it.** A worker
+  whose lease expires mid-close is stopped at its FIRST business write rather
+  than its last, because `FencedStore` re-reads the ownership marker before
+  each one. But the read and the write are still two operations, so a take-over
+  landing between them is made very unlikely rather than impossible -- the gap
+  is one Firestore round trip instead of an entire close. Calling that "never
+  overwritten" would claim more than a read-then-write can carry. Closing it
+  needs the check and the write inside one transaction in every store, which is
+  a change to the stores rather than to the wrapper, and it is not done.
+  Delivery is the case that would actually hurt, and delivery is fenced
+  separately in `FencedDelivery` because a sent message cannot be recalled.
+
 - **One period, one company.** There is no multi-tenancy, no authentication and
   no billing here. Those exist in commercial products and would be noise in a
   submission about whether an agent can finish a chore.

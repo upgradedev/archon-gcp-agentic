@@ -100,8 +100,9 @@ class FencedStore:
     instead of an entire close. Calling that "never overwritten" would be a
     stronger claim than a read-then-write can carry. Closing it properly needs
     the ownership check and the write in one transaction, which is a change to
-    every store implementation rather than a wrapper, and it is recorded in
-    STATE.md as open.
+    every store implementation rather than a wrapper. It is open, and it is
+    written down as open under "Honest scope" in the README rather than left
+    for a reader to discover here.
 
     Reads are not fenced. A stale worker reading is harmless, and fencing them
     would double the cost of the one thing that has to stay cheap.
