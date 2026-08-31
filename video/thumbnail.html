@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Archon — gallery thumbnail</title>
+<!--
+  1800x1200, which is the 3:2 Devpost asks for. It is rendered at about 300px
+  wide in the project gallery, so everything here is sized to survive that: one
+  wordmark, one sentence, one figure. The stack badges are the only small text
+  and they are legible rather than load-bearing.
+
+  Rendered by video/shoot-stills.py. Every figure is Bell Ridge's July, the same
+  month the demo closes, and the same guard that holds the deck holds this.
+-->
+<style>
+  :root {
+    --bg: #0b0f1e; --card: #131a2e; --card-hi: #182043; --border-strong: #2f3862;
+    --text: #e8ebf5; --text-2: #aab2c8; --text-3: #8b93a7;
+    --primary: #6366f1; --primary-hi: #7c7ff5; --violet: #8b5cf6;
+    --positive: #22c55e; --cyan: #2dd4bf;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 1800px; height: 1200px; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 400 24px/1.5 "Segoe UI", -apple-system, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: ""; position: fixed; inset: -20%;
+    background:
+      radial-gradient(46% 42% at 20% 24%, rgba(99,102,241,.26), transparent 68%),
+      radial-gradient(42% 40% at 82% 76%, rgba(139,92,246,.20), transparent 66%),
+      radial-gradient(32% 30% at 64% 16%, rgba(45,212,191,.11), transparent 62%);
+  }
+  main {
+    position: fixed; inset: 0; padding: 96px 104px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .mark { display: flex; align-items: center; gap: 30px; margin-bottom: 40px; }
+  .glyph {
+    width: 104px; height: 104px; border-radius: 28px; position: relative;
+    background: linear-gradient(140deg, var(--primary) 0%, var(--violet) 100%);
+    box-shadow: 0 24px 64px rgba(99,102,241,.46);
+  }
+  .glyph::after {
+    content: ""; position: absolute; inset: 29px;
+    border: 6px solid rgba(255,255,255,.95); border-radius: 8px;
+    border-right-color: transparent; border-bottom-color: transparent;
+    transform: rotate(45deg);
+  }
+  .wordmark { font-size: 116px; font-weight: 200; letter-spacing: .28em; padding-left: .28em; }
+
+  h1 {
+    font-size: 82px; font-weight: 300; line-height: 1.14; letter-spacing: -.015em;
+    max-width: 1560px;
+  }
+  h1 b { font-weight: 600; }
+  h1 .hi { color: var(--primary-hi); font-weight: 600; }
+
+  .found {
+    margin-top: 54px; display: flex; align-items: baseline; gap: 26px;
+    padding: 30px 40px; border-radius: 20px; align-self: flex-start;
+    background: linear-gradient(150deg, var(--card-hi), var(--card));
+    border: 1px solid var(--border-strong);
+  }
+  .found .n { font-size: 76px; font-weight: 300; color: var(--positive); }
+  .found .l { font-size: 32px; color: var(--text-2); }
+
+  .badges { display: flex; gap: 14px; margin-top: 58px; flex-wrap: wrap; }
+  .badge {
+    padding: 13px 26px; border: 1px solid var(--border-strong); border-radius: 999px;
+    background: rgba(19,26,46,.7); color: var(--text-2);
+    font-size: 26px; letter-spacing: .05em;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark">
+    <div class="glyph"></div>
+    <div class="wordmark">ARCHON</div>
+  </div>
+
+  <h1>It closes a trucking firm's month <b>while nobody is watching</b> —
+    and finds what <span class="hi">one batched payment was hiding.</span></h1>
+
+  <div class="found">
+    <span class="n num">$612.85</span>
+    <span class="l">quietly leaking, found on one month</span>
+  </div>
+
+  <div class="badges">
+    <span class="badge">Google ADK</span>
+    <span class="badge">Gemini</span>
+    <span class="badge">Cloud Run</span>
+    <span class="badge">Firestore</span>
+    <span class="badge">Pub/Sub</span>
+    <span class="badge">Cloud Storage</span>
+  </div>
+</main>
+</body>
+</html>

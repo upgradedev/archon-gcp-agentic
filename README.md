@@ -614,7 +614,7 @@ sequenceDiagram
     A->>D: verify_and_file
     D-->>F: books, drafts, 11-step trail
     A->>O: month-end digest, composed and filed
-    Note over A,X: the letters to brokers stop here.<br/>a human approves; no channel is configured.
+    Note over A,X: the letters to brokers stop here.<br/>a human approves, and no channel is configured.
     X--xA: nothing is sent unattended
 ```
 
@@ -779,7 +779,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 865 | `python -m pytest` |
+| Tests, all offline | 866 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

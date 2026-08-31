@@ -1076,3 +1076,37 @@ def test_every_figure_on_the_opening_slides_is_a_figure_from_the_close():
     # The broker and the remittance are named on the slide too.
     assert allocation["broker"] in body
     assert allocation["remittance_ref"] in body
+
+
+def test_no_mermaid_block_contains_a_semicolon():
+    """A semicolon inside a diagram label silently breaks the whole diagram.
+
+    Mermaid reads `;` as a statement separator, so
+
+        Note over A,X: a human approves; no channel is configured.
+
+    ended the note at "approves", left the rest as a stray statement, and that
+    statement swallowed the line after it. GitHub rendered a red parse error
+    where the architecture diagram should be -- on the README a judge opens
+    first, and on a submission whose rules ask for an architecture diagram by
+    name.
+
+    It had been broken for some time and nothing noticed, because the diagrams
+    are the one part of this repository that no test could see: rendering them
+    needs mermaid, which needs a network. This is the offline half of the
+    check -- the character that caused it, in the blocks it can appear in.
+    """
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    for markdown in sorted(root.glob("*.md")) + sorted(root.glob("docs/*.md")):
+        pattern = "```mermaid" + chr(10) + "(.*?)```"
+        blocks = re.findall(pattern, markdown.read_text(encoding="utf-8"), re.S)
+        for index, block in enumerate(blocks):
+            for number, line in enumerate(block.splitlines(), start=1):
+                assert ";" not in line, (
+                    f"{markdown.name} mermaid block {index}, line {number} carries a "
+                    f"semicolon, which mermaid reads as a statement separator and "
+                    f"which will break the diagram: {line.strip()!r}"
+                )
