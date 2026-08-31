@@ -101,13 +101,13 @@ def minimal(tmp_path) -> Path:
     period = root / PERIOD
     period.mkdir(parents=True)
     (period / "load-L-1.txt").write_text(
-        "MIDWEST FREIGHT EXCHANGE\nLOAD CONFIRMATION\n\n"
+        "THACKERY FREIGHT EXCHANGE\nLOAD CONFIRMATION\n\n"
         "Document Type: Load Confirmation\n"
         "Date: 2026-07-10\nLoad Number: L-1\nBroker: Thackery Freight Exchange\n"
         "Unit: T-1\nMiles: 1000\nLinehaul Rate: 100.00\nAccessorial: 0.00\n"
         "Total: 100.00\n", encoding="utf-8")
     (period / "remittance-RM-1.txt").write_text(
-        "MIDWEST FREIGHT EXCHANGE\nREMITTANCE ADVICE\n\n"
+        "THACKERY FREIGHT EXCHANGE\nREMITTANCE ADVICE\n\n"
         "Document Type: Broker Remittance\n"
         "Remittance Number: RM-1\nDate: 2026-07-24\n"
         "Broker: Thackery Freight Exchange\nLoads Settled: 1\n"

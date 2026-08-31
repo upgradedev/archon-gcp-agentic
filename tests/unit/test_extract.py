@@ -4,7 +4,7 @@ from __future__ import annotations
 from archon.domain.extract import EXTRACTION_SCHEMA, classify, extract_document
 from archon.domain.models import DocType
 
-LOAD = """MIDWEST FREIGHT EXCHANGE
+LOAD = """THACKERY FREIGHT EXCHANGE
 RATE CONFIRMATION
 
 Document Type: Load Confirmation

@@ -71,7 +71,7 @@ BANK_OBJ = "bank-2026-07-24.txt"
 
 # ── the two documents, in the corpus's own label-block format ────────────────
 
-LOAD = """MIDWEST FREIGHT EXCHANGE
+LOAD = """THACKERY FREIGHT EXCHANGE
 RATE CONFIRMATION
 
 Document Type: Load Confirmation
@@ -86,7 +86,7 @@ Total Payable: 1,000.00
 """
 
 #: The broker paid it. 1,000.00 gross, 30.00 factoring fee, 970.00 credited.
-REMITTANCE = """MIDWEST FREIGHT EXCHANGE
+REMITTANCE = """THACKERY FREIGHT EXCHANGE
 REMITTANCE ADVICE
 
 Document Type: Broker Remittance

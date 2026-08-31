@@ -10,7 +10,35 @@ down. It was red for most of this build, on purpose, and it is green now
 because the URL is real and answering. The CI badge covers the secret scan, the
 build, the tests and the browser journey.*
 
-> **Archon is a bookkeeping agent for owner-operator trucking firms that splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April.**
+> **Archon closes a haulier's month unattended: it splits one broker payment across the eight loads it settles and writes the letters chasing what leaked.**
+>
+> Owner-operator trucking firms live on a margin of about twenty cents a mile. A broker pays once a fortnight, one credit covering eight loads, minus a fee charged on the whole batch. So a load paid short is invisible: the bank shows one number and the books need eight. The owner opens a closed month with the letters already written instead of a shoebox they will get to in April.
+
+
+**The number, and what it beats.** On the same 27 documents, three reconciliation
+methods a haulier's books actually get recover **0.00** of a 200.00 short payment.
+Archon recovers it.
+
+| method | what it finds | recovers |
+|---|---|---|
+| Match the bank credit to an invoice | 0 of 9 loads | 0.00 |
+| Credit plus the fee against the advice total | **residual 0.00** | 0.00 |
+| Each advice line against the agreed linehaul rate | 1 flag, on a load paid ABOVE the rate | 0.00 |
+| **Archon**: each line against what was actually invoiced | L-7105 short by 200.00 | **200.00** |
+
+The second row is the finding. 18,667.65 credited plus 577.35 charged once on the
+batch equals the advice exactly, so the arithmetic a careful bookkeeper does by
+hand comes back clean while the money is gone. The 200.00 was an accessorial the
+advice quietly dropped, and the batch still ties. The third row is worse than
+nothing: it raises one flag, on the load the broker OVERPAID.
+
+Archon recovers that 200.00 and 412.85 more from a duplicate charge, 612.85 on
+the month. One synthetic month, n=1; the methods above are arithmetic, not
+products. Reproduce it:
+
+```bash
+python scripts/baseline.py
+```
 
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
@@ -715,7 +743,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 785 | `python -m pytest` |
+| Tests, all offline | 789 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
