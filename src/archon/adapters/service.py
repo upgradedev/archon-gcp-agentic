@@ -885,8 +885,16 @@ def _period_from_envelope(envelope: dict) -> str | None:
     message = envelope.get("message") or {}
     attributes = message.get("attributes") or {}
 
-    if attributes.get("period"):
-        return str(attributes["period"])
+    # Semantically, not just shaped like one. A period is a MONTH, so 2026-13
+    # and 2026-00 are not periods however well they match four-dash-two.
+    #
+    # This attribute was returned verbatim, so an event carrying `2026-13`
+    # claimed a marker, ran `_close`, failed on the filesystem, recorded an
+    # attempt and answered 503 asking for redelivery -- of an event that can
+    # never succeed. Three attempts and a dead letter, spent on a typo.
+    candidate = str(attributes.get("period") or "")
+    if candidate:
+        return candidate if mailbox.PERIOD.fullmatch(candidate) else None
 
     name = attributes.get("objectId") or ""
     if not name and message.get("data"):
@@ -897,7 +905,7 @@ def _period_from_envelope(envelope: dict) -> str | None:
             name = ""
 
     for part in str(name).split("/"):
-        if len(part) == 7 and part[4] == "-" and part[:4].isdigit() and part[5:].isdigit():
+        if mailbox.PERIOD.fullmatch(part):
             return part
     return None
 

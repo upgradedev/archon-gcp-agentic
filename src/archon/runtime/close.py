@@ -117,6 +117,25 @@ class CloseResult:
     source: dict | None = None
 
     @property
+    def currency(self) -> str:
+        """What this month is denominated in, from the documents that count.
+
+        The page used to take this from the first FINDING that carried one, so
+        a clean month in euros -- G7 green, nothing wrong, nothing found --
+        rendered as dollars, because there was no finding to read it off. The
+        one month whose figures need no explanation was the one shown in the
+        wrong currency.
+
+        Read from `ledger.posted`, which is the population G7 already agrees on,
+        so the number on the page and the gate that guards it cannot disagree.
+        """
+        from ..domain.models import DocType
+
+        seen = {(d.currency or "USD").upper() for d in self.ledger.posted
+                if d.doc_type is not DocType.UNKNOWN}
+        return next(iter(seen)) if len(seen) == 1 else "USD"
+
+    @property
     def closed(self) -> bool:
         return self.outcome == "closed"
 
@@ -148,6 +167,7 @@ class CloseResult:
             "run_id": self.run_id,
             "period": self.period,
             "company": self.company,
+            "currency": self.currency,
             "driver": self.driver,
             "source": self.source,
             "outcome": self.outcome,

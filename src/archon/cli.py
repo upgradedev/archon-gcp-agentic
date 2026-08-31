@@ -79,9 +79,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.agent:
         from .adapters.agents import gemini_narrator, run_agent_close
 
+        # The documents, handed over. Without these three the agent closed the
+        # BUNDLED corpus while `--mail` sat in the arguments doing nothing:
+        # `read_period` had already read the caller's directory above and the
+        # result was thrown away. Nothing failed, and the close you got was
+        # somebody else's month.
         result, final = run_agent_close(
             period=args.period, company="Bell Ridge Haulage",
             narrator=gemini_narrator(),
+            documents=documents, raw=raw,
+            source=({"mailbox": "local-directory",
+                     "detail": f"{len(documents)} document(s) from {root}"}
+                    if root is not None else None),
         )
         if result is None:
             print("the agent did not produce a close", file=sys.stderr)

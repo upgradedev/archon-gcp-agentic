@@ -233,3 +233,56 @@ def test_only_one_of_two_racing_take_overs_wins(store):
 
     assert results == [True, False]
     assert store.load_close("acme", key)["worker"] == "a"
+
+
+# -- evidence ids, against the real Firestore path rules ---------------------
+
+def test_a_nested_object_is_stored_and_reads_back_whole(store):
+    """`scans/invoice.txt` is a legal GCS object name and an illegal Firestore
+    document id.
+
+    A slash is a path separator there, so the id would have been a reference
+    two collections deep -- and with the wrong number of segments, not a
+    reference at all. Every object in a subfolder of the mail prefix arrives
+    with its slashes intact, because the reader keeps the name relative to the
+    prefix so a human can recognise it.
+    """
+    name = "scans/2026-07/invoice.txt#a1b2c3d4e5f6"
+
+    uri = store.put_document(name, "Document Type: Unknown\nAmount: 1.00\n")
+
+    assert "/" not in uri.rsplit("/", 1)[-1] or "%2F" in uri
+
+
+def test_the_logical_path_survives_the_encoding(store):
+    """The id is encoded; the path a human reads is not. Both are kept, so
+    nothing has to decode anything to follow the trail back to the bucket."""
+    from urllib.parse import quote, unquote
+
+    from google.cloud import firestore  # noqa: F401
+
+    name = "scans/2026-07/invoice.txt#a1b2c3d4e5f6"
+    store.put_document(name, "hello")
+
+    snapshot = store._db.collection("documents").document(quote(name, safe="")).get()
+
+    assert snapshot.exists, "the nested evidence was not written"
+    assert snapshot.to_dict()["name"] == name, "the logical path was lost"
+    assert unquote(snapshot.id) == name, "the id does not decode back to the path"
+
+
+def test_two_names_that_flattening_would_collide_stay_apart(store):
+    """`a_b.txt` and `a/b.txt` are different objects. Replacing the slash with
+    an underscore would have made the second silently replace the first."""
+    store.put_document("a_b.txt", "underscore")
+    store.put_document("a/b.txt", "slash")
+
+    from urllib.parse import quote
+
+    got = {
+        "a_b.txt": store._db.collection("documents").document(quote("a_b.txt", safe="")).get(),
+        "a/b.txt": store._db.collection("documents").document(quote("a/b.txt", safe="")).get(),
+    }
+
+    assert got["a_b.txt"].to_dict()["content"] == "underscore"
+    assert got["a/b.txt"].to_dict()["content"] == "slash"

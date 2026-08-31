@@ -402,6 +402,37 @@ def test_the_dedupe_key_is_a_document_id_not_a_path():
         assert "/" not in key, f"{obj!r} produced a key Firestore reads as a path: {key!r}"
 
 
+@pytest.mark.parametrize("period", ["2026-13", "2026-00", "2026-1", "2026-7", "not-a-month"])
+def test_a_month_that_is_not_a_month_never_reaches_a_claim(wired, period):
+    """`2026-13` is shaped like a period and is not one.
+
+    The attribute was returned verbatim, so such an event claimed a marker, ran
+    `_close`, failed on the filesystem, recorded an attempt and answered 503 --
+    asking Pub/Sub to redeliver something that can never succeed. Three
+    attempts and a dead letter, spent on a typo.
+
+    It is ignored at the parser now, before anything is claimed.
+    """
+    store, closes = wired
+    env = {"message": {"attributes": {"period": period}, "messageId": "m1"}}
+
+    response = post(env)
+
+    assert body(response)["status"] == "ignored"
+    assert response.status_code == 200, "a permanently invalid event must not be retried"
+    assert closes == [], "a close was attempted for a period that cannot exist"
+
+
+def test_a_real_month_still_gets_through(wired):
+    """The guard has to let the product work."""
+    store, closes = wired
+
+    response = post({"message": {"attributes": {"period": PERIOD}, "messageId": "m2"}})
+
+    assert body(response)["status"] == "closed"
+    assert closes == [PERIOD]
+
+
 # -- the decision itself, without a store, a bucket or a route ---------------
 
 def verdict(marker: dict, age_seconds: int = 0) -> str:

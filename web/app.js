@@ -20,8 +20,12 @@ const $ = (id) => document.getElementById(id);
 let money = "USD";
 
 function setMoney(payload) {
+  // The close says what it is denominated in. Reading it off the first FINDING
+  // meant a clean month in euros -- nothing wrong, nothing found, G7 green --
+  // had nothing to read it from and rendered as dollars. The one month whose
+  // figures need no explanation was the one shown in the wrong currency.
   const first = (payload && payload.findings || []).find((f) => f.currency);
-  money = (first && first.currency) || "USD";
+  money = (payload && payload.currency) || (first && first.currency) || "USD";
 }
 
 const usd = (n) => (n === null || n === undefined) ? "–"

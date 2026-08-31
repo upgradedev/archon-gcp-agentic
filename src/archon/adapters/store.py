@@ -169,8 +169,27 @@ class FirestoreStore:
         self.project = project
 
     def put_document(self, name: str, content: str) -> str:
-        self._db.collection("documents").document(name).set({"name": name, "content": content})
-        return f"firestore://documents/{name}"
+        """The evidence, keyed by something Firestore will accept as an id.
+
+        A document id may not contain a slash: Firestore reads one as a path
+        separator, so `scans/invoice.txt#abc123` is not an id but a reference
+        two collections deep, and with the wrong number of segments it is not a
+        reference at all. Any object in a subfolder of the mail prefix arrives
+        here with its slashes intact, because `read_gcs_period` keeps the name
+        relative to the prefix so a human can recognise it.
+
+        Percent-encoding rather than flattening, because flattening is lossy:
+        `a_b.txt` and `a/b.txt` would land on the same id and the second would
+        silently replace the first. `quote` is reversible, leaves the readable
+        characters alone, and the LOGICAL path is kept in `name` beside it so
+        nothing has to decode anything to read the trail.
+        """
+        from urllib.parse import quote
+
+        doc_id = quote(name, safe="")
+        self._db.collection("documents").document(doc_id).set(
+            {"name": name, "id": doc_id, "content": content})
+        return f"firestore://documents/{doc_id}"
 
     def save_run(self, run: dict) -> str:
         run_id = run["run_id"]
