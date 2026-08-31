@@ -597,6 +597,11 @@ def test_the_guided_tour_walks_every_stop_and_leaves_nothing_behind(page, base_u
         assert page.locator("#tour-title").inner_text().strip(), f"stop {n + 1} has no title"
         focused = page.eval_on_selector_all(".tour-focus", "els => els.map(e => e.id)")
         assert len(focused) == 1, f"stop {n + 1} focused {focused}"
+        # The class landing on one node is not the same as a visitor seeing a
+        # ring. Two stops shipped green under the count alone: they opened one
+        # panel and highlighted an element on another, which show() had just
+        # set to display:none. A quarter of the tour highlighted air.
+        expect(page.locator(".tour-focus")).to_be_visible()
         seen.append(focused[0])
         page.locator("#tour-next").click()
 
