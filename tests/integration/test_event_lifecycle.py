@@ -6,7 +6,7 @@ the attempt that starts and does not finish.
 
 `/events` claims a marker with `status: "processing"` and writes `closed` after
 `_close` returns. Between those two lines there is a container. If it dies --
-Cloud Run kills the request at 600s, the instance is scaled away mid-close, the
+Cloud Run ends the request at 600s and the instance may keep running, it is
 close raises -- the marker stays `processing` and nothing ever changes it. Every
 redelivery reads `processing` and gets a 503, forever, and Pub/Sub retries a
 month that CANNOT close until the message expires days later. Then the event is
@@ -200,7 +200,7 @@ def test_a_holder_that_died_with_its_instance_does_not_block_the_month_forever(
     The marker is left `processing` by a worker that no longer exists, and the
     only thing that distinguishes it from a live holder is how old it is.
 
-    Cloud Run kills the request at 600s (`infra/main.tf`), so a claim older
+    Cloud Run ends the request at 600s (`infra/main.tf`), so a claim older
     than the lease cannot still be working."""
     store, closes = wired
     env = load_event("503")
@@ -257,7 +257,7 @@ def test_a_close_that_finishes_after_its_lease_was_stolen_does_not_overwrite(
     compare-and-set too.
 
     A holder whose lease expired can still be alive -- it is unlikely, because
-    Cloud Run kills the request at 600s and the lease is 900s, but "unlikely"
+    Cloud Run ends the request at 600s and the lease is 900s, but the instance
     is not "cannot". If it is, a second worker has already retaken the claim,
     run the month and written `closed`. The original then finishes and, writing
     unconditionally, would put its own run back on top of the winner's.
@@ -431,6 +431,74 @@ def test_a_real_month_still_gets_through(wired):
 
     assert body(response)["status"] == "closed"
     assert closes == [PERIOD]
+
+
+def test_a_stale_worker_writes_no_business_record_and_sends_nothing(wired, monkeypatch):
+    """The fence, tested on what it is for: the RECORDS, not the marker.
+
+    The lease and the compare-and-set settled who may do the work. They did not
+    stop a worker that lost the claim mid-close from doing all of it -- the
+    books, the run, the letters and the owner's digest were written before
+    anything checked again, and the loser found out at the final marker write,
+    when the damage was durable. Cloud Run's documentation says a container may
+    keep running after its request times out, so this worker is not a
+    hypothesis.
+
+    Two attempts. The second takes the claim over while the first is working.
+    The first must then write nothing and send nothing, and say so.
+    """
+    store, _ = wired
+    env = load_event("901")
+    key = gcs.dedupe_key(env, PERIOD)
+    sent: list = []
+    working = service._close
+
+    class CountingDelivery:
+        def send(self, message):
+            sent.append(message)
+            return {"status": "delivered"}
+
+    monkeypatch.setattr(service.delivery_mod, "get_deliverer", lambda: CountingDelivery())
+
+    def robbed_mid_close(period, **kwargs):
+        # Somebody else's take-over lands while this attempt is inside the close.
+        store.save_close(service.COMPANY, key,
+                         {"period": PERIOD, "status": "processing", "attempt": 2,
+                          "claimed_at": datetime.now(UTC).isoformat()})
+        return working(period, **kwargs)
+
+    monkeypatch.setattr(service, "_close", robbed_mid_close)
+
+    response = post(env)
+
+    assert body(response)["status"] == "superseded"
+    assert response.status_code == 200, "the holder owns it; do not ask for a redelivery"
+    assert sent == [], "a superseded worker delivered to the owner"
+    assert store.load_close(service.COMPANY, PERIOD) is None, (
+        "a superseded worker wrote the month's books")
+    held = store.load_close(service.COMPANY, key)
+    assert held["attempt"] == 2, "the loser overwrote the holder's marker"
+    assert held["status"] == "processing", "the loser marked a month it does not own"
+
+
+def test_the_fence_is_actually_consulted(wired):
+    """A guard nobody can prove ran is a comment.
+
+    This asserts the fence was asked at least once per business write on an
+    ordinary close, so a refactor that quietly stops consulting it fails here
+    rather than in production a month later.
+    """
+    from archon.adapters.store import FencedStore
+
+    store, _ = wired
+    store.claim(service.COMPANY, "k", {"period": PERIOD, "attempt": 1})
+    fence = FencedStore(store, service.COMPANY, "k", 1)
+
+    fence.put_document("a.txt", "x")
+    fence.save_run({"run_id": "r"})
+    fence.save_close(service.COMPANY, PERIOD, {"status": "closed"})
+
+    assert fence.checks == 3
 
 
 # -- the decision itself, without a store, a bucket or a route ---------------

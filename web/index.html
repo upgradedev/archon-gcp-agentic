@@ -55,6 +55,34 @@
 
      Driveable from `window.archonTour`, which is how the recording follows the
      same eight beats a visitor is shown. -->
+<aside class="tour" id="own-month-format" hidden aria-label="Document format">
+  <div class="tour-head">
+    <span class="tour-count">Your own month</span>
+    <button class="tour-x" id="own-month-format-close" aria-label="Close">&#10005;</button>
+  </div>
+  <h3 class="tour-title">What a document looks like</h3>
+  <p class="tour-body">Plain <code>.txt</code>, one document per file, labelled lines.
+  Anything else is refused by name rather than skipped. Sixty files, 64KB each.</p>
+  <pre class="tour-sample"><code>Document Type: Load Confirmation
+Load Number: L-7105
+Date: 2026-07-13
+Broker: Thackery Freight Exchange
+Miles: 1050
+Linehaul Rate: 2,260.00
+Accessorial: 200.00
+Total Payable: 2,460.00</code></pre>
+  <p class="tour-body">Also read: Bank Transaction, Broker Remittance, Driver
+  Settlement, Fuel Card Statement, Insurance Invoice, Maintenance Invoice and
+  Toll Invoice. One currency per month.</p>
+  <p class="tour-body"><b>What happens to it.</b> The files are read in your
+  browser and sent to this Cloud Run service. They are held in memory for one
+  request, written to no bucket and no database, and never sent to a model:
+  this route runs the deterministic close only.</p>
+  <div class="tour-foot">
+    <button id="own-month-sample">Download a sample month</button>
+  </div>
+</aside>
+
 <aside class="tour" id="tour" hidden aria-live="polite" aria-label="Guided tour">
   <div class="tour-head">
     <span class="tour-count" id="tour-count">1 / 8</span>
@@ -91,9 +119,11 @@
        bare file input cannot be styled to match and `style-src 'self'` refuses
        the inline attribute a framework would write. -->
   <label class="ghost btn-like" id="own-month-label" for="own-month"
-         title="Close a month of your own .txt documents. Nothing is stored.">Your own month
+         title="Close a month of your own .txt documents. They are sent to this Cloud Run service, held in memory for one request, stored nowhere and never sent to a model.">Your own month
     <input type="file" id="own-month" accept=".txt,text/plain" multiple hidden>
   </label>
+  <button class="ghost" id="own-month-help"
+          title="What a document has to look like, and what happens to it">Format</button>
 </header>
 
 <div class="statusbar"><span class="dim" id="status" role="status" aria-live="polite">Documents are waiting.</span></div>

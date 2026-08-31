@@ -26,7 +26,6 @@ import binascii
 import json
 import logging
 import os
-import pathlib
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
@@ -41,7 +40,7 @@ from ..runtime.close import run_close
 from ..runtime.mailbox import available_periods, read_period
 from . import auth, gcs, headers, ratelimit
 from . import delivery as delivery_mod
-from .store import LocalStore, get_store
+from .store import ClaimLost, FencedDelivery, FencedStore, LocalStore, get_store
 
 log = logging.getLogger("archon.service")
 
@@ -64,13 +63,19 @@ USE_AGENT = os.getenv("ARCHON_AGENT_CLOSE", "").lower() in ("1", "true", "yes")
 
 COMPANY = os.getenv("ARCHON_COMPANY", "Bell Ridge Haulage")
 
-#: How long a claim on an object generation is believed. Cloud Run kills the
-#: request at 600s (`infra/main.tf`), so a container CANNOT still be working
-#: after that, and a claim older than this was left by a worker that no longer
-#: exists. The margin is deliberate and one-directional: too long and a dead
-#: holder blocks its month for a few extra minutes; too short and a live close
-#: gets stolen and the month runs twice, which is the failure an entire earlier
-#: round of this work existed to remove.
+#: How long a claim on an object generation is believed.
+#:
+#: This comment used to say a container CANNOT still be working after the 600s
+#: request timeout in `infra/main.tf`, and that was wrong. Cloud Run terminates
+#: the REQUEST and returns 504; the instance may go on executing, and Google's
+#: own documentation says so. The lease was therefore resting on a guarantee
+#: that does not exist.
+#:
+#: The lease is still useful -- it is what lets a month whose worker vanished be
+#: taken over at all -- but it is no longer what makes take-over SAFE. That is
+#: `FencedStore`: every business write re-reads the marker, so a worker still
+#: running past its lease writes nothing and sends nothing. The margin below
+#: buys latency, not correctness.
 EVENT_LEASE_SECONDS = int(os.getenv("ARCHON_EVENT_LEASE_SECONDS", "900"))
 
 #: How many attempts one object generation gets before its failure is recorded
@@ -181,7 +186,7 @@ def _narrator():
 
 
 def _close(period: str, store=None, documents=None, raw=None, source=None,
-           *, public: bool = False, allow_model: bool = True) -> dict:
+           *, public: bool = False, allow_model: bool = True, deliverer=None) -> dict:
     """Run one close and return it as the shape the page renders.
 
     `store` decides what the run is allowed to touch, and it was described here
@@ -209,7 +214,11 @@ def _close(period: str, store=None, documents=None, raw=None, source=None,
 
     target = store if store is not None else get_store()
     previous = _previous_statements(period)
-    deliverer = delivery_mod.SandboxDelivery() if public else None
+    # A caller may hand one in -- the events route wraps the real deliverer in
+    # the ownership fence, so a superseded worker cannot send. Otherwise the
+    # anonymous path gets the sandbox and everything else gets the default.
+    if deliverer is None:
+        deliverer = delivery_mod.SandboxDelivery() if public else None
     # `allow_model=False` is a hard refusal, not a preference: no agent, no
     # narrator, no Gemini call of any kind. It is what a GET gets.
     narrator = _narrator() if allow_model else None
@@ -468,8 +477,22 @@ def close_uploaded(payload: dict, request: Request) -> dict:
                    f"{UPLOAD_MAX_DOCUMENTS}. Run it locally for a bigger month: "
                    f"python run.py --mail <dir>")
 
+    # Every problem at once, and never a partial month.
+    #
+    # This loop used to raise on the first bad file and key `raw` by BASENAME,
+    # so `scans/invoice.txt` and `email/invoice.txt` collided and the second
+    # silently replaced the first: two documents in, one closed, revenue short
+    # by the whole of the missing one and no error anywhere. A bookkeeping
+    # product that quietly drops a document is the one thing this product
+    # exists not to be.
+    #
+    # It also meant somebody who dragged in a folder of PDFs learned about the
+    # first one and had to guess at the rest.
     raw: dict[str, str] = {}
     total = 0
+    unsupported: list[str] = []
+    duplicates: list[str] = []
+    oversized: list[str] = []
     for item in incoming:
         if not isinstance(item, dict):
             raise HTTPException(status_code=400, detail="each document is {name, text}")
@@ -478,18 +501,43 @@ def close_uploaded(payload: dict, request: Request) -> dict:
         if not name or not isinstance(text, str):
             raise HTTPException(status_code=400, detail="each document needs a name and text")
         if not name.lower().endswith(".txt"):
-            raise HTTPException(status_code=400,
-                                detail=f"{name}: this route reads .txt only")
+            unsupported.append(name)
+            continue
         size = len(text.encode("utf-8"))
-        total += size
         if size > UPLOAD_MAX_BYTES_EACH:
-            raise HTTPException(status_code=413,
-                                detail=f"{name} is {size} bytes; the cap is "
-                                       f"{UPLOAD_MAX_BYTES_EACH}")
-        if total > UPLOAD_MAX_BYTES_TOTAL:
-            raise HTTPException(status_code=413,
-                                detail=f"more than {UPLOAD_MAX_BYTES_TOTAL} bytes in total")
-        raw[pathlib.PurePosixPath(name).name] = text
+            oversized.append(f"{name} ({size} bytes)")
+            continue
+        total += size
+        # The whole logical path is the key, not the basename, so two documents
+        # in different folders stay two documents.
+        key = name.replace("\\", "/").lstrip("/")
+        key = "/".join(part for part in key.split("/") if part not in ("", ".", ".."))
+        if key in raw:
+            duplicates.append(key)
+            continue
+        raw[key] = text
+
+    if unsupported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"this route reads .txt only, and {len(unsupported)} of your files "
+                   f"are not: {', '.join(sorted(unsupported)[:20])}. Nothing was closed.")
+    if duplicates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"two documents share a name: {', '.join(sorted(set(duplicates))[:20])}. "
+                   f"Rename one and send them again. Nothing was closed, because a month "
+                   f"missing a document is worse than no month.")
+    if oversized:
+        raise HTTPException(
+            status_code=413,
+            detail=f"over the {UPLOAD_MAX_BYTES_EACH} byte limit: "
+                   f"{', '.join(sorted(oversized)[:20])}")
+    if total > UPLOAD_MAX_BYTES_TOTAL:
+        raise HTTPException(status_code=413,
+                            detail=f"more than {UPLOAD_MAX_BYTES_TOTAL} bytes in total")
+    if not raw:
+        raise HTTPException(status_code=400, detail="no readable documents in that selection")
 
     documents = [extract_document(text, source_file=name, period=period)
                  for name, text in sorted(raw.items())]
@@ -795,9 +843,32 @@ async def events(request: Request) -> JSONResponse:
     # crashed once could never close again, not even from a fresh upload of the
     # same object. The failure is recorded on the marker instead, which both
     # frees the next delivery to try and leaves something a human can read.
+    # The token travels with the writes.
+    #
+    # The lease and the compare-and-set settled who MAY do the work. They did
+    # not stop a worker that lost the claim mid-close from doing all of it: the
+    # books, the run, the letters and the owner's digest were written before
+    # anything checked again, and the loser discovered it had lost at the final
+    # marker write, when the damage was already durable. Cloud Run's own
+    # documentation says a container may keep running after the request times
+    # out, so a stale worker is not hypothetical.
+    #
+    # Fenced now: every business write reads the marker first and refuses if
+    # the attempt number has moved, and delivery is fenced too because a
+    # message that has left cannot be rolled back.
+    fence = FencedStore(get_store(), COMPANY, marker_key, attempt) if marker_key else None
     try:
         result = await run_in_threadpool(
-            _close, period, documents=documents, raw=raw, source=source)
+            _close, period, documents=documents, raw=raw, source=source,
+            store=fence,
+            deliverer=(FencedDelivery(delivery_mod.get_deliverer(), fence) if fence else None))
+    except ClaimLost as exc:
+        log.warning("attempt %s for %s lost its claim mid-close and wrote nothing: %s",
+                    attempt, period, exc)
+        return JSONResponse(
+            {"status": "superseded", "period": period, "attempt": attempt,
+             "reason": "another delivery took this claim over while this one was working"},
+            status_code=200)
     except Exception as exc:                           # noqa: BLE001 - push handler
         log.error("close failed for %s on attempt %s (%s: %s)",
                   period, attempt, type(exc).__name__, exc)
@@ -829,12 +900,15 @@ async def events(request: Request) -> JSONResponse:
             {"status": "dead-letter" if spent else "failed", "period": period,
              "attempt": attempt, "reason": reason},
             status_code=200 if spent else 503)
-    # A compare-and-set, not a write, for the same reason the take-over is one.
-    # A holder whose lease expired can still be alive -- unlikely, since Cloud
-    # Run kills the request at 600s and the lease is 900s, but unlikely is not
-    # impossible -- and by then somebody else has retaken the claim, closed the
-    # month and written the result. Writing unconditionally would put this
-    # superseded attempt back on top of the worker that actually holds it.
+    # A compare-and-set, not a write. A holder whose lease expired can still be
+    # running: Cloud Run ends the REQUEST at 600s and returns 504, and the
+    # instance may keep executing, which this file used to claim was impossible.
+    # By then somebody else has retaken the claim and closed the month, and
+    # writing unconditionally would put a superseded attempt on top of the
+    # worker that holds it.
+    #
+    # `FencedStore` means such a worker never got as far as writing books. This
+    # is the last of the same fence, on the marker itself.
     if marker_key and not get_store().retake(
             COMPANY, marker_key, attempt,
             {"period": period, "status": "closed", "run_id": result["run_id"],

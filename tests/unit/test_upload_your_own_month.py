@@ -110,13 +110,92 @@ def test_one_oversized_document_is_refused(client):
 
 
 def test_a_path_in_a_filename_cannot_escape(client):
-    """The name is used as a source_file and reaches a manifest, so a path in
-    it is a path traversal waiting for somewhere to land."""
+    """A name reaches a manifest and a document id, so it must not be able to
+    climb out of anything.
+
+    This asserted "no slash at all" until folders had to be kept: two
+    documents in different folders are two documents, and flattening to the
+    basename lost one of them silently. So the property is not the absence of
+    a separator, it is that nothing can go UP -- no `..`, no leading slash, no
+    drive letter -- and the store percent-encodes what is left before it ever
+    becomes a document id.
+    """
     body = client.post("/api/close/upload", json={
         "period": "2026-07",
-        "documents": [{"name": "../../etc/passwd.txt", "text": "Document Type: Unknown"}],
+        "documents": [
+            {"name": "../../etc/passwd.txt", "text": "Document Type: Unknown"},
+            {"name": "/absolute/x.txt", "text": "Document Type: Unknown"},
+        ],
     }).json()
 
-    files = [d.get("source_file") for d in body.get("documents", [])] or \
-            [f.get("source_file") for f in body.get("findings", [])]
-    assert not any("/" in str(f) or ".." in str(f) for f in files if f), files
+    names = ([d.get("source_file") for d in (body.get("documents") or [])]
+             or [f.get("source_file") for f in (body.get("findings") or [])])
+    for name in [n for n in names if n]:
+        assert ".." not in str(name), name
+        assert not str(name).startswith("/"), name
+        assert ":" not in str(name), name
+
+
+def test_two_documents_in_different_folders_are_two_documents(client):
+    """The data loss. `raw` was keyed by BASENAME, so `scans/invoice.txt` and
+    `email/invoice.txt` collided and the second silently replaced the first:
+    two documents in, one closed, revenue short by the whole of the missing
+    one, and no error anywhere.
+
+    A bookkeeping product that quietly drops a document is the one thing this
+    product exists not to be.
+    """
+    def load(name, ref, amount):
+        return {"name": name, "text":
+                f"Document Type: Load Confirmation\nLoad Number: {ref}\n"
+                f"Date: 2026-07-01\nMiles: 10\nLinehaul Rate: {amount}.00\n"
+                f"Total Payable: {amount}.00\n"}
+
+    body = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [load("scans/invoice.txt", "A-1", 111),
+                      load("email/invoice.txt", "B-2", 222)],
+    }).json()
+
+    assert body["statements"]["revenue"] == 333.0, "a document was dropped"
+
+
+def test_a_real_duplicate_is_refused_by_name(client):
+    """Two documents that genuinely share a logical name cannot both be kept,
+    so the answer is a refusal that names them, never a silent overwrite."""
+    doc = {"name": "invoice.txt", "text": "Document Type: Unknown\n"}
+
+    response = client.post("/api/close/upload",
+                           json={"period": "2026-07", "documents": [doc, dict(doc)]})
+
+    assert response.status_code == 400
+    assert "invoice.txt" in response.json()["detail"]
+    assert "Nothing was closed" in response.json()["detail"]
+
+
+def test_every_unsupported_file_is_named_at_once(client):
+    """Raising on the first one told somebody who dragged in a folder about one
+    file and left them to guess at the rest."""
+    response = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [{"name": "a.pdf", "text": "x"},
+                      {"name": "b.docx", "text": "y"},
+                      {"name": "c.png", "text": "z"}],
+    })
+
+    detail = response.json()["detail"]
+    assert response.status_code == 400
+    assert all(name in detail for name in ("a.pdf", "b.docx", "c.png"))
+
+
+def test_uppercase_extensions_are_accepted_here_too(client):
+    """`.TXT` off a scanner is a text file on every other path in this product."""
+    body = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [{"name": "LOAD.TXT", "text":
+                       "Document Type: Load Confirmation\nLoad Number: U-1\n"
+                       "Date: 2026-07-02\nMiles: 5\nLinehaul Rate: 50.00\n"
+                       "Total Payable: 50.00\n"}],
+    }).json()
+
+    assert body["statements"]["revenue"] == 50.0

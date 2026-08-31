@@ -69,6 +69,118 @@ def draft_record(run_id: str, index: int, draft, company: str | None = None,
     }
 
 
+class ClaimLost(Exception):
+    """Raised the moment a worker discovers the claim it holds is no longer its.
+
+    Carries no state on purpose. Everything the caller needs to decide -- that
+    this attempt is superseded and must write nothing further -- is in the fact
+    that it was raised at all.
+    """
+
+
+class FencedStore:
+    """A store that asks whether we still own the month before every write.
+
+    The lease and the compare-and-set on the marker were only half the fence.
+    They settled who MAY do the work, and then the work wrote the books, the
+    run, the letters and the owner's digest before anything checked again. A
+    worker whose lease expired mid-close -- and Cloud Run's own documentation
+    says a container may keep running after the request times out at 600s, so
+    this is not hypothetical -- would produce every one of those writes on top
+    of the winner's, and discover it had lost only at the final marker write,
+    when the damage was already durable.
+
+    So the token travels with the writes. Every business write reads the marker
+    first and refuses if the attempt number has moved. A superseded worker
+    fails on its FIRST write rather than its last, and the winner's month is
+    never overwritten.
+
+    Reads are not fenced. A stale worker reading is harmless, and fencing them
+    would double the cost of the one thing that has to stay cheap.
+    """
+
+    def __init__(self, inner, company, marker_key: str, attempt) -> None:
+        self._inner = inner
+        self._company = company
+        self._marker_key = marker_key
+        self._attempt = attempt
+        #: How many times the fence was consulted. Asserted by a test, because
+        #: a fence nobody can prove ran is a comment.
+        self.checks = 0
+
+    @property
+    def backend(self) -> str:
+        return getattr(self._inner, "backend", "unknown")
+
+    def _still_ours(self) -> None:
+        self.checks += 1
+        held = self._inner.load_close(self._company, self._marker_key) or {}
+        if held.get("attempt") != self._attempt:
+            raise ClaimLost(
+                f"attempt {self._attempt} no longer holds {self._marker_key}; "
+                f"it is now {held.get('attempt')!r}")
+
+    def put_document(self, name: str, content: str) -> str:
+        self._still_ours()
+        return self._inner.put_document(name, content)
+
+    def save_run(self, run: dict) -> str:
+        self._still_ours()
+        return self._inner.save_run(run)
+
+    def save_close(self, company, period: str, payload: dict) -> str:
+        self._still_ours()
+        return self._inner.save_close(company, period, payload)
+
+    def save_drafts(self, run_id: str, drafts: list, company=None, period=None) -> list[str]:
+        self._still_ours()
+        return self._inner.save_drafts(run_id, drafts, company, period)
+
+    # Reads and claim mechanics go straight through: they are how the fence
+    # itself works, and fencing them would be circular.
+    def claim(self, company, key: str, payload: dict) -> bool:
+        return self._inner.claim(company, key, payload)
+
+    def retake(self, company, key: str, expected_attempt, payload: dict) -> bool:
+        return self._inner.retake(company, key, expected_attempt, payload)
+
+    def load_close(self, company, period: str):
+        return self._inner.load_close(company, period)
+
+    def load_run(self, run_id: str):
+        return self._inner.load_run(run_id)
+
+    def load_drafts(self, run_id: str):
+        return self._inner.load_drafts(run_id)
+
+
+class FencedDelivery:
+    """The same fence, on the one action that reaches outside the process.
+
+    A superseded worker writing a duplicate record is bad. A superseded worker
+    SENDING is worse, because nothing downstream can be rolled back, so the
+    ownership check happens before the message leaves rather than after.
+    """
+
+    def __init__(self, inner, fence: FencedStore) -> None:
+        self._inner = inner
+        self._fence = fence
+
+    def __getattr__(self, name):
+        """Everything except `send` is the wrapped deliverer's own.
+
+        `Deliverer` is a protocol with a `channel` on it, and the receipt reads
+        that to say where the digest went. Wrapping without this made every
+        fenced close report `channel: unknown`, which is the wrapper lying about
+        the thing it was added to protect.
+        """
+        return getattr(self._inner, name)
+
+    def send(self, message):
+        self._fence._still_ours()
+        return self._inner.send(message)
+
+
 class Store(Protocol):
     """What the close needs from persistence, and nothing more."""
 

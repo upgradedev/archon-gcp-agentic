@@ -1030,9 +1030,10 @@ wireTour();
 //
 // The demo answered "does it work on your month" and could not answer the only
 // question an owner has, which is whether it works on THEIRS. The files are
-// read in the browser and posted as text; nothing is uploaded to a bucket and
-// nothing is kept. The route runs the deterministic close and never a model,
-// because the text belongs to a stranger.
+// read in the browser and POSTed to this Cloud Run service as text. That is an
+// upload, and the copy said it was not: what is true is that the text is held
+// in memory for one request, written to no bucket and no database, and never
+// sent to a model. The route runs the deterministic close only.
 
 const OWN_MONTH_MAX = 60;
 
@@ -1060,7 +1061,7 @@ async function closeOwnMonth(files) {
 
   const period = $("period").value || "2026-07";
   $("status").textContent =
-    `Reading ${chosen.length} document(s) of yours. Nothing is uploaded or kept.`;
+    `Sending ${chosen.length} document(s) to this service. Held in memory for one request, stored nowhere, never sent to a model.`;
 
   try {
     const documents = await Promise.all(chosen.map(readAsText));
@@ -1089,5 +1090,60 @@ if (ownMonth) {
   ownMonth.addEventListener("change", (e) => {
     closeOwnMonth(e.target.files);
     e.target.value = "";
+  });
+}
+
+// The format panel, and a sample month somebody can actually start from.
+//
+// A file picker with no statement of what a document must look like asks the
+// visitor to guess, and the refusals it earns them read as the product being
+// broken. The sample is built here rather than fetched so it needs no route.
+//
+// The two documents reproduce the product's own finding: a load invoiced at
+// 2,460.00 and an advice that paid the linehaul and dropped the 200.00
+// accessorial. Closing them finds the 200.
+
+const SAMPLE_MONTH = [
+  ["load-L-7105.txt", [
+    "THACKERY FREIGHT EXCHANGE", "RATE CONFIRMATION", "",
+    "Document Type: Load Confirmation", "Load Number: L-7105",
+    "Date: 2026-07-13", "Broker: Thackery Freight Exchange",
+    "Carrier Unit: T-102", "Origin: Memphis TN", "Destination: Atlanta GA",
+    "Miles: 1050", "Linehaul Rate: 2,260.00", "Accessorial: 200.00",
+    "Accessorial Detail: Lumper fee", "Total Payable: 2,460.00", "",
+  ]],
+  ["remittance-TFX-RA-4417.txt", [
+    "THACKERY FREIGHT EXCHANGE", "REMITTANCE ADVICE", "",
+    "Document Type: Broker Remittance", "Remittance Number: TFX-RA-4417",
+    "Date: 2026-07-24", "Broker: Thackery Freight Exchange",
+    "Loads Settled: 1", "Factoring Fee: 67.80", "Amount Credited: 2,192.20", "",
+    "LOAD LINES", "Load L-7105  Gross 2,260.00  Deduction 0.00  Reason -", "",
+  ]],
+];
+
+function showFormat(open) {
+  const panel = $("own-month-format");
+  if (panel) panel.hidden = !open;
+}
+
+const formatBtn = $("own-month-help");
+if (formatBtn) {
+  formatBtn.addEventListener("click", () => showFormat(true));
+  $("own-month-format-close").addEventListener("click", () => showFormat(false));
+  $("own-month-sample").addEventListener("click", () => {
+    for (const [name, body] of SAMPLE_MONTH) {
+      const text = body.join(String.fromCharCode(10));
+      const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+    $("status").textContent =
+      "Two sample documents saved. Pick them with Your own month to see the " +
+      "200.00 an advice dropped.";
   });
 }

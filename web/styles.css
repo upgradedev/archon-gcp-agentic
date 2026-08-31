@@ -589,3 +589,12 @@
   display: inline-flex; align-items: center; cursor: pointer;
   font: inherit; line-height: 1;
 }
+
+/* The sample block inside the format panel. */
+.tour-sample {
+  background: var(--bg-sunken); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 10px 12px; margin: 10px 0;
+  font-size: 12px; line-height: 1.5; overflow-x: auto;
+  color: var(--text-2);
+}
+.tour-sample code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
