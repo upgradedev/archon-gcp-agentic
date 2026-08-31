@@ -265,10 +265,28 @@ def test_the_run_trail_still_staggers(page, base_url):
     page.locator("#run").click()
     expect(page.locator("#trail .step")).to_have_count(11, timeout=30_000)
 
+    # The count above is satisfied the instant the page loads, by the stored
+    # close the page renders on arrival -- and it renders that trail while the
+    # runner panel is still display:none, because the overview is what a
+    # visitor lands on. `#run` calls show("runner") before it calls close(), so
+    # by the time the count passes we may be reading elements whose subtree was
+    # unrendered when they were created, and Chrome answers getComputedStyle on
+    # those with an empty string rather than "0s". CI caught exactly that once,
+    # at 1280px, on a green suite.
+    #
+    # Waiting on visibility is not a workaround for a flaky assertion: it is the
+    # precondition the assertion always had and never stated. A stagger only
+    # means anything on a trail somebody can see.
+    expect(page.locator("#panel-runner")).to_be_visible()
+    expect(page.locator("#trail .step").first).to_be_visible()
+
     delays = page.eval_on_selector_all(
         "#trail .step",
         "els => els.map(e => getComputedStyle(e).animationDelay)")
 
+    assert "" not in delays, (
+        f"a step had no computed animation-delay, so it was never rendered: {delays}"
+    )
     assert delays[0] == "0s"
     assert delays[1] != delays[0], "the steps all land at once"
     assert len(set(delays)) >= 5, f"expected a stagger, got {sorted(set(delays))}"
@@ -472,8 +490,11 @@ def test_replay_re_renders_without_re_executing_anything(page, base_url):
     expect(page.locator("#status")).to_contain_text("nothing was re-executed")
     assert posts == [], f"replay reached the server: {posts}"
 
+    expect(page.locator("#panel-runner")).to_be_visible()
+    expect(page.locator("#trail .step").first).to_be_visible()
     delays = page.eval_on_selector_all(
         "#trail .step", "els => els.map(e => getComputedStyle(e).animationDelay)")
+    assert "" not in delays, f"a replayed step was never rendered: {delays}"
     assert len(set(delays)) >= 5, "the replayed trail lost its stagger"
 
 
