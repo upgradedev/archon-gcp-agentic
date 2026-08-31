@@ -66,5 +66,5 @@
       "speechText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April. It runs on Google Cloud, it closes the month while nobody is watching, and every figure it shows can be traced back to the bytes it came from."
     }
   ],
-  "note": "No count of anything is voiced here on purpose: not tests, not detectors, not gates. Voicing a number that moves means re-synthesising audio and re-cutting to the frame every time the code changes. Numbers live in the README, where each one carries the command that produced it."
+  "note": "No count that MOVES is voiced here on purpose: not tests, not detectors, not gates. Voicing a number that changes when the code changes means re-synthesising audio and re-cutting to the frame every time. Those numbers live in the README, where each one carries the command that produced it. The counts that ARE voiced -- eleven steps, eight loads, and the three figures in `found` -- are fixed by the bundled month rather than by the code, and test_every_figure_the_narration_voices_is_still_in_the_close holds them to it."
 }

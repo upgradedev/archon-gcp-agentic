@@ -176,10 +176,28 @@ def main() -> int:
 
         hold("cloud", cloud)
 
-        # 4. The chore, running. Eleven steps, landing one at a time. Replay
-        #    re-renders the persisted run's trail (the button says so on the
-        #    page): nothing re-executes, which also means the film never waits
-        #    on a live model round-trip mid-beat.
+        # 4. The chore, running. Eleven steps, landing one at a time.
+        #
+        #    This presses "Watch the agent", which re-renders the trail of the
+        #    run Pub/Sub already triggered. It does NOT press "Run fresh close",
+        #    and that is deliberate rather than a shortcut:
+        #
+        #    The narration over this beat opens "Eleven steps, unattended." A
+        #    human pressing a button on camera under that word is a different
+        #    claim needing different audio. The origin card in beat 3 is what
+        #    proves the trigger, and it proves it with the gs:// object, the
+        #    generation, the Pub/Sub message, the model and the build.
+        #
+        #    It is also the only version that can be filmed reliably. A fresh
+        #    close is a live thinking-model round trip inside a fixed hold: run
+        #    long and the film cuts away on a half-drawn trail, run short and
+        #    there is dead air. The public route allows three closes per address
+        #    per ten minutes, and the capture is one address, so a retry inside
+        #    the window would be refused mid-film.
+        #
+        #    The page states the re-execution claim in its own words: the hero
+        #    context and the runner panel both say the replay executes nothing,
+        #    and the status line written on the press says no model was called.
         def watch():
             page.locator("#replay").click()
             scroll_to("#trail")

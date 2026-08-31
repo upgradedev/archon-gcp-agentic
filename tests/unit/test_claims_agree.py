@@ -888,3 +888,65 @@ def test_the_guided_tour_states_no_figure_of_its_own():
         stripped = re.sub(r"\$\{[^}]*\}", "", text)
         digits = re.findall(r"(?<![\w$])\d[\d,]*\.?\d*", stripped)
         assert not digits, f"a figure is written into tour prose: {text.strip()}"
+
+
+def test_every_figure_the_narration_voices_is_still_in_the_close():
+    """The audio is the one artifact in this repository that cannot be patched.
+
+    Changing a figure in the code costs a commit. Changing a figure that has
+    been spoken costs an ElevenLabs re-synthesis, a re-cut to the frame, and a
+    re-upload -- and if it is noticed after submission it costs nothing at all,
+    because it is too late. So the voiced figures are held to the close here,
+    where a drift fails in CI rather than on camera.
+
+    The narration's own note says no count that MOVES is voiced: not tests, not
+    detectors, not gates. The counts it DOES voice are properties of the
+    bundled month, and this is what makes that distinction enforceable rather
+    than a promise in a comment.
+    """
+    from archon.cli import read_period
+    from archon.runtime.close import run_close
+
+    documents, raw = read_period("2026-07", root=None)
+    result = run_close(period="2026-07", documents=documents,
+                       company="Bell Ridge Haulage", raw_texts=raw)
+    close = result.to_dict()
+
+    spoken = " ".join(seg["speechText"] for seg in NARRATION["segments"])
+    captioned = " ".join(seg["captionText"] for seg in NARRATION["segments"])
+
+    steps = len(close["journal"]["steps"])
+    assert steps == 11, (
+        f"the narration says 'Eleven steps, unattended' in the live beat and the "
+        f"close now runs {steps}. The audio would have to be re-recorded."
+    )
+
+    allocation = close["allocations"][0]
+    loads = len(allocation["lines"])
+    assert loads == 8, (
+        f"'eight loads' is voiced in three separate beats; the remittance now "
+        f"settles {loads}."
+    )
+    assert "eight loads" in spoken
+
+    assert round(allocation["residual"], 2) == 0.00, (
+        "the live beat voices 'The residual is zero'; it is now "
+        f"{allocation['residual']}"
+    )
+
+    # The three exceptions named aloud in the `found` beat. Each is voiced as a
+    # figure, so each has to still be a finding with that amount.
+    amounts = {round(f["amount"], 2) for f in close["findings"] if f.get("amount")}
+    for figure, spoken_as in ((200.00, "200 dollars light"),
+                              (412.85, "412.85"),
+                              (1865.00, "1,865 dollars")):
+        assert spoken_as in spoken, f"the narration no longer says {spoken_as!r}"
+        assert figure in amounts, (
+            f"the narration voices {spoken_as!r} and no finding carries "
+            f"{figure}. Detected amounts: {sorted(amounts)}"
+        )
+
+    # Captions are what a judge with the sound off reads, so they carry the
+    # same burden.
+    for spoken_as in ("eight loads", "412.85", "1,865"):
+        assert spoken_as in captioned, f"the caption dropped {spoken_as!r}"
