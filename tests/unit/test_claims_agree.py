@@ -821,3 +821,22 @@ def test_the_persona_does_not_invent_a_customer():
     for invented in ("named ", "a customer called", "told us", "says the owner"):
         assert invented not in hero.lower(), (
             f"{invented!r} beside the persona reads as a real person we cannot cite")
+
+
+def test_no_surface_claims_the_agent_chooses_the_workflow():
+    """The instruction says "Call the tools in this order" and then lists them.
+
+    The page said Gemini chooses the workflow. It does not: the sequence is
+    prescribed and what the agent decides is the disposition of each exception,
+    which is the more interesting claim anyway and the one the rest of this
+    repository is built to prove.
+    """
+    instruction = (ROOT / "src" / "archon" / "adapters" / "agents.py").read_text(encoding="utf-8")
+    assert "Call the tools in this order" in instruction, (
+        "the instruction no longer prescribes an order; this guard is now the wrong shape")
+
+    for name, text in (("README.md", README), ("web/index.html", PAGE),
+                       ("narration", SPEECH + CAPTIONS)):
+        lowered = text.lower()
+        assert "chooses the workflow" not in lowered, f"{name} says the agent chooses the workflow"
+        assert "picks the workflow" not in lowered, f"{name} says the agent picks the workflow"

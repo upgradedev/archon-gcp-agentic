@@ -423,7 +423,8 @@ def run_agent_close(period: str, company: str | None = None, model=None,
     """Let the ADK agent drive the close. Returns the result and its final word.
 
     This is the path the demo shows and the video records: one instruction in,
-    seven tool calls the agent chose to make, a closed month out.
+    seven tool calls in the order the instruction prescribes, the agent deciding
+    what to do about each exception along the way, a closed month out.
     """
     from google.adk.runners import InMemoryRunner
     from google.genai import types

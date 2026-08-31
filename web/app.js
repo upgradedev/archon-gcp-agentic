@@ -901,7 +901,7 @@ function showDeployment(h) {
   $("how-agent").textContent = !h
     ? "This page could not reach the service to ask what it runs."
     : agent
-      ? "Gemini chooses the workflow; deterministic code does every calculation."
+      ? "Gemini decides what to do about each exception; the tool order is prescribed and deterministic code does every calculation."
       : "The workflow is fixed and every calculation is deterministic; no model is in this deployment.";
 }
 

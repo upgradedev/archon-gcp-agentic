@@ -425,15 +425,23 @@ Over the bundled month, `python run.py`:
  = closed in 16 ms
 ```
 
-**The live demo prints two of these lines differently, and that is the point.**
+**The live demo prints step 6 differently, and that is the point.**
 `python run.py` is the deterministic path: standing policy decides each
-exception, and step 6 reads `5 draft, 2 escalate, 3 note` over a 63-line fact
-sheet. The deployed service runs with `ARCHON_AGENT_CLOSE=1`, so the ADK agent
-makes those dispositions itself, and it reads `5 draft, 3 escalate, 2 note`
-over 66 lines -- it escalates one thing policy would only have noted. Same
-month, same books, same 2,406.84, same seven gates: the agent's judgement moves
-the DISPOSITIONS and cannot move the arithmetic. If the two blocks agreed
-exactly, the agent would be decorative. You can see which one produced a given
+exception, and step 6 reads `5 draft, 2 escalate, 3 note`, which reproduces
+exactly because policy is a function. The deployed service runs with
+`ARCHON_AGENT_CLOSE=1`, so the ADK agent makes those dispositions itself and
+the split differs -- it will draft where policy noted, or escalate where policy
+drafted.
+
+**This document does not name the live split, deliberately.** It is a model's
+judgement on ten exceptions and it is not guaranteed to repeat, so a number
+printed here would be true until the next close and then quietly wrong. It was
+`5 draft, 3 escalate, 2 note` when that sentence was written and the deployment
+does not read that today. Open `/api/close/2026-07` for the current one.
+
+Same month, same books, same 2,406.84, same seven gates: the agent's judgement
+moves the DISPOSITIONS and cannot move the arithmetic. If the two agreed
+exactly the agent would be decorative. You can see which one produced a given
 payload without asking: `/api/close/2026-07` is stamped `driver`, and it says
 `adk-agent` live and `deterministic` on the cold-start path.
 
@@ -770,7 +778,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 840 | `python -m pytest` |
+| Tests, all offline | 841 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

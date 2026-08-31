@@ -48,7 +48,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--period", default=PERIOD, help="period to close, YYYY-MM")
     parser.add_argument("--json", action="store_true", help="emit the close as JSON")
     parser.add_argument("--agent", action="store_true",
-                        help="the ADK agent chooses the tool calls (needs a Gemini credential)")
+                        help="the ADK agent drives the close and decides each disposition "
+                             "(needs a Gemini credential)")
     # The answer to "can I run it on MY month?", which until now was no.
     #
     # The bundled corpus proves the arithmetic; it cannot prove the thing an
@@ -73,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # `--agent` used to swap in the narrator and nothing else, while its help
     # text said it drove the close through the ADK agent. It now does what it
-    # says: the agent chooses the tool calls, and a failure is reported rather
+    # says: the agent drives the close, and a failure is reported rather
     # than silently downgraded, because a flag that quietly does something
     # smaller than it claims is how the claim stops being true.
     if args.agent:
