@@ -665,7 +665,7 @@ and the ones that do not.
 | What personal data is processed? | In the shipped repository, none. Bell Ridge Haulage, its brokers, its suppliers and its three drivers are invented. The drivers are named "Driver 1" through "Driver 3" precisely so that no synthetic name reads as a real one |
 | Prove it | `grep -rniE "[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}" corpus/` returns nothing. The only address in the product is the configurable `ARCHON_OWNER_EMAIL`, which defaults to an `example` domain |
 | What would be processed in production? | A firm's own commercial documents, and driver settlement data, which is personal data about employees |
-| Where would it live | Firestore and Cloud Storage in the deploying firm's own project. No data leaves that project except the document text sent to Gemini for extraction, and the fact sheet sent for phrasing |
+| Where would it live | Firestore and Cloud Storage in the deploying firm's own project. The only thing that leaves it is the fact sheet sent for phrasing. Document text is parsed in-process and is not sent anywhere |
 | For how long | Not implemented. There is no retention policy and no deletion path in this repository, and a production deployment would need both |
 
 ### What it costs when nobody is using it
@@ -728,7 +728,7 @@ filed letters, and the owner who looks on Monday has nothing to look at.
 |---|---|---|---|
 | Agent framework | **Google ADK** `Agent` | `src/archon/adapters/agents.py` | none: no agent without it |
 | Multi-agent reporting | **ADK `SequentialAgent`** | `src/archon/adapters/agents.py` | deterministic narrator |
-| Model | **Gemini** | extraction and reporting | deterministic parser and narrator |
+| Model | **Gemini** | reporting | deterministic narrator |
 | Memory | **Firestore** | `src/archon/adapters/store.py` | in-memory, for the demo and tests |
 | Serving | **Cloud Run** | `Dockerfile`, `scripts/deploy.sh` | local uvicorn |
 | Trigger | **Cloud Storage notification + Pub/Sub push** | `POST /events` | the button on the page |
@@ -1010,11 +1010,14 @@ its persistence model is deliberately not used here.
   each defect the detectors look for, so that a run demonstrates each one on
   something real rather than on a fixture that agrees with it.
 - **The deterministic extractor is the reference path**, and it is what the demo
-  and CI use. It parses the label blocks OCR leaves behind. `extract_with_gemini`
-  in `archon/adapters/agents.py` is a second, model-driven path over the same
-  text, and it is not exercised in CI because CI has no key. **It takes text, not
-  pixels.** There is no image path and no vision call anywhere in this
-  repository, so a photograph of a fax is out of scope rather than handled.
+  and CI use, and it is what EVERY call site uses. `extract_with_gemini` in
+  `archon/adapters/agents.py` is a second, model-driven path over the same text,
+  and being honest about it means saying that **nothing calls it**: there is no
+  flag, no environment variable and no code path that selects it, so it is a
+  written alternative rather than a feature, and "a key would exercise it" would
+  be untrue. **It takes text, not pixels.** There is no image path and no vision
+  call anywhere in this repository, so a photograph of a fax is out of scope
+  rather than handled.
 - **The digest is composed but not delivered in the demo**, because no mail
   server is configured and configuring one would put a credential in a public
   repository. `SmtpDelivery` is real, runs on the standard library, and is

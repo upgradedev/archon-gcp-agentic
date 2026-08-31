@@ -87,11 +87,21 @@ TABS.forEach((tab, index) => {
 
 // ── the close ────────────────────────────────────────────────────────────────
 
+// "Watch Archon close July" was hardcoded, and /api/periods offers two. Switch
+// the selector to June and the button went on naming July while the page below
+// it showed June's books.
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July",
+  "August", "September", "October", "November", "December"];
+function monthName(value) {
+  const parts = String(value || "").split("-");
+  return MONTHS[Number(parts[1]) - 1] || "the month";
+}
+
 function setRunControls(state) {
   const header = $("run");
   const hero = $("hero-run");
   const labels = {
-    ready: ["Run fresh close", "Watch Archon close July"],
+    ready: ["Run fresh close", `Watch Archon close ${monthName(period)}`],
     running: ["Agent is closing…", "Archon is closing the books…"],
     complete: ["Run another fresh close", "Watch the close again"],
     failed: ["Try fresh close again", "Try the close again"],
@@ -277,7 +287,23 @@ function renderMileChart(s) {
 
 // The whole story in one line: one payment, how many jobs it settled, and
 // the money that was quietly going missing. Every figure is the close's own.
+// The opening paragraph names what the close found. It was static HTML naming
+// 612.85, which is July's figure: on June the page opened by claiming a number
+// that month does not contain, above a panel showing the real one. The rest of
+// the sentence is the pitch and does not move, so only the figure and its verb
+// are written here.
+function renderDek(d) {
+  const dek = document.querySelector(".hero-dek");
+  if (!dek) return;
+  const found = dek.querySelector(".dek-found");
+  if (!found) return;
+  found.textContent = d.leakage > 0
+    ? `On the month below it found ${usd(d.leakage)} quietly leaking.`
+    : "On the month below it found nothing leaking, and says so.";
+}
+
 function renderHero(d) {
+  renderDek(d);
   const first = (d.allocations && d.allocations[0]) || null;
   const parts = [];
   if (first) parts.push(`One payment. ${plural(first.lines.length, "load")}.`);
