@@ -53,7 +53,17 @@ def main() -> int:
         page.screenshot(path=str(out / "01-thumbnail.png"))
         print("01-thumbnail.png")
 
-        # 2. The opening slides, held long enough for their choreography to land.
+        # 2. The architecture diagram, which the rules ask for by name and a
+        #    form wants as a file. The README carries the same structure as
+        #    mermaid for GitHub to render inline; this is the version that can
+        #    be uploaded.
+        page.set_viewport_size({"width": 1920, "height": 940})
+        page.goto((HERE / "architecture.html").as_uri(), wait_until="networkidle")
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(out / "00-architecture.png"))
+        print("00-architecture.png")
+
+        # 3. The opening slides, held long enough for their choreography to land.
         page.set_viewport_size(WIDE)
         page.goto((HERE / "deck.html").as_uri(), wait_until="networkidle")
         page.wait_for_function("() => !!window.archonDeck", timeout=15_000)
@@ -65,7 +75,7 @@ def main() -> int:
             print(name)
         page.close()
 
-        # 3. The deployment itself, panel by panel.
+        # 4. The deployment itself, panel by panel.
         page = browser.new_page(viewport=WIDE, device_scale_factor=1)
         page.goto(app_url, wait_until="networkidle", timeout=60_000)
         page.wait_for_function(
