@@ -840,3 +840,51 @@ def test_no_surface_claims_the_agent_chooses_the_workflow():
         lowered = text.lower()
         assert "chooses the workflow" not in lowered, f"{name} says the agent chooses the workflow"
         assert "picks the workflow" not in lowered, f"{name} says the agent picks the workflow"
+
+
+def test_the_guided_tour_states_no_figure_of_its_own():
+    """The tour is the most on-camera thing in the product, and it was eight
+    paragraphs of Bell Ridge's July written by hand.
+
+    "Ten exceptions, three of them errors, 2,477.85 at stake" stood beside a
+    panel rendering whatever the current result holds. On the bundled month the
+    two agreed, so the drift was invisible. On a month an owner uploads
+    themselves -- the feature this product actually argues for -- the tour
+    narrated a stranger's books over their numbers.
+
+    Every count and figure now comes off the close on screen. This asserts the
+    prose carries none of its own, because the next person to edit a tour stop
+    will reach for the number they can see in front of them.
+    """
+    import pathlib
+    import re
+
+    app = (pathlib.Path(__file__).resolve().parents[2] / "web" / "app.js")
+    source = app.read_text(encoding="utf-8")
+    start = source.index("const TOUR = [")
+    block = source[start:source.index("\n];", start)]
+
+    # Figures from the bundled month. Any of these appearing as a literal in
+    # the tour means a stop stopped reading the result.
+    bundled = ["19,245", "577.35", "18,667", "2,477.85", "612.85", "1,865",
+               "412.85", "27 ", "10,810", "23,005", "2,406.84"]
+    found = [f for f in bundled if f in block]
+    assert not found, f"the tour hardcodes figures from one month: {found}"
+
+    # And the counts, which is the same defect spelled in words.
+    for phrase in ["Ten exceptions", "Eight lines", "Five corrective letters",
+                   "eight loads", "three of them errors"]:
+        assert phrase not in block, (
+            f"the tour hardcodes a count: {phrase!r}. Read it off the close."
+        )
+
+    # A number literal in the prose is the general form of the same mistake.
+    # Digits are legitimate inside `NUMBER_WORDS` indices and array bounds, so
+    # this looks only at string and template literals.
+    literals = re.findall(r'"[^"\n]*"|`[^`]*`', block)
+    for text in literals:
+        digits = re.findall(r"(?<![\w$])\d[\d,]*\.?\d*", text)
+        # `${...}` interpolations are the point; strip them before looking.
+        stripped = re.sub(r"\$\{[^}]*\}", "", text)
+        digits = re.findall(r"(?<![\w$])\d[\d,]*\.?\d*", stripped)
+        assert not digits, f"a figure is written into tour prose: {text.strip()}"

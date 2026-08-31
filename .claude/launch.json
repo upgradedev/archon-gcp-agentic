@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "archon",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "archon.adapters.service:app", "--port", "8099", "--app-dir", "src"],
+      "port": 8099
+    }
+  ]
+}

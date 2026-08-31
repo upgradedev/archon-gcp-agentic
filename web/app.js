@@ -674,10 +674,18 @@ document.addEventListener("click", (event) => {
   }
 });
 
+// A close persisted by an earlier release has no `skipped` field, and the page
+// has to serve those too: a stored close from yesterday would have rendered
+// "7/7 gates passed" beside two rows whose evidence column literally began
+// "Skipped:". The message is the fallback, because it is the same string the
+// gate wrote when it decided it had nothing to check.
+const wasSkipped = (g) =>
+  g.skipped === true || /^Skipped:/.test(g.message || "");
+
 // The same sentence the CLI prints, built from the same two counts, so the
 // page and the terminal cannot drift apart on the number a judge writes down.
 function gateLine(gates) {
-  const ran = gates.filter((g) => !g.skipped);
+  const ran = gates.filter((g) => !wasSkipped(g));
   const line = `${ran.filter((g) => g.passed).length}/${ran.length} gates passed`;
   const skipped = gates.length - ran.length;
   return skipped ? `${line}, ${skipped} skipped` : line;
@@ -687,7 +695,7 @@ function gateLine(gates) {
 // claims. Painting it the same green as a gate that ran over 27 entries made
 // the panel report seven verifications when five had happened.
 function renderGates(list) {
-  const tone = (g) => g.skipped ? ["info", "skip"] : g.passed ? ["ok", "pass"] : ["err", "fail"];
+  const tone = (g) => wasSkipped(g) ? ["info", "skip"] : g.passed ? ["ok", "pass"] : ["err", "fail"];
   const rows = list.map((g) => {
     const [cls, label] = tone(g);
     return `<tr>
@@ -858,14 +866,12 @@ document.querySelectorAll("[data-show-panel]").forEach((control) =>
   control.addEventListener("click", () => show(control.dataset.showPanel)));
 $("raw").addEventListener("click", () => window.open(`/api/close/${period}`, "_blank"));
 
-// Replays the rendering of the close already on screen. No server call: the
-// run happened (and persisted) once; this makes it watchable again without
-// pretending the production trigger fired.
-$("replay").addEventListener("click", () => {
-  if (!last) return;
-  render(last);
-  $("status").textContent = `replaying run ${last.run_id} · nothing was re-executed`;
-});
+// The header control and the hero control are the same action, so they are the
+// same function. They were not: the header one re-rendered in place and left
+// you on whatever panel you were reading, so "watch the agent" from the trends
+// tab silently did nothing you could see. A button whose label promises a walk
+// through eleven steps has to put those steps in front of you.
+$("replay").addEventListener("click", replayAndFollow);
 
 // Switching month is a read, not a run: it shows the close already on file.
 $("period").addEventListener("change", () => {
@@ -966,68 +972,177 @@ fetch("/api/periods").then((r) => r.ok ? r.json() : null).then((d) => {
 // Exposed as `window.archonTour` so the recording can walk the same eight
 // beats a visitor is shown, rather than a separate script that drifts from it.
 
+// Every count and every figure below is read off the close ON SCREEN, never
+// written into the prose. The tour was eight paragraphs of Bell Ridge's July --
+// "Ten exceptions", "Eight lines pay 19,245.00", "Five corrective letters" --
+// standing beside panels that render whatever the current result holds. On the
+// bundled month the two agreed and the drift was invisible. On a month the
+// owner uploads themselves, which is the feature this product is actually
+// arguing for, the tour narrated somebody else's books over their numbers.
+//
+// A stop's `title` and `body` may be a string or a function of the close.
+
+// Small readers first, so a stop that runs before a close has loaded returns
+// prose rather than throwing and taking the whole tour down with it.
+const firstAlloc = (d) => (d && d.allocations && d.allocations[0]) || null;
+const tourSteps = (d) => (d && d.journal && d.journal.steps) || [];
+// Making the tour read the result introduced a way to narrate nothing: opened
+// before the stored close arrives, every count is zero and stop three reads
+// "Zero steps, unattended". The stops below fall back to prose without figures,
+// and `start` refuses outright, because a tour is the one thing on this page a
+// judge is guaranteed to press.
+const hasClose = (d) => tourSteps(d).length > 0;
+const wasUploaded = (d) => !!(d && d.mode && d.mode.source === "uploaded-sandbox");
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six",
+  "seven", "eight", "nine", "ten", "eleven", "twelve"];
+const count = (n) => NUMBER_WORDS[n] !== undefined ? NUMBER_WORDS[n] : String(n);
+// "eight loads", not "8 loads". These are sentences a narrator reads aloud, so
+// a small count belongs in words; money and anything past twelve stays in
+// figures, where a digit is what a reader wants.
+const spell = (n, one, many) => `${count(n)} ${n === 1 ? one : (many || one + "s")}`;
+
 const TOUR = [
   {
-    title: "One payment, eight loads",
-    body: "A broker does not pay per load. It pays once a fortnight, one bank " +
-          "credit covering eight loads, minus a factoring fee charged on the " +
-          "whole batch. The bank shows one number; the books need eight.",
+    title: (d) => {
+      const a = firstAlloc(d);
+      return a ? `One payment, ${spell(a.lines.length, "load")}` : "One payment, many loads";
+    },
+    body: (d) => {
+      const a = firstAlloc(d);
+      if (!a) {
+        return "A broker does not pay per load. It pays in batches, one bank " +
+               "credit covering many loads, minus a factoring fee charged on " +
+               "the whole batch. This month carries no consolidated payment, " +
+               "so the panels below show the loads on their own.";
+      }
+      return "A broker does not pay per load. It pays once a fortnight, one " +
+             `bank credit covering ${spell(a.lines.length, "load")}, minus a ` +
+             "factoring fee charged on the whole batch. The bank shows one " +
+             `number; the books need ${count(a.lines.length)}.`;
+    },
     focus: "#hero-line",
   },
   {
     title: "Nobody pressed anything",
-    body: "A month of documents landed in a Cloud Storage bucket. The bucket " +
-          "notified Pub/Sub, its push subscription woke a Cloud Run container, " +
-          "and the close started itself. This panel names the exact objects it " +
-          "read and the hash of each one.",
+    body: (d) => wasUploaded(d)
+      ? "These are the documents you sent. On the bundled month nobody sends " +
+        "anything: it lands in a Cloud Storage bucket, the bucket notifies " +
+        "Pub/Sub, its push subscription wakes a Cloud Run container and the " +
+        "close starts itself. Your month took the same steps, in memory, and " +
+        "was stored nowhere."
+      : "A month of documents landed in a Cloud Storage bucket. The bucket " +
+        "notified Pub/Sub, its push subscription woke a Cloud Run container, " +
+        "and the close started itself. This panel names the exact objects it " +
+        "read and the hash of each one.",
     panel: "mailbox", focus: "#origin",
   },
   {
-    title: "Eleven steps, unattended",
-    body: "The whole close, step by step, as it ran. Every step carries its own " +
-          "counts, so a month that closed while nobody watched can still be " +
-          "walked backwards afterwards.",
+    title: (d) => hasClose(d)
+      ? `${cap(count(tourSteps(d).length))} steps, unattended`
+      : "Every step, unattended",
+    body: (d) => "The whole close, step by step, as it ran. " +
+      (hasClose(d) ? `All ${count(tourSteps(d).length)} of them carry ` : "Each one carries ") +
+      "their own counts, so a month that closed while nobody watched can " +
+      "still be walked backwards afterwards.",
     panel: "runner", focus: "#trail",
   },
   {
     title: "The identity the product rests on",
-    body: "Eight lines pay 19,245.00. The factoring fee takes 577.35, charged " +
-          "once on the batch, not per load. 18,667.65 landed in the bank, and " +
-          "the residual is 0.00. If this line did not close, nothing else here " +
-          "would be worth reading.",
+    body: (d) => {
+      const a = firstAlloc(d);
+      if (!a) {
+        return "A consolidated payment has to split back across the loads it " +
+               "settles, to the cent. This month has no such payment, so " +
+               "there is no residual to close and the loads stand on their own.";
+      }
+      return `${cap(spell(a.lines.length, "line"))} ` +
+             `${a.lines.length === 1 ? "pays" : "pay"} ${usd(a.allocated_gross)}. ` +
+             `The factoring fee takes ${usd(a.factoring_fee)}, charged once on ` +
+             `the batch, not per load. ${usd(a.remittance_total)} landed in the ` +
+             `bank, and the residual is ${usd(a.residual)}. If this line did ` +
+             "not close, nothing else here would be worth reading.";
+    },
     panel: "alloc", focus: "#alloc",
   },
   {
     title: "What it found on its own",
-    body: "Ten exceptions, three of them errors, 2,477.85 at stake. A broker " +
-          "that paid 200 light, a truck stop that charged 412.85 twice, and " +
-          "1,865.00 that left the account with no paperwork behind it. Every " +
-          "one has a deterministic detector, not a model's opinion.",
+    body: (d) => {
+      const findings = d.findings || [];
+      if (!findings.length) {
+        return "Ten deterministic detectors ran over the finished books and " +
+               "none of them fired. Nothing is missing and nothing fails to " +
+               "add up. Every one of them is a rule, not a model's opinion.";
+      }
+      const errors = findings.filter((f) => f.severity === "error");
+      const atStake = errors.reduce((sum, f) => sum + (f.amount || 0), 0);
+      const head = errors.length
+        ? `${cap(spell(findings.length, "exception"))}, ${count(errors.length)} of ` +
+          `them ${errors.length === 1 ? "an error" : "errors"}, ` +
+          `${usd(atStake)} at stake.`
+        : `${cap(spell(findings.length, "exception"))}, none of them errors.`;
+      // The worst one in its own words. The tour used to name three of Bell
+      // Ridge's by hand, which was the most persuasive sentence in it and the
+      // one that would have narrated a stranger's books over an owner's own
+      // month. The detector already writes a better sentence than the tour did.
+      const worst = errors.length ? ` ${errors[0].message}` : "";
+      return `${head}${worst} Every one has a deterministic detector, not a ` +
+             "model's opinion.";
+    },
     panel: "findings", focus: "#findings",
   },
   {
     title: "Letters written, none sent",
-    body: "Five corrective letters, drafted and filed. Nothing is sent: no " +
-          "delivery channel is configured, and the approval below records who " +
-          "decided and when. This is the one place a person is needed, and it " +
-          "is deliberately the last one.",
+    body: (d) => {
+      const n = (d.drafts || []).length;
+      if (!n) {
+        return "No corrective letter was needed this month. When one is, it " +
+               "is drafted and filed unsent: no delivery channel is " +
+               "configured, and the approval below records who decided and " +
+               "when. That is the one place a person is needed, and it is " +
+               "deliberately the last one.";
+      }
+      return `${cap(spell(n, "corrective letter"))}, drafted and filed. ` +
+             "Nothing is sent: no delivery channel is configured, and the " +
+             "approval below records who decided and when. This is the one " +
+             "place a person is needed, and it is deliberately the last one.";
+    },
     panel: "letters", focus: "#drafts",
   },
   {
     title: "It checks itself, and can refuse",
-    body: "Seven gates stand over the finished books, and a close that cannot " +
-          "verify its own arithmetic is blocked rather than filed. A gate with " +
-          "nothing to check reads skipped rather than passing quietly, so the " +
-          "count is what was verified. Each gate is broken on purpose in the " +
-          "test suite and asserted red, because a gate nobody has watched fail " +
-          "is a gate nobody should believe.",
+    body: (d) => {
+      const gates = d.gates || [];
+      if (!gates.length) {
+        return "Seven gates stand over the finished books, and a close that " +
+               "cannot verify its own arithmetic is blocked rather than filed. " +
+               "A gate with nothing to check reads skipped rather than passing " +
+               "quietly, so the count is what was verified. Each gate is broken " +
+               "on purpose in the test suite and asserted red, because a gate " +
+               "nobody has watched fail is a gate nobody should believe.";
+      }
+      const ran = gates.filter((g) => !wasSkipped(g));
+      const skipped = gates.length - ran.length;
+      const tail = skipped
+        ? `On this month ${count(ran.length)} of them had something to check ` +
+          `and ${count(skipped)} read skipped rather than passing quietly, so ` +
+          "the count is what was actually verified. "
+        : `On this month all ${count(gates.length)} had something to check. `;
+      return `${cap(count(gates.length))} gates stand over the finished books, ` +
+             "and a close that cannot verify its own arithmetic is blocked " +
+             `rather than filed. ${tail}Each gate is broken on purpose in the ` +
+             "test suite and asserted red, because a gate nobody has watched " +
+             "fail is a gate nobody should believe.";
+    },
     panel: "checks", focus: "#gates",
   },
   {
     title: "Every figure ties back to bytes",
-    body: "The source hashes, the run id, the release that produced this close, " +
-          "and the eleven-step trail. Books tie back to bytes, a build and a " +
-          "control flow, or they are trusted on faith.",
+    body: (d) => "The source hashes, the run id, the release that produced " +
+      "this close, and the " +
+      (hasClose(d) ? `${count(tourSteps(d).length)}-step trail` : "step-by-step trail") +
+      ". Books tie back to bytes, a build and a control flow, or they are " +
+      "trusted on faith.",
     panel: "checks", focus: "#trail",
   },
 ];
@@ -1047,8 +1162,11 @@ const tour = {
       if (tab) tab.click();
     }
     document.getElementById("tour-count").textContent = `${n + 1} / ${TOUR.length}`;
-    document.getElementById("tour-title").textContent = stop.title;
-    document.getElementById("tour-body").textContent = stop.body;
+    // `last` is the close currently rendered. A stop written as a function
+    // reads it; one written as a string does not depend on it.
+    const of = (v) => (typeof v === "function" ? v(last || {}) : v);
+    document.getElementById("tour-title").textContent = of(stop.title);
+    document.getElementById("tour-body").textContent = of(stop.body);
     document.getElementById("tour-back").disabled = n === 0;
     document.getElementById("tour-next").textContent =
       n === TOUR.length - 1 ? "Done" : "Next";
@@ -1060,7 +1178,16 @@ const tour = {
     }
     this.el().hidden = false;
   },
-  start() { this.show(0); },
+  start() {
+    if (!hasClose(last)) {
+      const status = document.getElementById("status");
+      if (status) status.textContent =
+        "The tour walks the close on screen. Give it a moment to load, or press " +
+        "Run fresh close.";
+      return;
+    }
+    this.show(0);
+  },
   next() { this.show(this.i + 1); },
   back() { this.show(this.i - 1); },
   stop() {
