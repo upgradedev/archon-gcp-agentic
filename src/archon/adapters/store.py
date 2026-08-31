@@ -91,9 +91,17 @@ class FencedStore:
     when the damage was already durable.
 
     So the token travels with the writes. Every business write reads the marker
-    first and refuses if the attempt number has moved. A superseded worker
-    fails on its FIRST write rather than its last, and the winner's month is
-    never overwritten.
+    first and refuses if the attempt has moved, so a superseded worker fails on
+    its FIRST write rather than its last.
+
+    **What this does not do, stated rather than implied.** The read and the
+    write are two operations. A take-over landing between them is not stopped,
+    it is only made very unlikely -- the window is one Firestore round trip
+    instead of an entire close. Calling that "never overwritten" would be a
+    stronger claim than a read-then-write can carry. Closing it properly needs
+    the ownership check and the write in one transaction, which is a change to
+    every store implementation rather than a wrapper, and it is recorded in
+    STATE.md as open.
 
     Reads are not fenced. A stale worker reading is harmless, and fencing them
     would double the cost of the one thing that has to stay cheap.

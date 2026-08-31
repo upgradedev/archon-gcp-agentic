@@ -28,6 +28,7 @@ REPO="${REPO:-upgradedev/archon-gcp-agentic}"
 POOL="${POOL:-github}"
 PROVIDER="${PROVIDER:-github-oidc}"
 DEPLOYER="${DEPLOYER:-archon-deploy}"
+BRANCH="${BRANCH:-main}"
 SA="${DEPLOYER}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 echo "==> project ${PROJECT_ID}, repository ${REPO}"
@@ -87,18 +88,26 @@ if ! gcloud iam workload-identity-pools providers describe "${PROVIDER}" \
     --display-name="GitHub OIDC" \
     --issuer-uri="https://token.actions.githubusercontent.com" \
     --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref" \
-    --attribute-condition="assertion.repository == '${REPO}'"
+    --attribute-condition="assertion.repository == '${REPO}' && assertion.ref == 'refs/heads/${BRANCH}'"
 fi
 
 POOL_ID="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}"
 
-# Only the main branch of that repository may become the deploy account. A pull
-# request from a fork runs with a different `ref`, so it cannot deploy however
-# it edits the workflow file.
+# Only the main branch of that repository may become the deploy account, and
+# this line is the one that has to say so.
+#
+# It bound `attribute.repository/${REPO}`, which is EVERY ref of that
+# repository: a branch, a tag, a pull request. `attribute.ref` was mapped on
+# the provider above and then never used, and the comment here claimed a
+# restriction that nothing enforced. Anyone able to push a branch could have
+# minted the deploy identity.
+#
+# Both halves now: the provider refuses a token whose repository or ref is
+# wrong, and the binding names the ref rather than the repository.
 gcloud iam service-accounts add-iam-policy-binding "${SA}" \
   --project "${PROJECT_ID}" \
   --role roles/iam.workloadIdentityUser \
-  --member "principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${REPO}" \
+  --member "principalSet://iam.googleapis.com/${POOL_ID}/attribute.ref/refs/heads/${BRANCH}" \
   --quiet >/dev/null
 
 PROVIDER_RESOURCE="${POOL_ID}/providers/${PROVIDER}"

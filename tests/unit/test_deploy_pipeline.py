@@ -426,3 +426,32 @@ def test_no_shell_step_carries_a_literal_backslash_n():
     assert not offenders, (
         "a shell step carries a literal backslash-n, which the shell passes as an "
         "argument: " + " | ".join(offenders))
+
+
+def test_the_deploy_identity_is_restricted_to_one_branch():
+    """`attribute.ref` was mapped on the provider and then never used.
+
+    The service-account binding named `attribute.repository/<repo>`, which is
+    EVERY ref of that repository -- a branch, a tag, a pull request -- while the
+    comment directly above it claimed only main could deploy. Anyone able to
+    push a branch could have minted the identity that changes production.
+
+    Two things have to hold together, so both are asserted: the provider must
+    refuse a token whose ref is wrong, and the binding must name the ref rather
+    than the repository. Either one alone leaves the hole open.
+    """
+    setup = (ROOT / "scripts" / "setup-cd.sh").read_text(encoding="utf-8")
+
+    condition = [line for line in setup.splitlines()
+                 if "--attribute-condition" in line and not line.lstrip().startswith("#")]
+    binding = [line for line in setup.splitlines()
+               if "principalSet://" in line and not line.lstrip().startswith("#")]
+
+    assert condition, "the provider has no attribute condition at all"
+    assert "assertion.ref" in condition[0], (
+        f"the provider does not restrict the ref: {condition[0].strip()}")
+    assert binding, "nothing binds the workload identity user"
+    assert "attribute.ref/refs/heads/" in binding[0], (
+        f"the binding accepts every ref of the repository: {binding[0].strip()}")
+    assert "attribute.repository/" not in binding[0], (
+        "the binding still names the repository, which is every branch of it")
