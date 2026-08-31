@@ -472,7 +472,7 @@ flowchart LR
         gcs[("Cloud Storage<br/><b>archon-mail</b><br/>uniform access, no public read")]
         topic["Pub/Sub topic<br/><b>archon-mail</b>"]
         sub["Push subscription<br/>OIDC token, one audience"]
-        subgraph run["Cloud Run · scale to zero · max 3 instances"]
+        subgraph run["Cloud Run · scale to zero · max 4 instances"]
             svc["<b>archon</b><br/>revision pinned to the commit SHA<br/>600s request deadline"]
         end
         fs[("Firestore Native<br/>runs · closes · drafts · documents")]
@@ -494,8 +494,7 @@ flowchart LR
     class gcs,fs store
 ```
 
-Everything above is Terraform in [`infra/main.tf`](infra/main.tf) -- seventeen
-resources, one state file, no resource created by a pipeline step. Nothing is
+Everything above is Terraform in [`infra/main.tf`](infra/main.tf) -- 15 resource blocks, one state file, no resource created by a pipeline step. Nothing is
 public except the page: `POST /events` answers 403 to anything without an OIDC
 token minted for this service's own audience, and the bucket has no public
 read. Both cost nothing between months, which is the shape of a business that
@@ -743,7 +742,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 789 | `python -m pytest` |
+| Tests, all offline | 791 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

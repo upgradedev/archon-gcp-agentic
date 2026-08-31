@@ -377,6 +377,31 @@ def test_a_failing_close_does_not_write_over_the_worker_that_holds_the_claim(
     assert response.status_code == 200, "the holder owns it now; do not retry this one"
 
 
+def test_the_dedupe_key_is_a_document_id_not_a_path():
+    """The idempotency marker is the safety-critical record in this build, and
+    its Firestore document id was built from the raw GCS object name.
+
+    A Firestore document path alternates collection and document, so an id
+    carrying slashes is not an id: `closes/{company}::{period}#event-mail/
+    2026-07/_READY@gen` is really a document in a subcollection two levels
+    down. That happens to be a legal path with an even number of slashes, so
+    every claim so far has quietly worked while living somewhere other than
+    where `store.py` says it does.
+
+    Add one more slash -- an object in a subfolder, which is exactly what the
+    Cloud Console's "create folder" button invites, and which this intake now
+    tolerates rather than blocks -- and the same expression resolves to a
+    COLLECTION. Firestore raises, the events route 500s, and the month cannot
+    be claimed at all.
+    """
+    for obj in ("mail/2026-07/_READY", "mail/2026-07/scans/_READY", "_READY"):
+        env = {"message": {"attributes": {"objectId": obj, "objectGeneration": "9"}}}
+
+        key = gcs.dedupe_key(env, PERIOD)
+
+        assert "/" not in key, f"{obj!r} produced a key Firestore reads as a path: {key!r}"
+
+
 # -- the decision itself, without a store, a bucket or a route ---------------
 
 def verdict(marker: dict, age_seconds: int = 0) -> str:

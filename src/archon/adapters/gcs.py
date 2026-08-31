@@ -258,4 +258,21 @@ def dedupe_key(envelope: dict, period: str) -> str | None:
         # message id so a duplicate push of that exact message is still caught.
         mid = message.get("messageId") or message.get("message_id") or ""
         return f"{period}#event-msg-{mid}" if mid else None
-    return f"{period}#event-{obj}@{generation}"
+    # Slashes flattened, because this string becomes a Firestore DOCUMENT ID.
+    # A Firestore path alternates collection and document, so an id carrying
+    # slashes is not an id: `closes/{company}::{period}#event-mail/2026-07/
+    # _READY@gen` is a document two subcollections down from where `store.py`
+    # says the marker lives. That path has an even number of slashes, so every
+    # claim so far worked while living somewhere nobody would look for it.
+    #
+    # One more slash breaks it outright. An object in a subfolder -- which the
+    # Cloud Console's "create folder" button invites, and which this intake now
+    # tolerates rather than blocks -- makes the same expression resolve to a
+    # COLLECTION. Firestore raises, the events route answers 500, and the month
+    # cannot be claimed at all: the idempotency record is the one thing in this
+    # build that must never fail to be written.
+    #
+    # Existing markers keep their old ids and are simply never consulted again,
+    # so the first delivery after this ships re-closes its month once. That is
+    # the safe direction, and the close is deterministic over the same bytes.
+    return f"{period}#event-{obj.replace('/', '_')}@{generation}"

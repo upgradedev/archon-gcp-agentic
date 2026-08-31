@@ -265,6 +265,24 @@ resource "google_project_iam_member" "runtime_firestore" {
   member  = "serviceAccount:${google_service_account.runtime.email}"
 }
 
+# The permission the entire agentic claim rests on, and it was granted by hand.
+#
+# `aiplatform.googleapis.com` is enabled above, which is the API, not the right
+# to call it. The runtime account holds `roles/aiplatform.user` on the live
+# project today because somebody added it in a console months ago; it was in no
+# file. So a destroy and a rebuild from this Terraform would have produced a
+# service that cannot reach Gemini, the agent path would have failed closed to
+# the deterministic orchestrator, and `/api/health` would have reported
+# `close_path: deterministic` on a submission whose hero sentence is the agent.
+#
+# Failing closed is why nothing caught it: the fallback is good engineering and
+# it hid a missing grant for as long as the hand-made one survived.
+resource "google_project_iam_member" "runtime_vertex" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.runtime.email}"
+}
+
 resource "google_storage_bucket_iam_member" "runtime_reads_mail" {
   bucket = google_storage_bucket.mail.name
   role   = "roles/storage.objectViewer"

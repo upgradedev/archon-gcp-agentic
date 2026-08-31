@@ -201,7 +201,10 @@ def test_the_bucket_and_dedupe_key_come_out_of_the_envelope():
     env = envelope(obj=f"mail/{PERIOD}/r.txt", generation="42")
 
     assert service._bucket_from_envelope(env) == BUCKET
-    assert gcs.dedupe_key(env, PERIOD) == f"{PERIOD}#event-mail/{PERIOD}/r.txt@42"
+    # Slashes flattened: this string is a Firestore document id, and an id that
+    # carries slashes is a PATH. The old expectation pinned the object name
+    # verbatim, so it asserted the defect rather than the contract.
+    assert gcs.dedupe_key(env, PERIOD) == f"{PERIOD}#event-mail_{PERIOD}_r.txt@42"
 
 
 def test_a_scheduler_event_with_no_object_dedupes_on_the_message_id():

@@ -747,3 +747,27 @@ def test_the_readme_console_block_is_what_the_command_actually_prints():
         assert figure in printed and figure in block, (
             f"{figure!r} disagrees between the README and the command"
         )
+
+
+def test_the_readme_counts_the_terraform_it_points_at():
+    """The architecture prose states a resource count and the diagram states a
+    max instance count. Both were wrong: seventeen against fifteen blocks, and
+    three instances against four.
+
+    Neither is a big number, and that is the point. A judge who opens
+    `infra/main.tf` because the README told them it holds everything is exactly
+    the reader this entry is written for, and the first thing they can check is
+    whether the count agrees.
+    """
+    import re
+
+    terraform = (ROOT / "infra" / "main.tf").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    blocks = len(re.findall(r'^resource "', terraform, re.M))
+    max_instances = re.search(r"max_instance_count\s*=\s*(\d+)", terraform)
+
+    assert max_instances, "max_instance_count is no longer written the way this reads it"
+    assert f"{blocks} resource blocks" in readme, f"the README does not say {blocks} resource blocks"
+    assert f"max {max_instances.group(1)} instances" in readme, (
+        f"the diagram does not say max {max_instances.group(1)} instances")
