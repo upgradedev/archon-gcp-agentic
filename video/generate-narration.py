@@ -307,8 +307,18 @@ def main() -> None:
             }
         )
         offset += hold
-    if not 90 <= offset < 175:
-        raise SystemExit(f"narration must be 90-174 seconds, observed {offset:.3f}")
+    # 90 to 250 seconds. The old ceiling was 174, an editorial choice made
+    # before anyone had read the submission rules, which ask for about four
+    # minutes and REQUIRE the video demonstrate the backend running on Google
+    # Cloud. Four beats were added to meet that requirement and the cut is
+    # about 210 seconds now.
+    #
+    # This bound and the one in tests/unit/test_narration_contract.py are the
+    # same rule written twice, and I raised the test's copy first and left this
+    # one, so eleven segments were synthesised and paid for before the run
+    # refused them. Change both together.
+    if not 90 <= offset < 250:
+        raise SystemExit(f"narration must be 90-250 seconds, observed {offset:.3f}")
     (OUT / "timing.json").write_text(
         json.dumps(
             {

@@ -151,3 +151,25 @@ def test_nothing_in_the_script_is_still_a_placeholder():
     assert not re.search(r"CHANGE-ME|FILL:|TODO|<[a-z]", everything, re.IGNORECASE), (
         "a placeholder survives in video/narration.json"
     )
+
+
+def test_the_cut_bounds_here_are_the_ones_the_generator_enforces():
+    """This file mirrors `video/generate-narration.py`'s bounds so they can be
+    checked offline, and a mirror that drifts is worse than no mirror.
+
+    It drifted once, in the cheapest possible way to notice and the most
+    expensive way to pay for: the ceiling was raised here and left there, so a
+    run synthesised eleven segments through a paid API and then refused them on
+    the line after. The generator is the authority; this reads its bound rather
+    than restating it.
+    """
+    source = (ROOT / "video" / "generate-narration.py").read_text(encoding="utf-8")
+
+    match = re.search(r"if not (\d+) <= offset < (\d+):", source)
+
+    assert match, "the generator's cut bound is no longer written the way this reads it"
+    low, high = int(match.group(1)), int(match.group(2))
+    assert (low, high) == (CUT_MIN_SECONDS, CUT_MAX_SECONDS), (
+        f"the generator enforces {low}-{high}s, this file mirrors "
+        f"{CUT_MIN_SECONDS}-{CUT_MAX_SECONDS}s"
+    )
