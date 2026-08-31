@@ -4,11 +4,13 @@
 [![Readiness](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-*The readiness badge is a submission gate, not a build gate: it fetches the
-live judge URL below and refuses to pass while that URL is a placeholder or
-down. It was red for most of this build, on purpose, and it is green now
-because the URL is real and answering. The CI badge covers the secret scan, the
-build, the tests and the browser journey.*
+*The readiness badge is a submission gate, not a build gate. It fetches the
+live judge URL below, and it also refuses to pass while any mandatory
+deliverable is missing, whatever the weighted score says. **It is red right now,
+and correctly so: the demo video has no public URL yet.** It went red the moment
+that veto was added, having previously printed PASS at 96.67% over the same
+missing row. The CI badge covers the secret scan, the build, the tests and the
+browser journey; Deploy asks a narrower question and passes.*
 
 > **Archon closes a haulier's month unattended: it splits one broker payment across the eight loads it settles and writes the letters chasing what leaked.**
 >
@@ -46,7 +48,7 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 - **Demo video**: recorded by CI against the deployed release, gated on the
   live service reporting that exact release and the `adk-agent` close path
   before a frame was taken, and bound to the green CI and Security runs for
-  the same commit. It is a build artifact -- 1080p, seven scenes, sha256 in a
+  the same commit. It is a build artifact -- 1080p, eleven scenes, sha256 in a
   receipt checked against the file -- and has **no public URL yet**; the
   submission link is the owner's to add.
 - **Who it is for**: owner-operator trucking firms running three to twelve trucks.
@@ -994,6 +996,16 @@ its persistence model is deliberately not used here.
   rather than silent, but no gate stops the close over it. Deduping on name and
   bytes together would trade this for the more common failure, which is the
   wrong trade for this corpus.
+
+- **A `Procfile` and a `vercel.json` ship, and they are not the deployment.**
+  They point at a two-line path shim so the same FastAPI app starts on a
+  platform that reads either file, which is how the owner tests it outside
+  Cloud Run. They do not weaken the Google Cloud claim and they are not a
+  second deployment: the container host is incidental here, while Firestore
+  holds the trail, Cloud Storage delivers the mail, Pub/Sub carries the
+  trigger and Vertex AI runs the agent. Move the container and every one of
+  those is still Google Cloud. `infra/main.tf` remains the only thing that
+  builds the judged deployment.
 
 - **One period, one company.** There is no multi-tenancy, no authentication and
   no billing here. Those exist in commercial products and would be noise in a

@@ -647,6 +647,17 @@ def main(argv=None):
                     help="skip the live probe. Always exits 2, never a pass.")
     ap.add_argument("--quiet", action="store_true",
                     help="print the summary only")
+    # Two different questions, and they were being answered by one exit code.
+    #
+    # "Is this deployment good?" is what the deploy pipeline asks after it has
+    # applied: the page serves, the close runs, the agent drove it. "Is this
+    # submission ready?" is what the badge answers, and a missing video URL is
+    # fatal to the second and irrelevant to the first. Without this split the
+    # deploy job goes red AFTER deploying correctly, because a human has not
+    # yet pressed upload.
+    ap.add_argument("--deployment-only", action="store_true",
+                    help="verify the deployment; do not veto on owner-gated "
+                         "deliverables such as the published video URL")
     ap.add_argument("--selftest", action="store_true",
                     help="prove the gate fails when it should, then exit")
     args = ap.parse_args(argv)
@@ -688,8 +699,31 @@ def main(argv=None):
         live_verified = all(r["status"] == PASS for r in live_results)
 
     score_ok = pct >= THRESHOLD
+
+    # A mandatory deliverable VETOES the score. It does not lose to it.
+    #
+    # The deliverables criterion carries weight 20, so a missing video URL cost
+    # 3.33 points against a 95 threshold and the gate printed PASS at 96.67
+    # while `dlv-video-url` read "fail" -- and the README badge rendered green
+    # above the sentence admitting the URL does not exist. That is the exact
+    # shape of failure this repository has already recorded once: a badge that
+    # resolved 200 while telling a judge the wrong thing.
+    #
+    # A weighted average is the right instrument for how COMPLETE something is
+    # and the wrong one for whether a required artifact exists. The live checks
+    # already veto; these are the same kind of fact.
+    missing = sorted(
+        result["id"]
+        for criterion in criteria
+        for result in criterion.get("results", [])
+        if str(result.get("id", "")).startswith("dlv-")
+        and result.get("status") != PASS
+    )
+
     if not live_attempted:
         verdict, code = "NOT VERIFIED", 2
+    elif missing and not args.deployment_only:
+        verdict, code = "FAIL", 1
     elif score_ok and live_verified:
         verdict, code = "PASS", 0
     else:

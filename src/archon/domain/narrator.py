@@ -15,7 +15,7 @@ sentence disagree about a figure, the offline sentence is right.
 """
 from __future__ import annotations
 
-from .models import Draft, Finding, Statements, ValidationResult
+from .models import Draft, ExceptionKind, Finding, Statements, ValidationResult
 
 #: How many findings the owner-facing summary names before it stops listing.
 TOP_FINDINGS = 5
@@ -137,11 +137,30 @@ def narrate(statements: Statements, findings: list[Finding],
         )
 
     if errors:
-        sentences.append(
-            f"{len(errors)} problem(s) worth {at_stake:,.2f} need attention, worst first: "
-            + "; ".join(f"{f.reference} ({f.amount:,.2f})" for f in errors[:TOP_FINDINGS])
-            + "."
-        )
+        # Split, because one number here refuted itself twelve lines later.
+        #
+        # This sentence used to read "3 problem(s) worth 2,477.85 need
+        # attention", and the same letter then said 1,865.00 of that "recovers
+        # nothing; it is a tax and completeness problem". An owner reading top
+        # to bottom is told a figure and then told it is not the figure. The
+        # distinction already existed in `drafts.py` -- leakage against
+        # undocumented -- and only the headline was lumping them.
+        no_paperwork = round(
+            sum(f.amount for f in errors
+                if f.kind == ExceptionKind.PAYMENT_WITHOUT_DOCUMENT), 2)
+        chaseable = round(at_stake - no_paperwork, 2)
+        worst = "; ".join(f"{f.reference} ({f.amount:,.2f})" for f in errors[:TOP_FINDINGS])
+        if no_paperwork and chaseable:
+            sentences.append(
+                f"{len(errors)} problem(s) need attention, worst first: {worst}. "
+                f"{chaseable:,.2f} of that you can get back; {no_paperwork:,.2f} left "
+                f"the account with no paperwork behind it and recovers nothing."
+            )
+        else:
+            sentences.append(
+                f"{len(errors)} problem(s) worth {at_stake:,.2f} need attention, "
+                f"worst first: {worst}."
+            )
     else:
         sentences.append("No errors were found in the month's documents.")
 

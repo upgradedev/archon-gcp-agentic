@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .drafts import leakage, outstanding, undocumented
-from .models import Draft
+from .models import Draft, ExceptionKind
 
 #: How many actions the digest names before it stops listing. A digest that
 #: lists everything is a report, and a report is the thing this replaces.
@@ -139,9 +139,23 @@ def compose(result, recipient: str, company: str | None = None) -> Digest:
 
     watch = [f for f in result.findings if f.severity != "error" and not f.actionable]
     if watch:
+        # An unreadable document first, and never truncated away.
+        #
+        # This list sorted by amount, and an artifact nobody could read carries
+        # 0.00, so it sorted last and then fell off the end of a three-line cut.
+        # The close's own outcome_reason says "closed with an unreadable
+        # document escalated to the owner" -- and the letter to that owner was
+        # the one place it never appeared. A thing the books call escalated has
+        # to reach the person it was escalated to.
+        unreadable = [f for f in watch
+                      if f.kind == ExceptionKind.UNREADABLE_DOCUMENT]
+        rest = [f for f in watch if f not in unreadable]
+        ordered = unreadable + rest
         lines += ["", "WORTH A LOOK, NOTHING WRITTEN"]
-        for finding in watch[:TOP_ACTIONS]:
+        for finding in ordered[:TOP_ACTIONS]:
             lines.append(f"  {finding.reference}: {finding.message}")
+        if len(ordered) > TOP_ACTIONS:
+            lines.append(f"  and {len(ordered) - TOP_ACTIONS} more, all in the app.")
 
     lines += ["", "WHAT I NEED FROM YOU"]
     if result.outcome != "closed":

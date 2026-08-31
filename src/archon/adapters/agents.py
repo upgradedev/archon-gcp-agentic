@@ -5,7 +5,7 @@ where a Google Agent Framework picks that machinery up and runs it, and it is
 the piece the sponsor requirement is about, so it is worth being precise about
 what would break without it.
 
-**Remove ADK and there is no agent.** The six tools below are the close, one
+**Remove ADK and there is no agent.** The seven tools below are the close, one
 step each, and it is the ADK `Agent` that decides to call them, in what order,
 and when the month is finished. Delete it and what is left is a function
 somebody has to remember to call, on a schedule somebody has to maintain, with
@@ -19,7 +19,7 @@ owner who looks on Monday.
 Three deliberate design decisions:
 
 **The agent decides something that matters.** An earlier version of this file
-handed the agent six tools that reported slices of a close which had already
+handed the agent seven tools that reported slices of a close which had already
 run, and a test asserted that calling them out of order changed nothing. That
 was a fair criticism: an agent whose decisions cannot affect the outcome is
 decoration, and on a submission judged mostly on autonomous action it is the
@@ -423,7 +423,7 @@ def run_agent_close(period: str, company: str | None = None, model=None,
     """Let the ADK agent drive the close. Returns the result and its final word.
 
     This is the path the demo shows and the video records: one instruction in,
-    six tool calls the agent chose to make, a closed month out.
+    seven tool calls the agent chose to make, a closed month out.
     """
     from google.adk.runners import InMemoryRunner
     from google.genai import types

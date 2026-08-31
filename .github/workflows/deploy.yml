@@ -212,4 +212,7 @@ jobs:
 
       - name: Readiness gate, against what is now live
         if: steps.tf.outputs.planned != 'true'
-        run: python scripts/readiness.py
+        # `--deployment-only`: this step asks whether what we just applied
+        # serves, not whether the submission is finished. A video URL a
+        # human has not yet pasted must not turn a correct deploy red.
+        run: python scripts/readiness.py --deployment-only
