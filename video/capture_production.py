@@ -47,6 +47,10 @@ EXPECTED_BEATS = ["title", "problem", "value",
 
 VIEWPORT = {"width": 1920, "height": 1080}
 
+#: The opening and closing titles. A file, not a route: a bookkeeping service
+#: has no business serving a pitch deck.
+DECK_URL = (Path(__file__).resolve().parent / "deck.html").as_uri()
+
 #: Seconds of still page after the last beat. Covers the trim lead and
 #: encoder rounding, so -shortest never clips the ending.
 TAIL_SECONDS = 4.0
@@ -115,8 +119,7 @@ def main() -> int:
         # The titles first, off the repository's own file. No network, so this
         # cannot be the thing that makes a take fail, and no route is added to
         # a bookkeeping service to carry a pitch deck.
-        deck_url = (Path(__file__).resolve().parent / "deck.html").as_uri()
-        page.goto(deck_url, wait_until="networkidle", timeout=30_000)
+        page.goto(DECK_URL, wait_until="networkidle", timeout=30_000)
         page.wait_for_function("() => !!window.archonDeck", timeout=15_000)
         timeline_started = time.monotonic()
 
@@ -234,16 +237,35 @@ def main() -> int:
             page.wait_for_timeout(seconds * 1000)
 
         def cloud():
-            # The deployment answering for itself: the release it serves, the
-            # store it persists to, and the agent path for the close.
-            page.goto(app_url + "api/health", wait_until="networkidle", timeout=30_000)
+            """The deployment answering for itself, twice: raw, then legible.
+
+            The raw JSON is the unvarnished thing and it stays, because a
+            rendered panel of numbers somebody else chose is worth less than
+            the endpoint's own words. But it is 13px of monospace at the top of
+            a 1080p frame -- readable when a judge pauses, illegible while the
+            film is playing, and the first cut spent twenty seconds on it.
+
+            So the response is READ here, on the deployment's own origin, and
+            handed to the slide. A file:// page cannot fetch across origins, so
+            this is the only way the slide can carry live figures rather than
+            figures I typed. If the deployment says something else, the slide
+            says something else.
+            """
             budget = holds["cloud"]
-            page.wait_for_timeout(budget * (0.34 if console_stills else 0.62) * 1000)
+            page.goto(app_url + "api/health", wait_until="networkidle", timeout=30_000)
+            health = page.evaluate("() => JSON.parse(document.body.innerText)")
+            page.wait_for_timeout(budget * 0.22 * 1000)
+
+            page.goto(DECK_URL, wait_until="networkidle", timeout=30_000)
+            page.wait_for_function("() => !!window.archonDeck", timeout=15_000)
+            page.evaluate("(h) => window.archonDeck.health(h)", health)
+            page.evaluate("() => window.archonDeck.show(3)")
+            page.wait_for_timeout(budget * (0.34 if console_stills else 0.58) * 1000)
 
             # Then the console, if it was supplied, sharing the same budget so
             # adding stills costs the cut nothing.
             if console_stills:
-                each = budget * 0.42 / len(console_stills)
+                each = budget * 0.24 / len(console_stills)
                 for still in console_stills:
                     show_still(still, each)
 
@@ -309,10 +331,17 @@ def main() -> int:
 
         hold("evidence", evidence)
 
-        # 11. Back to the statement the whole thing is answering.
+        # 11. Out on a title, not on a scrolled console.
+        #
+        #     The first cut ended by scrolling the app back to the top and
+        #     stopping there, so the last frame -- the one a thumbnail and a
+        #     paused tab land on -- was a half-scrolled product page. It closes
+        #     where it opened now, on the claim the rest of the film had to
+        #     earn, with the two links a judge needs.
         def ending():
-            page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
-            page.wait_for_timeout(400)
+            page.goto(DECK_URL, wait_until="networkidle", timeout=30_000)
+            page.wait_for_function("() => !!window.archonDeck", timeout=15_000)
+            page.evaluate("() => window.archonDeck.show(4)")
 
         hold("close", ending)
 

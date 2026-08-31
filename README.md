@@ -19,27 +19,28 @@ browser journey; Deploy asks a narrower question and passes.*
 > Owner-operator trucking firms live on a margin of about twenty cents a mile. A broker pays once a fortnight, one credit covering eight loads, minus a fee charged on the whole batch. So a load paid short is invisible: the bank shows one number and the books need eight. The owner opens a closed month with the letters already written instead of a shoebox they will get to in April.
 
 
-**The number, and what it beats.** On the same 27 documents, three reconciliation
-methods a haulier's books actually get recover **0.00** of a 200.00 short payment.
-Archon finds it.
+**The number, and what it beats.** A load on this month was paid 200.00 short.
+Run the three reconciliations a haulier's books actually get over the same 27
+documents and **every one of them reports the month clean.**
 
-| method | what it finds | identifies as recoverable |
+| the method | the verdict it reaches on this month | recovered |
 |---|---|---|
-| Match the bank credit to an invoice | 0 of 9 loads | 0.00 |
-| Credit plus the fee against the advice total | **residual 0.00** | 0.00 |
-| Each advice line against the agreed linehaul rate | 1 flag, on a load paid ABOVE the rate | 0.00 |
-| **Archon**: each line against what was actually invoiced | L-7105 short by 200.00 | **200.00** |
+| Match the bank credit to an invoice | No invoice equals the credit, because the credit covers eight. Nothing to compare | 0.00 |
+| Credit plus fee against the remittance total | **It reconciles, to the cent.** So the month is reported clean | 0.00 |
+| Each remittance line against the agreed linehaul rate | One flag, and it is a false one, on a load the broker OVERPAID | 0.00 |
+| **Archon**: each line against what was actually invoiced | L-7105 invoiced 2,460.00, paid 2,260.00 | **200.00** |
 
-The second row is the finding. 18,667.65 credited plus 577.35 charged once on the
-batch equals the advice exactly, so the arithmetic a careful bookkeeper does by
-hand comes back clean while the money is gone. The 200.00 was an accessorial the
-advice quietly dropped, and the batch still ties. The third row is worse than
-nothing: it raises one flag, on the load the broker OVERPAID.
+**The second row is the whole problem.** 18,667.65 credited plus 577.35 charged
+once on the batch equals the remittance exactly, so the arithmetic a careful
+bookkeeper does by hand comes back clean while the money is gone. The 200.00 was
+an accessorial the remittance quietly dropped, and the batch still ties. Nothing
+that checks the batch can see it. Only something that checks each line against
+what was invoiced can, and that is the one comparison the paperwork does not
+hand you.
 
-Archon identifies that 200.00 as recoverable, and 412.85 more from a duplicate
-charge, 612.85 on
-the month. One synthetic month, n=1; the methods above are arithmetic, not
-products. Reproduce it:
+Archon recovers that 200.00, and 412.85 more from a duplicate charge: 612.85 on
+the month, against a margin of 0.223 a mile. One synthetic month, n=1, and the
+three methods above are arithmetic rather than products. Reproduce all four:
 
 ```bash
 python scripts/baseline.py
@@ -77,10 +78,9 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 
 ## Contents
 
-- [The submission description](#the-submission-description)
+- [Spin it up](#spin-it-up)
 - [The chore](#the-chore)
 - [Why a haulier's month is hard](#why-a-hauliers-month-is-hard)
-- [Spin it up](#spin-it-up)
 - [What one run does](#what-one-run-does)
 - [Architecture](#architecture)
 - [Architecture review, and the gaps left in it](#architecture-review-and-the-gaps-left-in-it)
@@ -91,116 +91,10 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
 - [Who owes whom, and which way it is going](#who-owes-whom-and-which-way-it-is-going)
 - [The trigger, fired on the live deployment](#the-trigger-fired-on-the-live-deployment)
 - [Deploy it](#deploy-it)
+- [The submission description](#the-submission-description)
 - [Pre-existing components](#pre-existing-components)
 - [Honest scope](#honest-scope)
 - [Licence](#licence)
-
----
-
-## The submission description
-
-*This is the text for the entry form, kept here so it is reviewable and so it
-cannot drift from the product. Owner's voice, no em dashes.*
-
----
-
-Archon closes a small trucking firm's month while nobody is watching, and the
-thing that makes that possible is that it can split one broker payment back
-across the eight separate loads it settles.
-
-That sounds small. It is the reason a haulier's books never close. A broker does
-not pay per load. It pays once a fortnight, in a single bank credit, covering
-however many loads it feels like, minus a factoring fee charged on the whole
-batch, minus whatever it decided to hold back on individual loads. The bank shows
-one number, and the payment must be allocated across the eight loads it
-settles, with the batch fee accounted for separately. Matching software
-cannot do it, because
-matching asks "which document is this payment" and the honest answer is "eight of
-them, at amounts none of which equal the payment."
-
-So Archon allocates instead, and then proves its own answer. What landed in the
-bank has to equal what the lines pay, less the fee charged once. When that leaves
-anything over, it says so rather than pushing it into a suspense account.
-
-A month of documents lands in a Cloud Storage bucket, and then one empty object
-called `_READY` says the batch is complete. Nothing is pressed. The bucket's own
-finalize notification publishes to a Pub/Sub topic, whose push subscription wakes
-a Cloud Run container with an OIDC token; each document is acknowledged and held,
-and the marker starts the close. That marker is there because Cloud Storage never
-says "that was the last one", and without it a folder of 27 documents would close
-the month 27 times, 26 of them over a month that had not finished arriving. The
-close then works through eleven steps: it classifies 27 artifacts, posts the double-entry journal,
-splits the remittance, reconciles which loads were paid, finds the ten things
-that do not add up, writes
-the corrective letters, checks its own books against seven gates, and marks the
-period closed with a trail in Firestore you can walk back through.
-
-Then it writes the owner their month-end letter and hands it to a delivery
-seam, with a receipt that says what actually happened: delivered when a mail
-channel is configured, composed and filed when none is, and the demo runs with
-none so that no credential sits in a public repository. The letter matters more
-than it looks. A haulier does not open a bookkeeping console on the first of
-the month, because a haulier is driving. The letter is the month in the shape
-they would read it: what the firm made, what is at stake and of what kind, and
-what Archon already did about it.
-
-**What the buyer gets, said precisely.** Archon does not win work or raise
-rates. It gives back the hours a month-end takes, catches the money that leaks
-when nobody has those hours, and turns "I think we are fine" into figures with
-sources attached. On the bundled synthetic month that is 612.85 of quiet
-leakage caught and a close that runs unattended instead of eating an evening;
-both figures are labelled, measured, and reproducible by pressing the button.
-Being precise about which value is which is the difference between a tool and
-a pitch.
-
-On the July it ships with: 23,005.00 billed over 10,810 miles against 20,598.16
-spent, a margin of 0.223 a mile. The letters it writes break into three
-different things, and they are reported separately because adding them up
-produces a number that flatters us. How MANY there are is not fixed: an
-agent decides which exceptions warrant a letter and which go to the owner
-instead, so the count moves between runs and a number printed here would be
-true of one of them:
-
-| | | |
-|---|---|---|
-| **612.85** | leaking away quietly | a broker that paid 200.00 light on one load without saying so, and a truck stop that charged the same 412.85 twice in three days. **This is the only figure the agent can be said to have found.** Nobody was going to notice either one |
-| 4,900.00 | invoiced and unpaid | two loads no remittance has touched. Owed already. An invoice ledger shows this without any agent, so chasing it is useful work and not a discovery |
-| 1,865.00 | spent with no paperwork | money already gone, with no invoice behind it. Recovers nothing at all. It is a tax-deductibility and completeness problem |
-
-An earlier version of this README added those to 5,512.85 and called the total
-recoverable. That was a nine-fold overstatement and it is recorded here rather
-than quietly corrected.
-
-The letters to brokers and suppliers are written, costed and filed unsent. That is
-the one thing a person does, and it is deliberate: every step Archon takes can be
-re-run and produces the same books, but an email to a broker cannot be un-sent.
-
-You can work that gate on the demo. Approve or reject any letter and the state
-moves, with an audit line carrying the timestamp and what happens next. It is a
-public sandbox and it says so: nothing is sent, the decision is not kept, and the
-approver reads "sandbox visitor" where a configured deployment records a person.
-There is deliberately no server endpoint behind it, because one nobody can
-authenticate to is dead code and a fake identity in an audit trail is a worse lie
-than a missing button.
-
-Every figure above was computed by a deterministic ledger, never phrased by a
-model. Gemini's role is judgement and sequencing, not arithmetic: the ADK agent
-decides which tool to call and when the month is finished, weighs what each
-exception deserves and can withhold a close the gates passed; when the live
-narrator is enabled it also phrases the summary from a fact sheet it cannot add
-to. Parsing and every figure are deterministic, and a gate fails the whole close
-if an unreadable document is ever given a figure, because that is the one
-failure that would not announce itself. An artifact nobody could read is
-reported as an exception and posted as nothing.
-
-Built on Google ADK, Gemini 3.7 Flash, Cloud Run, Firestore, Cloud Storage and Pub/Sub. Take
-ADK away and the judgement goes with it: the trigger would still fire arithmetic,
-but nothing would weigh the exceptions, choose what each deserves, or withhold a
-close the gates passed. Take Firestore away and a container that scales to zero
-between months has nowhere to keep the trail.
-
-It is for owner-operator trucking firms running three to twelve trucks. It replaces
-the shoebox, and the bookkeeper who gets to it in April.
 
 ---
 
@@ -276,6 +170,55 @@ fold on purpose.
 All money figures in this README are from the bundled synthetic month and are
 labelled as such; no real firm's books appear anywhere in this repository.
 
+## Spin it up
+
+**The whole close, with nothing installed.** No key, no credential, no network,
+no dependency beyond the Python standard library:
+
+```bash
+git clone https://github.com/upgradedev/archon-gcp-agentic.git
+cd archon-gcp-agentic
+python run.py
+```
+
+That prints the eleven-step trail, the month, the exceptions and the filed
+letters. CI runs that exact command inside an empty virtualenv on every push, and the
+readiness gate runs it too, so if it ever stops working the build goes red
+rather than a judge finding out.
+
+`run.py` is three lines: the package lives under `src/`, and asking a judge to
+`pip install -e .` before seeing anything would make the claim above false.
+
+**The page and the API:**
+
+```bash
+pip install -r requirements.txt
+uvicorn archon.adapters.service:app --reload
+```
+
+Then open `http://localhost:8000`, press one button, and watch it run.
+
+The console has ten sections behind the tab rail: what Archon does, watch the
+agent, documents read, the allocation, open items, exceptions, letters, trends,
+fleet and checks. A switcher offers every month with mail on file. The tiles are controls rather than ornaments,
+because each one opens the ledger its number came out of.
+
+**Let the ADK agent drive it** (needs a Gemini key):
+
+```bash
+export GOOGLE_API_KEY=...
+python run.py --agent
+```
+
+**Run the tests:**
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+---
+
 ## The chore
 
 A month of mail lands in a bucket. Nobody is watching. Archon then:
@@ -336,53 +279,6 @@ When that identity leaves a residual, the close raises it. It does not absorb it
 into a suspense account, because a suspense account is where a bookkeeper hides
 the thing they could not explain, and hiding it is exactly what the owner is
 paying for this not to do.
-
-## Spin it up
-
-**The whole close, with nothing installed.** No key, no credential, no network,
-no dependency beyond the Python standard library:
-
-```bash
-git clone https://github.com/upgradedev/archon-gcp-agentic.git
-cd archon-gcp-agentic
-python run.py
-```
-
-That prints the eleven-step trail, the month, the exceptions and the filed
-letters. CI runs that exact command inside an empty virtualenv on every push, and the
-readiness gate runs it too, so if it ever stops working the build goes red
-rather than a judge finding out.
-
-`run.py` is three lines: the package lives under `src/`, and asking a judge to
-`pip install -e .` before seeing anything would make the claim above false.
-
-**The page and the API:**
-
-```bash
-pip install -r requirements.txt
-uvicorn archon.adapters.service:app --reload
-```
-
-Then open `http://localhost:8000`, press one button, and watch it run.
-
-The console has ten sections behind the tab rail: what Archon does, watch the
-agent, documents read, the allocation, open items, exceptions, letters, trends,
-fleet and checks. A switcher offers every month with mail on file. The tiles are controls rather than ornaments,
-because each one opens the ledger its number came out of.
-
-**Let the ADK agent drive it** (needs a Gemini key):
-
-```bash
-export GOOGLE_API_KEY=...
-python run.py --agent
-```
-
-**Run the tests:**
-
-```bash
-pip install -r requirements-dev.txt
-python -m pytest
-```
 
 ## What one run does
 
@@ -979,6 +875,115 @@ evidence being argued with.
 | The books persist with an 11-step trail | Firestore adapter tests | `GET /api/close/2026-07` from a cold browser |
 | Which build is answering | `service.py:health` | `GET /api/health` → `release`, `revision` |
 | CI, security scan, readiness gate green on the release | `.github/workflows/` | the badges and runs on the repo |
+
+## The submission description
+
+*This is the text for the entry form, kept here so it is reviewable and so it
+cannot drift from the product. Owner's voice, no em dashes.*
+
+---
+
+Archon closes a small trucking firm's month while nobody is watching, and the
+thing that makes that possible is that it can split one broker payment back
+across the eight separate loads it settles.
+
+That sounds small. It is the reason a haulier's books never close. A broker does
+not pay per load. It pays once a fortnight, in a single bank credit, covering
+however many loads it feels like, minus a factoring fee charged on the whole
+batch, minus whatever it decided to hold back on individual loads. The bank shows
+one number, and the payment must be allocated across the eight loads it
+settles, with the batch fee accounted for separately. Matching software
+cannot do it, because
+matching asks "which document is this payment" and the honest answer is "eight of
+them, at amounts none of which equal the payment."
+
+So Archon allocates instead, and then proves its own answer. What landed in the
+bank has to equal what the lines pay, less the fee charged once. When that leaves
+anything over, it says so rather than pushing it into a suspense account.
+
+A month of documents lands in a Cloud Storage bucket, and then one empty object
+called `_READY` says the batch is complete. Nothing is pressed. The bucket's own
+finalize notification publishes to a Pub/Sub topic, whose push subscription wakes
+a Cloud Run container with an OIDC token; each document is acknowledged and held,
+and the marker starts the close. That marker is there because Cloud Storage never
+says "that was the last one", and without it a folder of 27 documents would close
+the month 27 times, 26 of them over a month that had not finished arriving. The
+close then works through eleven steps: it classifies 27 artifacts, posts the double-entry journal,
+splits the remittance, reconciles which loads were paid, finds the ten things
+that do not add up, writes
+the corrective letters, checks its own books against seven gates, and marks the
+period closed with a trail in Firestore you can walk back through.
+
+Then it writes the owner their month-end letter and hands it to a delivery
+seam, with a receipt that says what actually happened: delivered when a mail
+channel is configured, composed and filed when none is, and the demo runs with
+none so that no credential sits in a public repository. The letter matters more
+than it looks. A haulier does not open a bookkeeping console on the first of
+the month, because a haulier is driving. The letter is the month in the shape
+they would read it: what the firm made, what is at stake and of what kind, and
+what Archon already did about it.
+
+**What the buyer gets, said precisely.** Archon does not win work or raise
+rates. It gives back the hours a month-end takes, catches the money that leaks
+when nobody has those hours, and turns "I think we are fine" into figures with
+sources attached. On the bundled synthetic month that is 612.85 of quiet
+leakage caught and a close that runs unattended instead of eating an evening;
+both figures are labelled, measured, and reproducible by pressing the button.
+Being precise about which value is which is the difference between a tool and
+a pitch.
+
+On the July it ships with: 23,005.00 billed over 10,810 miles against 20,598.16
+spent, a margin of 0.223 a mile. The letters it writes break into three
+different things, and they are reported separately because adding them up
+produces a number that flatters us. How MANY there are is not fixed: an
+agent decides which exceptions warrant a letter and which go to the owner
+instead, so the count moves between runs and a number printed here would be
+true of one of them:
+
+| | | |
+|---|---|---|
+| **612.85** | leaking away quietly | a broker that paid 200.00 light on one load without saying so, and a truck stop that charged the same 412.85 twice in three days. **This is the only figure the agent can be said to have found.** Nobody was going to notice either one |
+| 4,900.00 | invoiced and unpaid | two loads no remittance has touched. Owed already. An invoice ledger shows this without any agent, so chasing it is useful work and not a discovery |
+| 1,865.00 | spent with no paperwork | money already gone, with no invoice behind it. Recovers nothing at all. It is a tax-deductibility and completeness problem |
+
+An earlier version of this README added those to 5,512.85 and called the total
+recoverable. That was a nine-fold overstatement and it is recorded here rather
+than quietly corrected.
+
+The letters to brokers and suppliers are written, costed and filed unsent. That is
+the one thing a person does, and it is deliberate: every step Archon takes can be
+re-run and produces the same books, but an email to a broker cannot be un-sent.
+
+You can work that gate on the demo. Approve or reject any letter and the state
+moves, with an audit line carrying the timestamp and what happens next. It is a
+public sandbox and it says so: nothing is sent, the decision is not kept, and the
+approver reads "sandbox visitor" where a configured deployment records a person.
+There is deliberately no server endpoint behind it, because one nobody can
+authenticate to is dead code and a fake identity in an audit trail is a worse lie
+than a missing button.
+
+Every figure above was computed by a deterministic ledger, never phrased by a
+model. Gemini's role is judgement and sequencing, not arithmetic: the ADK agent
+decides which tool to call and when the month is finished, weighs what each
+exception deserves and can withhold a close the gates passed; when the live
+narrator is enabled it also phrases the summary from a fact sheet it cannot add
+to. Parsing and every figure are deterministic, and a gate fails the whole close
+if an unreadable document is ever given a figure, because that is the one
+failure that would not announce itself. An artifact nobody could read is
+reported as an exception and posted as nothing.
+
+Built on Google ADK, Gemini 3.7 Flash, Cloud Run, Firestore, Cloud Storage and Pub/Sub. Take
+ADK away and the judgement goes with it: the trigger would still fire arithmetic,
+but nothing would weigh the exceptions, choose what each deserves, or withhold a
+close the gates passed. Take Firestore away and a container that scales to zero
+between months has nowhere to keep the trail.
+
+It is for owner-operator trucking firms running three to twelve trucks. It replaces
+the shoebox, and the bookkeeper who gets to it in April.
+
+---
+
+---
 
 ## Pre-existing components
 
