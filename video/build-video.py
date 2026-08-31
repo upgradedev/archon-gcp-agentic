@@ -129,8 +129,20 @@ def main() -> None:
     streams = media["streams"]
     videos = [item for item in streams if item.get("codec_type") == "video"]
     audios = [item for item in streams if item.get("codec_type") == "audio"]
-    if not 90 <= duration < 179 or len(videos) != 1 or len(audios) != 1:
-        raise SystemExit("final media contract failed")
+    # 90 to 254 seconds, which is the generator's 90-250 plus the trim lead the
+    # composer adds. The old pair was 175 and 179 and carried the same +4.
+    #
+    # This is the THIRD place the cut length is written -- the generator, the
+    # offline contract test, and here -- and I moved them one at a time, so a
+    # run synthesised eleven segments and was refused by the generator, then a
+    # later run recorded the whole journey and was refused by this line.
+    # `test_the_cut_bounds_here_are_the_ones_the_generator_enforces` now reads
+    # all three out of their sources.
+    if not 90 <= duration < 254 or len(videos) != 1 or len(audios) != 1:
+        raise SystemExit(
+            f"final media contract failed: {duration:.3f}s, "
+            f"{len(videos)} video and {len(audios)} audio streams"
+        )
     if videos[0].get("width") != 1920 or videos[0].get("height") != 1080:
         raise SystemExit("final video dimensions are not 1920x1080")
     if abs(duration - total) > FRAME_SECONDS:

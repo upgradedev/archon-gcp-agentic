@@ -388,6 +388,20 @@ The month it found: 23,005.00 billed over 10,810 miles, 20,598.16 spent,
 the 0.223 a mile left over is why the 612.85 that was quietly leaking matters
 at all. On a fatter margin it would be noise.
 
+**And the line the rest of it rests on**, because a README that describes this
+mechanism without showing it is asking to be taken on trust:
+
+```
+  8 remittance lines pay      19,245.00
+  factoring fee, charged once   -577.35
+  landed in the bank          18,667.65     residual 0.00
+```
+
+One credit from one broker, split back across the eight loads it settles, with
+the fee taken on the batch rather than per load. If that residual is not zero,
+G2 fails and the month is blocked rather than filed -- `python run.py` prints
+it, `/api/close/2026-07` carries it as `allocations[0]`, and the page draws it.
+
 ### The ten things it looks for
 
 Every one has a deterministic detector. **Nine of the ten fire on the bundled
@@ -701,7 +715,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 785 | `python -m pytest` |
+| Tests, all offline | 786 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

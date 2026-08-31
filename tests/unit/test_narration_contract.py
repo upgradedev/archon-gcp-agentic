@@ -153,6 +153,10 @@ def test_nothing_in_the_script_is_still_a_placeholder():
     )
 
 
+#: The composer allows the generator's ceiling plus the trim lead it adds.
+COMPOSER_LEAD_ALLOWANCE = 4
+
+
 def test_the_cut_bounds_here_are_the_ones_the_generator_enforces():
     """This file mirrors `video/generate-narration.py`'s bounds so they can be
     checked offline, and a mirror that drifts is worse than no mirror.
@@ -172,4 +176,29 @@ def test_the_cut_bounds_here_are_the_ones_the_generator_enforces():
     assert (low, high) == (CUT_MIN_SECONDS, CUT_MAX_SECONDS), (
         f"the generator enforces {low}-{high}s, this file mirrors "
         f"{CUT_MIN_SECONDS}-{CUT_MAX_SECONDS}s"
+    )
+
+
+def test_the_composer_allows_exactly_what_the_generator_produces():
+    """The cut length is written in THREE places -- the generator, this file,
+    and `video/build-video.py` -- and I moved them one at a time.
+
+    A run synthesised eleven segments through a paid API and was refused by the
+    generator. The fix moved that bound, and a later run recorded the whole
+    journey, composed it, and was refused by the composer instead. Each failure
+    cost a full cycle to learn one number.
+
+    The composer's ceiling is the generator's plus the lead it prepends, so
+    this reads both out of their sources rather than restating either.
+    """
+    composer = (ROOT / "video" / "build-video.py").read_text(encoding="utf-8")
+
+    match = re.search(r"if not (\d+) <= duration < (\d+)", composer)
+
+    assert match, "the composer's duration contract is no longer written the way this reads it"
+    low, high = int(match.group(1)), int(match.group(2))
+    assert low == CUT_MIN_SECONDS, f"composer floor {low}, generator floor {CUT_MIN_SECONDS}"
+    assert high == CUT_MAX_SECONDS + COMPOSER_LEAD_ALLOWANCE, (
+        f"composer ceiling {high}, expected {CUT_MAX_SECONDS} + {COMPOSER_LEAD_ALLOWANCE} "
+        f"= {CUT_MAX_SECONDS + COMPOSER_LEAD_ALLOWANCE}"
     )
