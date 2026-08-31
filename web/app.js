@@ -1021,3 +1021,69 @@ function wireTour() {
 }
 
 wireTour();
+
+// ── your own month ─────────────────────────────────────────────────────────
+//
+// The demo answered "does it work on your month" and could not answer the only
+// question an owner has, which is whether it works on THEIRS. The files are
+// read in the browser and posted as text; nothing is uploaded to a bucket and
+// nothing is kept. The route runs the deterministic close and never a model,
+// because the text belongs to a stranger.
+
+const OWN_MONTH_MAX = 60;
+
+function readAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, text: String(reader.result) });
+    reader.onerror = () => reject(new Error(`could not read ${file.name}`));
+    reader.readAsText(file);
+  });
+}
+
+async function closeOwnMonth(files) {
+  const chosen = [...files].filter((f) => f.name.toLowerCase().endsWith(".txt"));
+  if (!chosen.length) {
+    $("status").textContent = "Those are not .txt documents. This reads text files.";
+    return;
+  }
+  if (chosen.length > OWN_MONTH_MAX) {
+    $("status").textContent =
+      `${chosen.length} files; this page takes ${OWN_MONTH_MAX}. ` +
+      "For a bigger month run it locally: python run.py --mail <dir>";
+    return;
+  }
+
+  const period = $("period").value || "2026-07";
+  $("status").textContent =
+    `Reading ${chosen.length} document(s) of yours. Nothing is uploaded or kept.`;
+
+  try {
+    const documents = await Promise.all(chosen.map(readAsText));
+    const response = await fetch("/api/close/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ period, documents }),
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      $("status").textContent = body.detail || "That month was refused.";
+      return;
+    }
+    last = body;
+    render(body);
+    $("status").textContent =
+      `Your ${documents.length} document(s), closed in memory and kept nowhere. ` +
+      "Reload and it is gone.";
+  } catch (err) {
+    $("status").textContent = `Could not close that month: ${err.message}`;
+  }
+}
+
+const ownMonth = $("own-month");
+if (ownMonth) {
+  ownMonth.addEventListener("change", (e) => {
+    closeOwnMonth(e.target.files);
+    e.target.value = "";
+  });
+}

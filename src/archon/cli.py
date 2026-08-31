@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import pathlib
 import sys
 
 from . import PERIOD
@@ -47,9 +49,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="emit the close as JSON")
     parser.add_argument("--agent", action="store_true",
                         help="the ADK agent chooses the tool calls (needs a Gemini credential)")
+    # The answer to "can I run it on MY month?", which until now was no.
+    #
+    # The bundled corpus proves the arithmetic; it cannot prove the thing an
+    # owner actually wants to know, which is whether their own broker dropped
+    # an accessorial. `read_period` already took a root, so the only thing
+    # missing was a way to say so.
+    parser.add_argument("--mail", metavar="DIR",
+                        help="close a directory of your own documents instead of the "
+                             "bundled month; expects DIR/<period>/*.txt")
     args = parser.parse_args(argv)
 
-    documents, raw = read_period(args.period)
+    root = pathlib.Path(args.mail).expanduser().resolve() if args.mail else None
+    if root is not None and not (root / args.period).is_dir():
+        print(f"no {args.period} directory under {root}. Expected "
+              f"{root / args.period}{os.sep}*.txt", file=sys.stderr)
+        return 2
+
+    documents, raw = read_period(args.period, root=root)
+    if root is not None and not documents:
+        print(f"{root / args.period} holds no .txt documents", file=sys.stderr)
+        return 2
 
     # `--agent` used to swap in the narrator and nothing else, while its help
     # text said it drove the close through the ADK agent. It now does what it

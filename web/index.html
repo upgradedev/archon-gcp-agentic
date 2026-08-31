@@ -86,6 +86,14 @@
   <button class="ghost" id="replay" title="Re-render the saved run without executing it">Replay saved run</button>
   <button class="ghost" id="raw" title="Open the technical API response">View JSON</button>
   <button class="ghost" id="tour-start" title="A guided walk through what this month found">Guided tour</button>
+  <!-- The question the demo could not answer: not "does it work on your month"
+       but "does it work on MINE". A label wrapping a hidden input, because a
+       bare file input cannot be styled to match and `style-src 'self'` refuses
+       the inline attribute a framework would write. -->
+  <label class="ghost btn-like" id="own-month-label" for="own-month"
+         title="Close a month of your own .txt documents. Nothing is stored.">Your own month
+    <input type="file" id="own-month" accept=".txt,text/plain" multiple hidden>
+  </label>
 </header>
 
 <div class="statusbar"><span class="dim" id="status" role="status" aria-live="polite">Documents are waiting.</span></div>

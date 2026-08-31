@@ -582,3 +582,10 @@
 @media (max-width: 720px) {
   .tour { right: 12px; left: 12px; bottom: 12px; width: auto; }
 }
+
+/* The "your own month" control is a label wrapping a hidden input, so it has
+ * to be told to look and behave like the buttons beside it. */
+.btn-like {
+  display: inline-flex; align-items: center; cursor: pointer;
+  font: inherit; line-height: 1;
+}

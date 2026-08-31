@@ -26,6 +26,7 @@ import binascii
 import json
 import logging
 import os
+import pathlib
 from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException, Request
@@ -34,6 +35,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from .. import PERIOD, __version__, paths
+from ..domain.extract import extract_document
+from ..runtime import mailbox
 from ..runtime.close import run_close
 from ..runtime.mailbox import available_periods, read_period
 from . import auth, gcs, headers, ratelimit
@@ -407,6 +410,103 @@ def periods() -> dict:
 #: returned before this is consulted, so the only thing this can go stale
 #: against is itself.
 _COLD_START_CLOSES: dict[str, dict] = {}
+
+
+#: What an anonymous visitor may hand us. Small on purpose: this exists so a
+#: haulier can see their OWN month, not so anyone can push a corpus through a
+#: public endpoint.
+UPLOAD_MAX_DOCUMENTS = 60
+UPLOAD_MAX_BYTES_EACH = 64 * 1024
+UPLOAD_MAX_BYTES_TOTAL = 1024 * 1024
+
+
+@app.post("/api/close/upload")
+def close_uploaded(payload: dict, request: Request) -> dict:
+    """Close a month the visitor brought, and keep none of it.
+
+    The demo answered one question well and refused the only one an owner
+    actually has: not "does it work on your month" but "does it work on MINE".
+    The engine never needed anything to answer it -- `_close` has always taken
+    documents directly -- so what was missing was a door.
+
+    Three deliberate limits, and each is a refusal rather than a precaution.
+
+    **No model, ever, on this route.** `allow_model=False` is not a cost
+    control. The text is attacker-controlled, and a route that forwards a
+    stranger's document into a language model is a prompt-injection surface
+    that this product has no reason to open. The deterministic close is the
+    part that finds the money anyway: the allocation identity, the ten
+    detectors and the seven gates are arithmetic.
+
+    **Nothing is stored.** An ephemeral `LocalStore` and the sandbox deliverer,
+    the same pair the anonymous button already gets. The documents are parsed
+    in memory, closed, returned, and dropped. No bucket, no Firestore, no copy.
+    A stranger's invoices are the last thing this project wants to hold.
+
+    **The same limiter.** Three per address per ten minutes, and the
+    concurrency slot, because this is the same class of work as the button
+    beside it.
+    """
+    caller = request.client.host if request.client else "unknown"
+    allowed, why = ratelimit.PUBLIC_CLOSES.check(caller)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=why)
+
+    period = str(payload.get("period") or PERIOD)
+    if not mailbox.PERIOD.fullmatch(period):
+        raise HTTPException(status_code=400,
+                            detail=f"{period!r} is not a period; use YYYY-MM")
+
+    incoming = payload.get("documents")
+    if not isinstance(incoming, list) or not incoming:
+        raise HTTPException(status_code=400,
+                            detail="send documents: [{name, text}, ...]")
+    if len(incoming) > UPLOAD_MAX_DOCUMENTS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{len(incoming)} documents; this route takes "
+                   f"{UPLOAD_MAX_DOCUMENTS}. Run it locally for a bigger month: "
+                   f"python run.py --mail <dir>")
+
+    raw: dict[str, str] = {}
+    total = 0
+    for item in incoming:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail="each document is {name, text}")
+        name = str(item.get("name") or "").strip()
+        text = item.get("text")
+        if not name or not isinstance(text, str):
+            raise HTTPException(status_code=400, detail="each document needs a name and text")
+        if not name.lower().endswith(".txt"):
+            raise HTTPException(status_code=400,
+                                detail=f"{name}: this route reads .txt only")
+        size = len(text.encode("utf-8"))
+        total += size
+        if size > UPLOAD_MAX_BYTES_EACH:
+            raise HTTPException(status_code=413,
+                                detail=f"{name} is {size} bytes; the cap is "
+                                       f"{UPLOAD_MAX_BYTES_EACH}")
+        if total > UPLOAD_MAX_BYTES_TOTAL:
+            raise HTTPException(status_code=413,
+                                detail=f"more than {UPLOAD_MAX_BYTES_TOTAL} bytes in total")
+        raw[pathlib.PurePosixPath(name).name] = text
+
+    documents = [extract_document(text, source_file=name, period=period)
+                 for name, text in sorted(raw.items())]
+
+    with ratelimit.PUBLIC_CLOSES.slot() as slot:
+        if not slot.acquired:
+            raise HTTPException(
+                status_code=429,
+                detail=f"{ratelimit.PUBLIC_CLOSES.concurrent} closes are already running.")
+        return _close(
+            period, store=LocalStore(), documents=documents, raw=raw,
+            public=True, allow_model=False,
+            source={"mailbox": "uploaded",
+                    "release": os.getenv("ARCHON_RELEASE") or None,
+                    "detail": f"{len(documents)} document(s) you sent, closed in memory "
+                              f"and kept nowhere"},
+        )
 
 
 @app.post("/api/close/{period}")

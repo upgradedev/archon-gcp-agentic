@@ -42,6 +42,18 @@ products. Reproduce it:
 python scripts/baseline.py
 ```
 
+That is the bundled month, and it is ours. **Run it on yours**: put a month of
+`.txt` documents in a folder and
+
+```bash
+python run.py --mail ~/my-books --period 2026-07
+```
+
+reads `~/my-books/2026-07/*.txt` and closes it. The same engine, the same seven
+gates, nothing uploaded anywhere. The page has the same door under **Your own
+month**, capped at 60 documents because a public route is not the place for a
+year of paperwork.
+
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
 - **Live demo**: [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/). No account, no install, one button. **Guided tour** in the top bar walks the eight beats of the month in order, for anyone arriving without us beside them.
@@ -51,6 +63,11 @@ Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), 
   the same commit. It is a build artifact -- 1080p, eleven scenes, sha256 in a
   receipt checked against the file -- and has **no public URL yet**; the
   submission link is the owner's to add.
+- **Try it on your own month**: **Your own month** in the top bar takes your
+  `.txt` documents, closes them in memory and keeps nothing. No account, no
+  upload to storage, no model call -- the text is yours, so it never leaves for
+  one. For a real month, `python run.py --mail <dir>` runs the same close over
+  `<dir>/<period>/*.txt` on your machine.
 - **Who it is for**: owner-operator trucking firms running three to twelve trucks.
 
 ---
@@ -744,7 +761,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 791 | `python -m pytest` |
+| Tests, all offline | 803 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
