@@ -332,13 +332,23 @@ def _last_successful_close() -> dict:
 
 
 @app.get("/api/health")
-def health() -> dict:
-    """Liveness, plus enough detail to tell which backend a deploy is using."""
+def health(request: Request) -> dict:
+    """Liveness, plus enough detail to tell which backend a deploy is using.
+
+    `served_from` is the host the caller actually reached, which is the one
+    piece of this that cannot be faked by the payload: it comes from the
+    request, so a reader is looking at the address that answered them. The
+    submission video records the viewport and not the browser chrome, so
+    without this the `.run.app` host appears nowhere on film -- and the rules
+    name it as the first acceptable way to demonstrate the backend runs on
+    Google Cloud.
+    """
     store = get_store()
     last = _last_successful_close()
     configured = "adk-agent" if USE_AGENT else "deterministic"
     return {
         "status": "ok",
+        "served_from": str(request.base_url).rstrip("/"),
         "version": __version__,
         "store": getattr(store, "backend", "unknown"),
         "gemini": USE_GEMINI,

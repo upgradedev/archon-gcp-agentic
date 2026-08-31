@@ -103,10 +103,21 @@ def test_an_agent_that_returns_nothing_is_a_fallback_not_a_crash(agent_on, monke
 
 def test_health_reports_the_path_that_actually_runs(monkeypatch):
     monkeypatch.setattr(service, "USE_AGENT", False)
-    assert service.health()["close_path"] == "deterministic"
+    assert service.health(_request())["close_path"] == "deterministic"
 
     monkeypatch.setattr(service, "USE_AGENT", True)
-    assert service.health()["close_path"] == "adk-agent"
+    assert service.health(_request())["close_path"] == "adk-agent"
+
+
+
+def _request():
+    """`health` reads the host that answered off the request, so calling it as
+    a plain function needs one. The minimum ASGI scope FastAPI's `Request`
+    accepts, rather than a mock, so this keeps testing the real signature."""
+    from fastapi import Request
+
+    return Request({"type": "http", "headers": [], "method": "GET",
+                    "scheme": "http", "server": ("testserver", 80), "path": "/"})
 
 
 def test_health_names_the_model_the_agent_would_actually_call(monkeypatch):
@@ -115,11 +126,11 @@ def test_health_names_the_model_the_agent_would_actually_call(monkeypatch):
     from archon.adapters.agents import DEFAULT_MODEL
 
     monkeypatch.setattr(service, "USE_AGENT", True)
-    assert service.health()["model"] == DEFAULT_MODEL
+    assert service.health(_request())["model"] == DEFAULT_MODEL
 
     monkeypatch.setattr(service, "USE_AGENT", False)
     monkeypatch.setattr(service, "USE_GEMINI", False)
-    assert service.health()["model"] is None
+    assert service.health(_request())["model"] is None
 
 
 def test_the_model_is_one_this_project_can_actually_reach():

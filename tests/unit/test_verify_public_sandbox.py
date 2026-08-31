@@ -671,3 +671,22 @@ def test_a_period_that_is_a_path_cannot_reach_the_filesystem():
         assert response.status_code == 404, (
             f"{hostile!r} was accepted as a period and answered "
             f"{response.status_code}")
+
+
+def test_health_reports_the_host_that_answered():
+    """The one field on this payload a reader can check against their own
+    address bar, and the reason it exists.
+
+    The submission video records the viewport, not the browser chrome, so the
+    `.run.app` host appears nowhere on film. Taking it from the request rather
+    than a constant means the payload cannot claim a host it is not being
+    served from.
+    """
+    from fastapi.testclient import TestClient
+
+    from archon.adapters.service import app
+
+    body = TestClient(app).get("/api/health").json()
+
+    assert body["served_from"] == "http://testserver", body.get("served_from")
+    assert "served_from" in body and body["status"] == "ok"
