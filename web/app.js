@@ -320,7 +320,31 @@ function renderOrigin(d) {
     // The producer comes off the close itself; the viewer comes off health.
     // They are labelled apart, and when they differ the card says so rather
     // than picking one.
-    const producer = (d.source && d.source.release) || null;
+    // A sandbox close inherits none of the trusted close's claims.
+  //
+  // This card said Cloud Storage, Pub/Sub, Firestore and "driven by the agent"
+  // about a result that had touched none of them, because the console was
+  // built around one kind of close and a second kind arrived. It renders from
+  // the result's own `mode` now.
+  const mode = d.mode || {};
+  if (mode.source === "uploaded-sandbox") {
+    $("origin").innerHTML = [
+      ["What this is", "Deterministic sandbox close of documents you sent"],
+      ["Where it ran", "In memory for one request on this Cloud Run service"],
+      ["Stored", "Nowhere. No bucket, no database. Reload and it is gone"],
+      ["Model", "None called. This route never reaches Gemini"],
+      ["Provenance", "Not available: nothing was persisted to tie it back to"],
+    ].map(([k, v]) =>
+      `<div class="kv-row"><span class="kv-k">${esc(k)}</span>
+       <span class="kv-v">${esc(v)}</span></div>`).join("")
+      + `<div class="kv-row"><span class="kv-k">Trusted close</span>
+         <span class="kv-v"><button class="ghost" id="back-to-trusted">Return to the
+         saved close</button></span></div>`;
+    const back = $("back-to-trusted");
+    if (back) back.addEventListener("click", () => location.reload());
+    return;
+  }
+  const producer = (d.source && d.source.release) || null;
     if (producer) rows.push(["Close produced by", `release ${producer}`]);
     if (health.release || health.revision) {
       rows.push(["Viewed through", `deployment ${health.release || "unknown"}` +
@@ -1063,9 +1087,27 @@ function readAsText(file) {
 }
 
 async function closeOwnMonth(files) {
-  const chosen = [...files].filter((f) => f.name.toLowerCase().endsWith(".txt"));
+  // Every file is validated, and nothing is quietly dropped.
+  //
+  // This filtered the selection to `.txt` and closed whatever was left, so
+  // somebody who dragged in a folder of invoices and PDFs got a month built
+  // from half of it with no indication that the other half had gone. A partial
+  // month presented as a month is the failure this product exists to refuse,
+  // and the backend refuses it too -- this is the same rule said earlier, not
+  // instead.
+  const all = [...files];
+  const unsupported = all.filter((f) => !f.name.toLowerCase().endsWith(".txt"));
+  if (unsupported.length) {
+    const names = unsupported.map((f) => f.name).sort().join(", ");
+    $("status").textContent =
+      `This reads .txt only, and ${unsupported.length} of your ` +
+      `file${unsupported.length === 1 ? " is" : "s are"} not: ${names}. ` +
+      "Nothing was closed.";
+    return;
+  }
+  const chosen = all;
   if (!chosen.length) {
-    $("status").textContent = "Those are not .txt documents. This reads text files.";
+    $("status").textContent = "No files were selected.";
     return;
   }
   if (chosen.length > OWN_MONTH_MAX) {
@@ -1093,12 +1135,28 @@ async function closeOwnMonth(files) {
     }
     last = body;
     render(body);
+    const n = documents.length;
     $("status").textContent =
-      `Your ${documents.length} document(s), closed in memory and kept nowhere. ` +
-      "Reload and it is gone.";
+      `Deterministic sandbox close of ${n} document${n === 1 ? "" : "s"} you sent. ` +
+      "No model was called, nothing was stored, and reload restores the saved close.";
   } catch (err) {
     $("status").textContent = `Could not close that month: ${err.message}`;
   }
+}
+
+// A label is not a button to a keyboard.
+//
+// `for=` makes a mouse click reach the hidden file input and does nothing for
+// Enter or Space, so the control was unreachable without a pointer. It carries
+// `role="button"` and a tab stop now, and the two keys a button answers to.
+const ownMonthLabel = $("own-month-label");
+if (ownMonthLabel) {
+  ownMonthLabel.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+      e.preventDefault();
+      $("own-month").click();
+    }
+  });
 }
 
 const ownMonth = $("own-month");
@@ -1140,6 +1198,8 @@ const SAMPLE_MONTH = [
 function showFormat(open) {
   const panel = $("own-month-format");
   if (panel) panel.hidden = !open;
+  const trigger = $("own-month-help");
+  if (trigger) trigger.setAttribute("aria-expanded", String(!!open));
 }
 
 const formatBtn = $("own-month-help");

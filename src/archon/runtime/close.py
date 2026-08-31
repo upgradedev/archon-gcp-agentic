@@ -82,6 +82,13 @@ Narrator = Callable[[str], str]
 Decider = Callable[
     [list[Finding]], tuple[dict[int, "Disposition"], str | None]
 ]
+def _agent_model() -> str:
+    """The model the agent path would use, named from one place."""
+    from ..adapters.agents import DEFAULT_MODEL
+
+    return DEFAULT_MODEL
+
+
 
 
 @dataclass
@@ -115,6 +122,34 @@ class CloseResult:
     #: the books on screen to the exact bytes that produced them.
     driver: str = "deterministic"
     source: dict | None = None
+
+    @property
+    def mode(self) -> dict:
+        """What this particular result IS, so a page cannot describe it wrongly.
+
+        The console was built around one kind of close -- mail off a bucket,
+        driven by the agent, persisted to Firestore -- and then a second kind
+        arrived: documents somebody uploaded, closed deterministically in
+        memory and kept nowhere. The page went on saying Cloud Storage,
+        Pub/Sub, Firestore and agent about a result that had touched none of
+        them, and showed the bundled month's figures beside it.
+
+        Six facts, so the interface renders from what a result is rather than
+        from what the product usually does. A viewer that reads these cannot
+        inherit the trusted close's claims for a sandbox one.
+        """
+        uploaded = (self.source or {}).get("mailbox") == "uploaded"
+        return {
+            "source": "uploaded-sandbox" if uploaded else "persisted-gcs",
+            "orchestration": self.driver,
+            "persistence": "none" if uploaded else "firestore",
+            # Imported here rather than at module scope: `close.py` is the
+            # deterministic core and must not import the adapter that carries
+            # the ADK dependency just to name a string.
+            "model": _agent_model() if self.driver == "adk-agent" else None,
+            "provenance": not uploaded,
+            "delivery": not uploaded,
+        }
 
     @property
     def currency(self) -> str:
@@ -169,6 +204,7 @@ class CloseResult:
             "company": self.company,
             "currency": self.currency,
             "driver": self.driver,
+            "mode": self.mode,
             "source": self.source,
             "outcome": self.outcome,
             "summary": self.summary,

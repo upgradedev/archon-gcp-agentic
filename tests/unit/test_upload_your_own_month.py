@@ -243,3 +243,39 @@ def test_documents_that_merely_look_alike_are_kept(client):
     }).json()
 
     assert body["statements"]["revenue"] == 200.0
+
+
+def test_an_uploaded_close_declares_what_it_is(client):
+    """The console was built around one kind of close and a second arrived.
+
+    Without this contract the page went on saying Cloud Storage, Pub/Sub,
+    Firestore and "driven by the agent" about a result that had touched none of
+    them, and showed the bundled month's figures beside it. Six facts, so an
+    interface renders from what a result IS rather than from what the product
+    usually does.
+    """
+    body = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [{"name": "a.txt", "text":
+                       "Document Type: Load Confirmation\nLoad Number: A-1\n"
+                       "Date: 2026-07-01\nMiles: 10\nLinehaul Rate: 100.00\n"
+                       "Total Payable: 100.00\n"}],
+    }).json()
+
+    assert body["mode"] == {
+        "source": "uploaded-sandbox",
+        "orchestration": "deterministic",
+        "persistence": "none",
+        "model": None,
+        "provenance": False,
+        "delivery": False,
+    }
+
+
+def test_the_saved_close_declares_itself_too(client):
+    """The other half. A contract only one side fills in is a field."""
+    mode = client.get("/api/close/2026-07").json()["mode"]
+
+    assert mode["source"] == "persisted-gcs"
+    assert mode["persistence"] == "firestore"
+    assert mode["provenance"] is True

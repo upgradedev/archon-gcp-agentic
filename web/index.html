@@ -118,11 +118,12 @@ Total Payable: 2,460.00</code></pre>
        but "does it work on MINE". A label wrapping a hidden input, because a
        bare file input cannot be styled to match and `style-src 'self'` refuses
        the inline attribute a framework would write. -->
-  <label class="ghost btn-like" id="own-month-label" for="own-month"
+  <label class="ghost btn-like" id="own-month-label" for="own-month" tabindex="0" role="button"
          title="Close a month of your own .txt documents. They are sent to this Cloud Run service, held in memory for one request, stored nowhere and never sent to a model.">Your own month
     <input type="file" id="own-month" accept=".txt,text/plain" multiple hidden>
   </label>
-  <button class="ghost" id="own-month-help"
+  <button class="ghost" id="own-month-help" aria-expanded="false"
+          aria-controls="own-month-format"
           title="What a document has to look like, and what happens to it">Format</button>
 </header>
 
