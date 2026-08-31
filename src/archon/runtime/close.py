@@ -40,7 +40,7 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from archon.domain.text import plural
+from archon.domain.text import article, plural
 
 from ..adapters import delivery as delivery_mod
 from ..adapters.delivery import Deliverer, Receipt
@@ -399,17 +399,30 @@ def run_close(period: str,
 
     # 4. Reconcile. Which loads got paid, which are still outstanding.
     with run.step("reconcile", "Reconcile loads against what the brokers paid") as step:
-        settled = allocation_mod.settled_load_refs(results)
+        known = allocation_mod.loads_by_ref(documents)
+        paid = allocation_mod.settled_load_refs(results)
+        # A remittance can pay a reference this month has no load confirmation
+        # for: TFX-RA-4417 pays L-7099, which arrived in nobody's mail.
+        # Counting those as settled LOADS put "8 of 9 loads settled, 2 still
+        # outstanding" on the first line of the terminal, which is ten loads
+        # out of nine. The stray is not being hidden by this -- G2 reconciles it
+        # and the remittance_unreconciled detector names it -- it is simply not
+        # one of this month's loads, so it cannot be one of them being paid.
+        settled = paid & known.keys()
+        stray = sorted(paid - known.keys())
         outstanding = allocation_mod.unsettled_loads(documents, results)
-        loads = len(allocation_mod.loads_by_ref(documents))
+        loads = len(known)
         open_items = register_mod.build(documents, results, period)
         step.note(
             f"{len(settled)} of {loads} loads settled, {len(outstanding)} still "
             f"outstanding; {open_items.owed_to_us:,.2f} owed to the firm across "
             f"{plural(len(open_items.receivables), 'item')}, "
             f"{open_items.owed_by_us:,.2f} owed "
-            f"by it across {len(open_items.payables)}",
+            f"by it across {plural(len(open_items.payables), 'item')}"
+            + (f"; {plural(len(stray), 'paid reference')} has no load on file "
+               f"({', '.join(stray[:3])})" if stray else ""),
             loads=loads, settled=len(settled), outstanding=len(outstanding),
+            paid_without_load=len(stray),
             owed_to_us=open_items.owed_to_us, owed_by_us=open_items.owed_by_us,
         )
 
@@ -532,7 +545,7 @@ def run_close(period: str,
         stored["run"] = store.save_run(run.to_dict())
         step.note(
             f"period {period} marked {outcome} ({outcome_reason}); books, "
-            f"{plural(len(filed), 'draft')} and a "
+            f"{plural(len(filed), 'draft')} and {article(len(run.steps) + 2)} "
             f"{len(run.steps) + 2}-step trail persisted to {getattr(store, 'backend', 'store')}",
             outcome=outcome, backend=getattr(store, "backend", "store"),
         )

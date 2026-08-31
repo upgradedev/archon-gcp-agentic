@@ -8,6 +8,18 @@ and the plural of an irregular noun has somewhere to live.
 """
 
 
+def article(count: int) -> str:
+    """"an 11-step trail", not "a 11-step trail".
+
+    English takes the article from the SOUND of the next word, and "eleven"
+    and "eight" open with a vowel while every other digit under twenty does
+    not. The trail line hardcoded "a" beside a number it computed, so the one
+    length the close actually has was the one it got wrong.
+    """
+    head = str(count)
+    return "an" if head[0] == "8" or head.startswith("11") or head.startswith("18") else "a"
+
+
 def plural(count: int, one: str, many: str | None = None) -> str:
     """`plural(1, "document")` -> "1 document"; `plural(3, "document")` -> "3 documents".
 

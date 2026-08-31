@@ -15,6 +15,7 @@ sentence disagree about a figure, the offline sentence is right.
 """
 from __future__ import annotations
 
+from . import validation
 from .models import Draft, ExceptionKind, Finding, Statements, ValidationResult
 from .text import plural
 
@@ -82,7 +83,12 @@ def facts_sheet(statements: Statements, findings: list[Finding],
             f"{finding.amount:,.2f} - {finding.message}"
         )
 
-    lines += ["", f"GATES ({sum(1 for g in gates if g.passed)}/{len(gates)} passed)"]
+    # `validation.summary`, not a second count of the same list. This said
+    # "7/7 passed" while step 8 of the same run said "5/5 gates passed, 2
+    # skipped", because the ratio here counted the two gates that had nothing
+    # to check as gates that had checked something. Two numbers for one fact,
+    # in one document, is how a reader learns not to trust either.
+    lines += ["", f"GATES ({validation.summary(gates)})"]
     for gate in gates:
         lines.append(f"  {'PASS' if gate.passed else 'FAIL'} {gate.rule}: {gate.message}")
 

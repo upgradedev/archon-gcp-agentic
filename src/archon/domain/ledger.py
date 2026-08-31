@@ -466,7 +466,7 @@ class Ledger:
         if unposted:
             notes.append(
                 f"{plural(len(unposted), 'document')} could not be read and "
-                "were deliberately "
+                f"{'was' if len(unposted) == 1 else 'were'} deliberately "
                 f"left unposted rather than estimated."
             )
 

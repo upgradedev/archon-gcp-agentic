@@ -399,8 +399,9 @@ Over the bundled month, `python run.py`:
  + 3. Split each remittance across the loads it settles
      1 remittance split across 8 loads; every one reconciles
  + 4. Reconcile loads against what the brokers paid
-     8 of 9 loads settled, 2 still outstanding; 5,100.00 owed to the firm
-     across 3 items, 3,564.75 owed by it across 5
+     7 of 9 loads settled, 2 still outstanding; 5,100.00 owed to the firm
+     across 3 items, 3,564.75 owed by it across 5 items; 1 paid reference
+     has no load on file (L-7099)
  + 5. Find what is missing or does not add up
      10 exceptions, 3 of them errors, 2,477.85 at stake
  + 6. Decide what to do about each exception
@@ -416,7 +417,7 @@ Over the bundled month, `python run.py`:
      was phrased by a model
  + 10. File the close and mark the period
      period 2026-07 marked closed (closed with an unreadable document
-     escalated to the owner); books, 5 drafts and a 11-step trail
+     escalated to the owner); books, 5 drafts and an 11-step trail
      persisted to memory
  + 11. Write the owner their month-end letter
      "2026-07 closed. 612.85 was quietly leaking, 5 letters ready" ->
@@ -778,7 +779,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 848 | `python -m pytest` |
+| Tests, all offline | 849 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

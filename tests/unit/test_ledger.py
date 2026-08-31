@@ -172,3 +172,42 @@ def test_documents_of_filters_by_family():
     ledger = _ledger(load("L-1", 100.0), load("L-2", 200.0), unreadable())
     assert len(ledger.documents_of(DocType.LOAD_CONFIRMATION)) == 2
     assert len(ledger.documents_of(DocType.UNREADABLE)) == 1
+
+
+def test_settled_and_outstanding_loads_add_up_to_the_loads_there_were():
+    """"8 of 9 loads settled, 2 still outstanding" is ten loads out of nine.
+
+    `settled_load_refs` returns every reference any remittance paid towards,
+    and TFX-RA-4417 pays L-7099, which arrived in nobody's mail this month.
+    Counting that as a settled LOAD inflated the numerator against a
+    denominator built from the load confirmations actually received, and put a
+    sum that does not add up on the first line a judge reads in the terminal.
+
+    The stray reference is not being hidden by this: G2 reconciles it and the
+    `remittance_unreconciled` detector reports it by name. It is simply not one
+    of this month's loads, so it cannot be counted as one of them being paid.
+    """
+    from archon.cli import read_period
+    from archon.domain import allocation as allocation_mod
+    from archon.runtime.close import run_close
+
+    documents, raw = read_period("2026-07", root=None)
+    result = run_close(period="2026-07", documents=documents,
+                       company="Bell Ridge Haulage", raw_texts=raw)
+
+    known = allocation_mod.loads_by_ref(documents)
+    results = result.allocations
+    settled = allocation_mod.settled_load_refs(results)
+    outstanding = allocation_mod.unsettled_loads(documents, results)
+
+    # The bundled month is built to contain this case, so the test is not
+    # hypothetical: a reference is paid that has no load behind it.
+    assert settled - known.keys(), "the month lost its unreconciled remittance line"
+
+    reconcile = next(s for s in result.journal.steps if s.name == "reconcile")
+    assert reconcile.counts["settled"] + reconcile.counts["outstanding"] == len(known), (
+        f"{reconcile.counts['settled']} settled + {reconcile.counts['outstanding']} "
+        f"outstanding != {len(known)} loads. The step note reads: "
+        f"{reconcile.detail!r}"
+    )
+    assert len(outstanding) == 2
