@@ -127,7 +127,17 @@
   }
   button:hover:not(:disabled) { filter: brightness(1.1); }
   button:disabled { opacity: 0.55; cursor: progress; }
-  button.ghost { background: var(--fill); border-color: var(--border-strong); color: var(--text); }
+  /* The label is here because a file input cannot be styled and `style-src
+     'self'` refuses the inline attribute a framework would write. It is a
+     CONTROL, so it has to look like the controls beside it: scoped to
+     `button`, this rule left "Your own month" as bare text between two
+     buttons, which reads as a heading nobody can press. */
+  button.ghost,
+  label.ghost { background: var(--fill); border-color: var(--border-strong); color: var(--text); }
+  label.btn-like {
+    font-weight: 600; border-radius: var(--r-md);
+    border: 1px solid var(--border-strong); padding: 11px 20px;
+  }
 
   .statusbar { padding: 10px 0 0; font-size: 13px; }
 
@@ -454,7 +464,14 @@
 /* ── small screens: the sidebar becomes a top rail ────────────────────────── */
 
   @media (max-width: 899px) {
+    /* The nav wraps to ten rows here and the controls take another six, so the
+       first thing a judge saw on a phone was 920px of chrome and no statement
+       of what the product is. The sections are still one tap away behind the
+       existing toggle; what leads is now the page. */
     .shell { flex-direction: column; }
+    .shell:not(.side-open) .nav,
+    .shell:not(.side-open) .side-foot { display: none; }
+    .shell:not(.side-open) .side { padding-bottom: 10px; }
     .side {
       position: static; width: auto; height: auto; overflow: visible;
       border-right: 0; border-bottom: 1px solid var(--border);

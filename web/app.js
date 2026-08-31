@@ -892,8 +892,18 @@ fetch("/api/health").then((r) => r.ok ? r.json() : null)
     if (last) renderOrigin(last);
   }).catch(() => showDeployment(null));
 
-$("side-toggle").addEventListener("click", () =>
-  $("shell").classList.toggle("side-collapsed"));
+// One toggle, two meanings, because the sidebar is a column on a desktop and a
+// wrapped strip on a phone. `side-collapsed` hides it where it is a column;
+// `side-open` reveals it where the page leads instead. Both are classes on the
+// shell, so nothing here writes a style attribute.
+$("side-toggle").addEventListener("click", () => {
+  const shell = $("shell");
+  if (window.matchMedia("(max-width: 899px)").matches) {
+    shell.classList.toggle("side-open");
+  } else {
+    shell.classList.toggle("side-collapsed");
+  }
+});
 
 fetch("/api/periods").then((r) => r.ok ? r.json() : null).then((d) => {
   if (!d || !d.periods || !d.periods.length) return;
