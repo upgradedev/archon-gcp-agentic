@@ -279,3 +279,80 @@ def test_the_saved_close_declares_itself_too(client):
     assert mode["source"] == "persisted-gcs"
     assert mode["persistence"] == "firestore"
     assert mode["provenance"] is True
+
+
+def test_an_uploaded_month_is_not_given_this_firms_identity():
+    """A visitor closing THEIR month got Bell Ridge's name twice over.
+
+    `_close` hardcoded `company=COMPANY`, so an uploaded month was labelled
+    "Bell Ridge Haulage" in the sidebar and in the provenance card, and every
+    corrective letter it drafted was SIGNED with it. A judge who tries the one
+    feature this product argues for got a stranger's company name on their own
+    letters, one click after the upload.
+    """
+    from archon.adapters.service import COMPANY
+
+    client = TestClient(app)
+    response = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [corpus("load-L-7101.txt"), corpus("load-L-7108.txt")],
+    })
+    assert response.status_code == 200
+    close = response.json()
+
+    assert close["company"] != COMPANY, "the upload wears this firm's name"
+    assert close["company"], "and it must not be blank either -- run_close falls back to 'Accounts'"
+    for draft in close["drafts"]:
+        assert COMPANY not in draft["body"], (
+            f"a letter drafted for an uploaded month is signed {COMPANY!r}"
+        )
+
+
+def test_an_uploaded_month_is_compared_against_nothing():
+    """It was compared against Bell Ridge's June, under "Against the month before".
+
+    `_close` called `_previous_statements(period)` unconditionally, and that
+    function ignores the uploaded documents entirely: with nothing stored it
+    closes `corpus/2026-06` to manufacture a baseline. So the trends panel
+    showed a real trend, computed correctly, between two different firms'
+    books. Not a mislabel a reader could discount -- a fabricated trend.
+    """
+    client = TestClient(app)
+    response = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [corpus("load-L-7101.txt")],
+    })
+    close = response.json()
+
+    assert close["comparison"] is None, (
+        f"an uploaded month was given a baseline: {close['comparison']}"
+    )
+    assert not close["trend_summary"], (
+        f"and a sentence about it: {close['trend_summary']!r}"
+    )
+
+
+def test_an_uploaded_month_is_told_where_its_documents_went():
+    """The page rendered "This record predates mailbox provenance" about
+    documents the visitor had uploaded seconds earlier, on the panel whose own
+    heading promises every object with its size, generation and sha256. The
+    service composes the honest sentence; the page was throwing it away.
+
+    The route's half of that contract is asserted here; `mailboxNote` in
+    web/app.js is what renders it.
+    """
+    client = TestClient(app)
+    response = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [corpus("load-L-7101.txt")],
+    })
+    source = response.json()["source"]
+
+    assert source["mailbox"] == "uploaded"
+    assert source["detail"], "the panel has nothing honest to render without this"
+
+    rendered = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    assert 'kind === "uploaded"' in rendered, (
+        "web/app.js has no branch for an uploaded month, so it falls through "
+        "to the predates-provenance note"
+    )

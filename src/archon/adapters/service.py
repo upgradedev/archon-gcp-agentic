@@ -189,7 +189,8 @@ def _narrator():
 
 
 def _close(period: str, store=None, documents=None, raw=None, source=None,
-           *, public: bool = False, allow_model: bool = True, deliverer=None) -> dict:
+           *, public: bool = False, allow_model: bool = True, deliverer=None,
+           company: str = COMPANY, compare: bool = True) -> dict:
     """Run one close and return it as the shape the page renders.
 
     `store` decides what the run is allowed to touch, and it was described here
@@ -203,6 +204,14 @@ def _close(period: str, store=None, documents=None, raw=None, source=None,
     `public=True` is what an anonymous caller gets. It hands in a deliverer
     that has no code path that sends, so this is structural rather than a flag
     that configuration can switch back on.
+
+    `company` and `compare` exist because a visitor closing THEIR OWN month
+    came through here and got Bell Ridge's identity twice over. The books were
+    labelled with this firm's name and the corrective letters were signed with
+    it, and the month-over-month panel compared their documents against Bell
+    Ridge's June under a heading reading "Against the month before". Neither
+    was a wrong label a reader could discount; the second was a fabricated
+    trend. An uploaded month names itself and is compared against nothing.
     """
     if documents is None:
         try:
@@ -216,7 +225,7 @@ def _close(period: str, store=None, documents=None, raw=None, source=None,
                                 "with the repository"}
 
     target = store if store is not None else get_store()
-    previous = _previous_statements(period)
+    previous = _previous_statements(period) if compare else None
     # A caller may hand one in -- the events route wraps the real deliverer in
     # the ownership fence, so a superseded worker cannot send. Otherwise the
     # anonymous path gets the sandbox and everything else gets the default.
@@ -235,7 +244,7 @@ def _close(period: str, store=None, documents=None, raw=None, source=None,
             from .agents import run_agent_close
 
             result, _final = run_agent_close(
-                period=period, company=COMPANY, store=target,
+                period=period, company=company, store=target,
                 previous=previous, narrator=narrator,
                 documents=documents, raw=raw, source=source,
                 deliverer=deliverer,
@@ -250,7 +259,7 @@ def _close(period: str, store=None, documents=None, raw=None, source=None,
                         period, type(exc).__name__, exc)
 
     result = run_close(
-        period=period, documents=documents, company=COMPANY,
+        period=period, documents=documents, company=company,
         store=target, narrator=narrator, raw_texts=raw, previous=previous,
         source=source, deliverer=deliverer,
     )
@@ -580,6 +589,10 @@ def close_uploaded(payload: dict, request: Request) -> dict:
         return _close(
             period, store=LocalStore(), documents=documents, raw=raw,
             public=True, allow_model=False,
+            # Not None: `run_close` falls back to "Accounts", which signs the
+            # letters with a word nobody chose. Not COMPANY either, which is
+            # what it used to be.
+            company="Your firm", compare=False,
             source={"mailbox": "uploaded",
                     "release": os.getenv("ARCHON_RELEASE") or None,
                     "detail": f"{plural(len(documents), 'document')} you sent, closed in memory "

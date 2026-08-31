@@ -173,7 +173,7 @@ function render(d) {
   renderMileChart(d.statements);
   renderAlloc(d.allocations);
   renderRegister(d.register);
-  renderTrends(d.comparison, d.trend_summary);
+  renderTrends(d.comparison, d.trend_summary, wasUploaded(d));
   renderFindings(d.findings);
   renderDigest(d.digest, d.receipt);
   renderDrafts(d.drafts, d.findings);
@@ -434,17 +434,36 @@ function renderRunStats(d) {
     <span class="v ${kind || "num"}">${esc(v)}</span></div>`).join("");
 }
 
+// What to say when there is no bucket listing to show. An uploaded month used
+// to fall past both branches and land on "this record predates mailbox
+// provenance", which is a sentence about an old stored close being shown to
+// somebody whose documents were read seconds earlier -- on the panel whose own
+// heading promises every object with its size, generation and sha256. The
+// service already composes the honest sentence and it was being thrown away.
+function mailboxNote(src) {
+  const kind = src && src.mailbox;
+  if (kind === "uploaded") {
+    return `${src.detail || "The documents you sent, closed in memory."} ` +
+           "There is no bucket listing and no hash trail here because nothing " +
+           "was stored: the text was held for one request and written to no " +
+           "bucket and no database. Everything else on this page was computed " +
+           "from it.";
+  }
+  if (kind === "bundled-sample") {
+    return "This close read the bundled synthetic sample month shipped with " +
+           "the repository, and is labelled as such. Drop objects into the " +
+           "bucket and the next event-driven close will list them here with " +
+           "hashes.";
+  }
+  return "This record predates mailbox provenance; trigger a close to stamp it.";
+}
+
 // The mailbox table: read objects with their hashes, refused objects with
 // their reasons, or an honest note that this close used the bundled sample.
 function renderMailbox(src) {
   if (!src || src.mailbox !== "gcs") {
     $("mailbox").innerHTML = `<thead><tr><th>Mailbox</th></tr></thead><tbody>
-      <tr><td class="muted">${src && src.mailbox === "bundled-sample"
-        ? "This close read the bundled synthetic sample month shipped with the " +
-          "repository, and is labelled as such. Drop objects into the bucket " +
-          "and the next event-driven close will list them here with hashes."
-        : "This record predates mailbox provenance; trigger a close to stamp it."}
-      </td></tr></tbody>`;
+      <tr><td class="muted">${mailboxNote(src)}</td></tr></tbody>`;
     return;
   }
   const read = (src.manifest || []).map((m) => `<tr>
@@ -797,14 +816,23 @@ function renderRegister(reg) {
 
 // Fuel going up is worse; revenue going up is better. Getting that backwards is
 // how a dashboard congratulates a firm for burning more diesel.
-function renderTrends(comparison, line) {
+function renderTrends(comparison, line, uploaded) {
   // The earliest month has nothing behind it. Say so, and draw no axis: an
   // empty chart reads as a real zero, which is a different and wrong claim.
+  //
+  // An uploaded month has nothing behind it for a different reason, and it
+  // used to be given Bell Ridge's June instead: a real trend, computed
+  // correctly, between two different firms' books, under a heading reading
+  // "Against the month before". The server no longer manufactures that
+  // baseline, and this says which of the two silences it is.
   if (!comparison) {
-    $("trend-line").textContent =
-      "This is the earliest month with mail on file, so there is nothing behind it to compare against.";
-    $("chart-trend").innerHTML =
-      `<p class="sub tight">Close a later month to see it against this one.</p>`;
+    $("trend-line").textContent = uploaded
+      ? "You sent one month. There is nothing behind it to compare against, " +
+        "and the month before belongs to whoever sent it -- not to this page."
+      : "This is the earliest month with mail on file, so there is nothing behind it to compare against.";
+    $("chart-trend").innerHTML = uploaded
+      ? `<p class="sub tight">Send a second month to see it against this one.</p>`
+      : `<p class="sub tight">Close a later month to see it against this one.</p>`;
     $("trends").innerHTML = "";
     return;
   }
