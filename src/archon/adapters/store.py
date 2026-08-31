@@ -167,18 +167,34 @@ class FencedDelivery:
         self._fence = fence
 
     def __getattr__(self, name):
-        """Everything except `send` is the wrapped deliverer's own.
+        """Attributes pass through; the protocol's CALL does not.
 
-        `Deliverer` is a protocol with a `channel` on it, and the receipt reads
-        that to say where the digest went. Wrapping without this made every
-        fenced close report `channel: unknown`, which is the wrapper lying about
-        the thing it was added to protect.
+        `Deliverer` carries a `channel` that the receipt reads to say where the
+        digest went, and wrapping without this made every fenced close report
+        `channel: unknown`.
+
+        It is also how this class was broken. `deliver` was not implemented --
+        the method here was called `send`, which nothing calls -- so
+        `__getattr__` forwarded the real delivery straight to the inner
+        deliverer and the fence was never consulted once. The test that covered
+        it used a double whose method was also `send`, so its counter stayed at
+        zero because nothing had been called at all, and it passed. A guard that
+        does not exist, reported green.
+
+        Any method the protocol declares must be written out below. A test
+        asserts exactly that, by name, so the next one cannot slip through here.
         """
         return getattr(self._inner, name)
 
-    def send(self, message):
+    def deliver(self, digest):
+        """Ownership is checked here, immediately before the message leaves.
+
+        This is the last point at which a superseded worker can be stopped: a
+        written record can be overwritten, and a delivered message cannot be
+        recalled.
+        """
         self._fence._still_ours()
-        return self._inner.send(message)
+        return self._inner.deliver(digest)
 
 
 class Store(Protocol):

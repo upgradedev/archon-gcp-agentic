@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import json
 import logging
 import os
@@ -492,6 +493,8 @@ def close_uploaded(payload: dict, request: Request) -> dict:
     total = 0
     unsupported: list[str] = []
     duplicates: list[str] = []
+    identical: list[str] = []
+    by_digest: dict[str, str] = {}
     oversized: list[str] = []
     for item in incoming:
         if not isinstance(item, dict):
@@ -515,6 +518,25 @@ def close_uploaded(payload: dict, request: Request) -> dict:
         if key in raw:
             duplicates.append(key)
             continue
+        # Byte-identical under two names is the same evidence twice.
+        #
+        # The name check alone let `copy-a.txt` and `copy-b.txt` through with
+        # identical bytes, and a 100.00 load counted twice: revenue 200.00,
+        # seven of seven gates green, from one document sent twice. The GCS
+        # path has hashed every object since the beginning; this one compared
+        # filenames.
+        #
+        # It REFUSES rather than deduplicating, and the two paths differ on
+        # purpose. A bucket is a mailbox where the same file legitimately
+        # arrives twice, so skipping the repeat is right there. An upload is a
+        # person choosing files: two identical ones is a mistake they can see
+        # and fix, and silently dropping accounting evidence is the behaviour
+        # this product exists to refuse.
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if digest in by_digest:
+            identical.append(f"{by_digest[digest]} and {key}")
+            continue
+        by_digest[digest] = key
         raw[key] = text
 
     if unsupported:
@@ -528,6 +550,12 @@ def close_uploaded(payload: dict, request: Request) -> dict:
             detail=f"two documents share a name: {', '.join(sorted(set(duplicates))[:20])}. "
                    f"Rename one and send them again. Nothing was closed, because a month "
                    f"missing a document is worse than no month.")
+    if identical:
+        raise HTTPException(
+            status_code=400,
+            detail=f"these are the same document under different names: "
+                   f"{'; '.join(sorted(identical)[:20])}. Nothing was closed: counting "
+                   f"one document twice is exactly the error this product looks for.")
     if oversized:
         raise HTTPException(
             status_code=413,

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections import Counter
 
-from .ledger import matching_remittance
+from .ledger import remittance_pairing
 from .models import (
     Account,
     AllocationResult,
@@ -91,9 +91,20 @@ def g3_bank_movement_agrees(ledger, documents: list[Document]) -> ValidationResu
     # not extra money. Counting both was what made this gate agree with the
     # double posting it exists to catch: booked and observed committed the same
     # error, so the drift between them was always zero.
-    duplicated = [d for d in bank_lines
-                  if matching_remittance(d, documents, ledger.period) is not None]
-    independent = [d for d in bank_lines if d not in duplicated]
+    # The SAME one-to-one pairing the ledger posted against, not a fresh
+    # per-line question.
+    #
+    # This asked `matching_remittance` again, line by line, so when two credits
+    # carried one reference both were called duplicates here exactly as they
+    # were there: the gate reproduced the ledger's error and reported zero
+    # drift over books that were short a whole credit. A check that recomputes
+    # the thing it is checking cannot catch it being wrong.
+    #
+    # Pairing once means the second credit is independent on BOTH sides: the
+    # ledger posts it and this gate observes it, so they agree because the
+    # money agrees rather than because the mistake does.
+    pairing = remittance_pairing(documents, ledger.period)
+    independent = [d for d in bank_lines if (d.source_file or "") not in pairing]
 
     observed = round(
         sum((d.net_amount or 0.0) if d.direction == "in" else -(d.net_amount or 0.0)

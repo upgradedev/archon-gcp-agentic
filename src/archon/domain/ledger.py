@@ -57,8 +57,45 @@ _SIMPLE_EXPENSES = {
 #: produced are the same money, and the factor sends the advice for the exact
 #: figure it deposits, so there is nothing to tolerate here. A near-miss is a
 #: DIFFERENT payment and must stay a separate line.
+def remittance_pairing(documents: list[Document], period: str) -> dict[str, Document]:
+    """Which bank credit is the arrival of which advice, decided ONCE, one-to-one.
+
+    `matching_remittance` answers for a single line with no knowledge of the
+    other lines, so two distinct credits carrying the same reference each
+    matched the same advice and each was suppressed. One real movement of money
+    vanished, and G3 agreed because it reconciles through the same function --
+    books short by a whole credit with seven of seven gates green.
+
+    An advice is the explanation for at most one credit. Assign it once and the
+    next credit that resembles it is what it looks like: another payment.
+
+    Deterministic by source file, so the same month always pairs the same way
+    and a run id stays stable.
+    """
+    credits = sorted((d for d in documents
+                      if d.doc_type == DocType.BANK_TRANSACTION
+                      and d.direction == "in"
+                      and round(d.net_amount or 0.0, 2) > 0),
+                     key=lambda d: (d.source_file or ""))
+    taken: set[int] = set()
+    pairs: dict[str, Document] = {}
+    for line in credits:
+        match = _first_unclaimed_remittance(line, documents, period, taken)
+        if match is not None:
+            taken.add(id(match))
+            pairs[line.source_file or ""] = match
+    return pairs
+
+
+def _first_unclaimed_remittance(bank_line: Document, documents: list[Document],
+                                period: str, taken: set[int]) -> Document | None:
+    """`matching_remittance`'s rules, skipping advices already spoken for."""
+    candidate = matching_remittance(bank_line, documents, period, taken=taken)
+    return candidate
+
+
 def matching_remittance(bank_line: Document, documents: list[Document],
-                        period: str) -> Document | None:
+                        period: str, taken: set[int] | None = None) -> Document | None:
     """The remittance a given inbound bank line is the arrival of, if any.
 
     The defect this closes: a broker remittance posted Dr Bank / Cr AR, and the
@@ -97,7 +134,8 @@ def matching_remittance(bank_line: Document, documents: list[Document],
     # is the arrival of. Its own month already posted it, or will.
     candidates = [d for d in documents
                   if d.doc_type == DocType.BROKER_REMITTANCE
-                  and belongs_to(period, d.date)]
+                  and belongs_to(period, d.date)
+                  and (taken is None or id(d) not in taken)]
 
     if reference:
         for remittance in candidates:
@@ -135,6 +173,18 @@ class Ledger:
         self.documents: list[Document] = []
         self.entries: list[JournalEntry] = []
         self.allocations: list[AllocationResult] = []
+        #: Bank credit -> the advice it is the arrival of, decided once for the
+        #: whole month and one-to-one. Rebuilt whenever documents change,
+        #: because `add_all` extends the list before posting and the pairing
+        #: has to see every credit to know which one an advice explains.
+        self._pairing_cache: tuple[int, dict[str, Document]] | None = None
+
+    @property
+    def _pairing(self) -> dict[str, Document]:
+        if self._pairing_cache is None or self._pairing_cache[0] != len(self.documents):
+            self._pairing_cache = (len(self.documents),
+                                   remittance_pairing(self.documents, self.period))
+        return self._pairing_cache[1]
 
     # ── posting ──────────────────────────────────────────────────────────────
 
@@ -265,7 +315,11 @@ class Ledger:
         amount = doc.net_amount or 0.0
         reference = doc.reference or ""
         if doc.direction == "in":
-            already = matching_remittance(doc, self.documents, self.period)
+            # The pairing, not a fresh per-line question. Asked per line the
+            # same advice answered "yes" to every credit that resembled it and
+            # suppressed all of them; one movement of money is the arrival of
+            # one advice, and the next credit is another payment.
+            already = self._pairing.get(doc.source_file or "")
             if already is not None:
                 # The remittance already posted this cash. Posting it again is
                 # the same money twice, and G3 agreed with the doubled figure

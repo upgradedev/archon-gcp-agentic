@@ -454,9 +454,15 @@ def test_a_stale_worker_writes_no_business_record_and_sends_nothing(wired, monke
     working = service._close
 
     class CountingDelivery:
-        def send(self, message):
-            sent.append(message)
-            return {"status": "delivered"}
+        # `deliver`, which is what the protocol declares and what `run_close`
+        # calls. This double used to define `send`, so its counter stayed at
+        # zero because nothing had been called at all -- and the assertion
+        # below passed while the fence it was written to prove was bypassed.
+        channel = "counting"
+
+        def deliver(self, digest):
+            sent.append(digest)
+            return {"channel": "counting", "delivered": True}
 
     monkeypatch.setattr(service.delivery_mod, "get_deliverer", lambda: CountingDelivery())
 
@@ -473,6 +479,9 @@ def test_a_stale_worker_writes_no_business_record_and_sends_nothing(wired, monke
 
     assert body(response)["status"] == "superseded"
     assert response.status_code == 200, "the holder owns it; do not ask for a redelivery"
+    # Both halves, because "nothing was delivered" is also true when nothing
+    # was ever called: the fence has to be shown to have run AND to have
+    # stopped the delivery.
     assert sent == [], "a superseded worker delivered to the owner"
     assert store.load_close(service.COMPANY, PERIOD) is None, (
         "a superseded worker wrote the month's books")

@@ -199,3 +199,47 @@ def test_uppercase_extensions_are_accepted_here_too(client):
     }).json()
 
     assert body["statements"]["revenue"] == 50.0
+
+
+def test_the_same_document_under_two_names_is_refused(client):
+    """Revenue 200.00 from one 100.00 load, with seven of seven gates green.
+
+    The name check let `copy-a.txt` and `copy-b.txt` through with identical
+    bytes. The GCS path has hashed every object since the beginning; this one
+    compared filenames.
+
+    It refuses rather than deduplicating, and the two paths differ on purpose:
+    a bucket is a mailbox where the same file legitimately arrives twice, and
+    an upload is a person choosing files, where two identical ones is a mistake
+    they can see and fix.
+    """
+    text = ("Document Type: Load Confirmation\nLoad Number: A-1\nDate: 2026-07-01\n"
+            "Miles: 10\nLinehaul Rate: 100.00\nTotal Payable: 100.00\n")
+
+    response = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [{"name": "copy-a.txt", "text": text},
+                      {"name": "copy-b.txt", "text": text}],
+    })
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "copy-a.txt" in detail and "copy-b.txt" in detail, detail
+    assert "Nothing was closed" in detail
+
+
+def test_documents_that_merely_look_alike_are_kept(client):
+    """One byte of difference is a different document, and refusing it would
+    be the same failure in the other direction."""
+    def load(ref, amount):
+        return (f"Document Type: Load Confirmation\nLoad Number: {ref}\n"
+                f"Date: 2026-07-01\nMiles: 10\nLinehaul Rate: {amount}.00\n"
+                f"Total Payable: {amount}.00\n")
+
+    body = client.post("/api/close/upload", json={
+        "period": "2026-07",
+        "documents": [{"name": "a.txt", "text": load("A-1", 100)},
+                      {"name": "b.txt", "text": load("A-2", 100)}],
+    }).json()
+
+    assert body["statements"]["revenue"] == 200.0
