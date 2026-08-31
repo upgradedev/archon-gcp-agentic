@@ -199,9 +199,54 @@ def main() -> int:
         #    because this workflow holds no browser session for the Cloud
         #    Console, and a still nobody can reproduce proves less than a URL
         #    every viewer can open themselves.
+        #: Stills of the Cloud Run console, if any were placed here. They are
+        #: the ONE asset in this recording a clone cannot regenerate: the
+        #: console needs a signed-in session and this workflow holds none, so
+        #: they are captured by hand and committed. Everything else on film is
+        #: produced by the run that produces it.
+        #:
+        #: The beat works without them. It is the health route and the .run.app
+        #: address that carry the claim, and those are live; the stills are
+        #: corroboration for a judge who wants the dashboard the rules name
+        #: first. Missing files are not an error, and no frame is held on a
+        #: file that is not there.
+        console_dir = Path(__file__).resolve().parent / "console"
+        console_stills = sorted(console_dir.glob("*.png")) if console_dir.is_dir() else []
+
+        def show_still(path: Path, seconds: float) -> None:
+            """One still, letterboxed into the frame, from a data URI.
+
+            A file:// navigation would leave the recording pointed at the local
+            disk mid-beat; a data URI keeps it in one document and cannot fetch
+            anything. The image is scaled to fit rather than cropped, because a
+            console screenshot that has lost its top bar has lost the thing it
+            was there to show.
+            """
+            import base64
+
+            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+            page.set_content(
+                "<style>html,body{margin:0;height:100%;background:#0b0f1e}"
+                "img{width:100%;height:100%;object-fit:contain}</style>"
+                f'<img alt="" src="data:image/png;base64,{encoded}">',
+                wait_until="load",
+            )
+            page.wait_for_timeout(seconds * 1000)
+
         def cloud():
+            # The deployment answering for itself: the release it serves, the
+            # store it persists to, and the agent path for the close.
             page.goto(app_url + "api/health", wait_until="networkidle", timeout=30_000)
-            page.wait_for_timeout(holds["cloud"] * 620)
+            budget = holds["cloud"]
+            page.wait_for_timeout(budget * (0.34 if console_stills else 0.62) * 1000)
+
+            # Then the console, if it was supplied, sharing the same budget so
+            # adding stills costs the cut nothing.
+            if console_stills:
+                each = budget * 0.42 / len(console_stills)
+                for still in console_stills:
+                    show_still(still, each)
+
             page.goto(app_url, wait_until="networkidle", timeout=60_000)
             page.get_by_role(
                 "heading", name=re.compile("It closes the month while nobody is watching")
