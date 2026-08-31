@@ -201,7 +201,12 @@
   .stage.on .fact:nth-child(5) { animation-delay: 1.35s; }
   .stage.on .fact:nth-child(6) { animation-delay: 1.55s; }
   .fact .k { font-size: 18px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); }
-  .fact .v { font-size: 34px; font-weight: 500; margin-top: 8px; word-break: break-all; }
+  .fact .v { font-size: 34px; font-weight: 500; margin-top: 8px; }
+  /* The host is 38 characters and break-all split it mid-word, which reads as
+     a rendering fault rather than a URL. It gets the width of two cards and a
+     size that fits on one line. */
+  .fact.wide { grid-column: span 2; }
+  .fact.wide .v { font-size: 40px; }
   .fact .v.cool { color: var(--cyan); }
   .fact .v.ok { color: var(--positive); }
   .live {
@@ -328,7 +333,7 @@
     The deployment <b>answers for itself</b> — and this is what it just said.
   </h1>
   <div class="facts">
-    <div class="fact"><div class="k">Serving from</div><div class="v cool" id="f-url">—</div></div>
+    <div class="fact wide"><div class="k">Serving from</div><div class="v cool" id="f-url">—</div></div>
     <div class="fact"><div class="k">Cloud Run revision</div><div class="v" id="f-revision">—</div></div>
     <div class="fact"><div class="k">Release</div><div class="v" id="f-release">—</div></div>
     <div class="fact"><div class="k">Trail persisted to</div><div class="v ok" id="f-store">—</div></div>
