@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Archon — the problem, and what it is worth</title>
+<!--
+  The opening of the submission video.
+
+  These are the video's own titles, not a route on the product: a bookkeeping
+  service has no business serving a pitch deck, and a judge who found /deck on
+  the deployment would be right to wonder. It is filmed from file:// by
+  video/capture_production.py, which drives it through window.archonDeck the
+  same way it drives the app, so the beats and the narration stay in one
+  timeline rather than two that drift.
+
+  Every figure on these slides is Bell Ridge's July, the month the demo then
+  closes on camera. Nothing here is illustrative.
+
+  Self-contained on purpose: no font file, no image, no script beyond the four
+  lines at the bottom. The recording has to be reproducible from a clone.
+-->
+<style>
+  :root {
+    --bg: #0b0f1e; --bg-sunken: #080b16; --card: #131a2e; --card-hi: #182043;
+    --fill: #1b2440; --border: #222a45; --border-strong: #2f3862;
+    --text: #e8ebf5; --text-2: #aab2c8; --text-3: #8b93a7;
+    --primary: #6366f1; --primary-hi: #7c7ff5; --violet: #8b5cf6;
+    --positive: #22c55e; --cyan: #2dd4bf; --warning: #f59e0b;
+    --error: #f43f5e; --info: #38bdf8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 400 24px/1.5 "Segoe UI", -apple-system, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* A slow wash behind everything, so a held frame is never quite static. */
+  body::before {
+    content: ""; position: fixed; inset: -30%;
+    background:
+      radial-gradient(46% 40% at 22% 26%, rgba(99,102,241,.20), transparent 68%),
+      radial-gradient(40% 38% at 78% 72%, rgba(139,92,246,.16), transparent 66%),
+      radial-gradient(34% 32% at 62% 18%, rgba(45,212,191,.09), transparent 62%);
+    animation: drift 42s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    from { transform: translate3d(-2.5%, -1.5%, 0) scale(1); }
+    to   { transform: translate3d(2.5%, 1.5%, 0) scale(1.09); }
+  }
+
+  .stage {
+    position: fixed; inset: 0; display: none;
+    padding: 104px 128px; flex-direction: column; justify-content: center;
+  }
+  .stage.on { display: flex; }
+
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+  /* ── entrances ─────────────────────────────────────────────────────────── */
+  @keyframes rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes widen { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes pop {
+    0%   { opacity: 0; transform: translateY(18px) scale(.92); }
+    62%  { opacity: 1; transform: translateY(-4px) scale(1.02); }
+    100% { opacity: 1; transform: none; }
+  }
+  .stage.on [data-in] { opacity: 0; animation: rise .82s cubic-bezier(.2,.7,.3,1) forwards; }
+
+  /* ── 1. title ──────────────────────────────────────────────────────────── */
+  #s-title { align-items: center; justify-content: center; text-align: center; }
+
+  .mark { display: flex; align-items: center; gap: 30px; margin-bottom: 46px; }
+  .glyph {
+    width: 96px; height: 96px; border-radius: 26px; position: relative;
+    background: linear-gradient(140deg, var(--primary) 0%, var(--violet) 100%);
+    box-shadow: 0 26px 70px rgba(99,102,241,.44);
+  }
+  .glyph::after {
+    content: ""; position: absolute; inset: 27px;
+    border: 5px solid rgba(255,255,255,.94); border-radius: 7px;
+    border-right-color: transparent; border-bottom-color: transparent;
+    transform: rotate(45deg);
+  }
+  .wordmark { font-size: 118px; font-weight: 200; letter-spacing: .30em; padding-left: .30em; }
+  .wordmark span { display: inline-block; opacity: 0; animation: pop .74s cubic-bezier(.2,.7,.3,1) forwards; }
+
+  .tagline { font-size: 46px; font-weight: 300; color: var(--text-2); letter-spacing: .012em; }
+  .tagline b { color: var(--text); font-weight: 500; }
+
+  .rule {
+    width: 340px; height: 2px; margin: 52px auto 0; transform-origin: center;
+    background: linear-gradient(90deg, transparent, var(--primary-hi), transparent);
+    animation: widen 1.1s cubic-bezier(.2,.7,.3,1) .9s both;
+  }
+
+  .badges { display: flex; gap: 14px; margin-top: 46px; }
+  .badge {
+    padding: 11px 22px; border: 1px solid var(--border-strong); border-radius: 999px;
+    background: rgba(19,26,46,.72); color: var(--text-2); font-size: 21px; letter-spacing: .05em;
+  }
+
+  /* ── 2. the problem ────────────────────────────────────────────────────── */
+  .kicker {
+    font-size: 22px; letter-spacing: .26em; text-transform: uppercase;
+    color: var(--primary-hi); margin-bottom: 26px;
+  }
+  h1 { font-size: 62px; font-weight: 300; line-height: 1.16; letter-spacing: -.01em; max-width: 1360px; }
+  h1 b { font-weight: 600; }
+
+  .flow { margin-top: 74px; display: flex; align-items: center; gap: 54px; }
+
+  .credit {
+    padding: 34px 44px; border-radius: 20px; min-width: 400px;
+    background: linear-gradient(150deg, var(--card-hi), var(--card));
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 30px 76px rgba(0,0,0,.46);
+  }
+  .credit .lab { font-size: 21px; color: var(--text-3); letter-spacing: .1em; text-transform: uppercase; }
+  .credit .amt { font-size: 66px; font-weight: 300; margin-top: 12px; color: var(--cyan); }
+  .credit .sub { font-size: 22px; color: var(--text-2); margin-top: 10px; }
+
+  .arrow { flex: 0 0 96px; height: 2px; background: var(--border-strong); position: relative; }
+  .arrow::after {
+    content: ""; position: absolute; right: -1px; top: -7px;
+    border: 8px solid transparent; border-left-color: var(--border-strong);
+  }
+
+  .loads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; flex: 1; }
+  .load {
+    padding: 18px 20px; border-radius: 13px; background: var(--card);
+    border: 1px solid var(--border); opacity: 0;
+    animation: pop .58s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  .load .ref { font-size: 21px; color: var(--text-2); letter-spacing: .04em; }
+  .load .val { font-size: 28px; margin-top: 5px; }
+  /* Marked, not explained. The demo names both of these a minute later. */
+  .load.short  { border-color: rgba(244,63,94,.5);  background: rgba(244,63,94,.07); }
+  .load.short .val  { color: var(--error); }
+  .load.orphan { border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.07); }
+  .load.orphan .val { color: var(--warning); }
+  .stage.on .load:nth-child(1) { animation-delay: 3.10s; }
+  .stage.on .load:nth-child(2) { animation-delay: 3.32s; }
+  .stage.on .load:nth-child(3) { animation-delay: 3.54s; }
+  .stage.on .load:nth-child(4) { animation-delay: 3.76s; }
+  .stage.on .load:nth-child(5) { animation-delay: 3.98s; }
+  .stage.on .load:nth-child(6) { animation-delay: 4.20s; }
+  .stage.on .load:nth-child(7) { animation-delay: 4.42s; }
+  .stage.on .load:nth-child(8) { animation-delay: 4.64s; }
+
+  .fee {
+    margin-top: 40px; display: inline-flex; align-items: baseline; gap: 16px;
+    padding: 18px 30px; border-radius: 14px; align-self: flex-start;
+    background: rgba(245,158,11,.09); border: 1px solid rgba(245,158,11,.36);
+    opacity: 0; animation: rise .8s cubic-bezier(.2,.7,.3,1) 6.0s forwards;
+  }
+  .fee .k { color: var(--warning); font-size: 25px; }
+  .fee .v { font-size: 32px; color: var(--text); }
+  .fee .n { color: var(--text-3); font-size: 22px; }
+
+  .punch {
+    margin-top: 58px; font-size: 50px; font-weight: 300; line-height: 1.28;
+    opacity: 0; animation: rise .95s cubic-bezier(.2,.7,.3,1) 8.4s forwards;
+  }
+  .punch b { font-weight: 600; color: var(--primary-hi); }
+
+  /* ── 3. value ──────────────────────────────────────────────────────────── */
+  .steps { margin-top: 62px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .step {
+    padding: 30px 32px; border-radius: 17px; background: var(--card);
+    border: 1px solid var(--border); opacity: 0;
+    animation: rise .74s cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  .stage.on .step:nth-child(1) { animation-delay: .70s; }
+  .stage.on .step:nth-child(2) { animation-delay: .95s; }
+  .stage.on .step:nth-child(3) { animation-delay: 1.20s; }
+  .stage.on .step:nth-child(4) { animation-delay: 1.45s; }
+  .stage.on .step:nth-child(5) { animation-delay: 1.70s; }
+  .stage.on .step:nth-child(6) { animation-delay: 1.95s; }
+  .step .i { font-size: 20px; letter-spacing: .16em; text-transform: uppercase; color: var(--primary-hi); }
+  .step .t { font-size: 31px; font-weight: 500; margin-top: 12px; }
+  .step .d { font-size: 22px; color: var(--text-2); margin-top: 9px; line-height: 1.42; }
+
+  .outcome {
+    margin-top: 58px; display: flex; align-items: center; gap: 56px;
+    opacity: 0; animation: rise .9s cubic-bezier(.2,.7,.3,1) 2.5s forwards;
+  }
+  .figure .n { font-size: 68px; font-weight: 300; color: var(--positive); }
+  .figure .n.cool { color: var(--cyan); }
+  .figure .l { font-size: 22px; color: var(--text-3); margin-top: 6px; letter-spacing: .04em; }
+  .divider { width: 1px; height: 82px; background: var(--border-strong); }
+</style>
+</head>
+<body>
+
+<!-- ── 1 ─────────────────────────────────────────────────────────────────── -->
+<section class="stage" id="s-title">
+  <div class="mark">
+    <div class="glyph" data-in style="animation-delay:.1s"></div>
+    <div class="wordmark" id="wordmark"></div>
+  </div>
+  <p class="tagline" data-in style="animation-delay:1.35s">
+    It closes the month <b>while nobody is watching.</b>
+  </p>
+  <div class="rule"></div>
+  <div class="badges">
+    <span class="badge" data-in style="animation-delay:1.9s">Google ADK</span>
+    <span class="badge" data-in style="animation-delay:2.0s">Gemini</span>
+    <span class="badge" data-in style="animation-delay:2.1s">Cloud Run</span>
+    <span class="badge" data-in style="animation-delay:2.2s">Firestore</span>
+    <span class="badge" data-in style="animation-delay:2.3s">Pub/Sub</span>
+  </div>
+</section>
+
+<!-- ── 2 ─────────────────────────────────────────────────────────────────── -->
+<section class="stage" id="s-problem">
+  <p class="kicker" data-in>The month nobody closes</p>
+  <h1 data-in style="animation-delay:.2s">
+    A broker does not pay per load.<br>
+    It pays <b>once a fortnight</b> — one bank credit, covering eight.
+  </h1>
+
+  <div class="flow">
+    <div class="credit" data-in style="animation-delay:1.5s">
+      <div class="lab">One bank credit</div>
+      <div class="amt num">$18,667.65</div>
+      <div class="sub">Thackery Freight Exchange · TFX-RA-4417</div>
+    </div>
+    <div class="arrow" data-in style="animation-delay:2.6s"></div>
+    <!-- The eight lines TFX-RA-4417 actually settles, at the amounts it
+         actually paid. Two of them are the month's own defects and they are
+         marked but not narrated: L-7105 was invoiced 2,460.00 and paid
+         2,260.00, and L-7099 is paid by the remittance with no load
+         confirmation anywhere in the mail. The demo finds both on camera a
+         minute later, so the slide plants them rather than explaining them. -->
+    <div class="loads">
+      <div class="load"><div class="ref">L-7101</div><div class="val num">$2,450</div></div>
+      <div class="load"><div class="ref">L-7102</div><div class="val num">$3,250</div></div>
+      <div class="load"><div class="ref">L-7103</div><div class="val num">$1,875</div></div>
+      <div class="load"><div class="ref">L-7104</div><div class="val num">$2,940</div></div>
+      <div class="load short"><div class="ref">L-7105</div><div class="val num">$2,260</div></div>
+      <div class="load"><div class="ref">L-7106</div><div class="val num">$3,480</div></div>
+      <div class="load"><div class="ref">L-7107</div><div class="val num">$1,650</div></div>
+      <div class="load orphan"><div class="ref">L-7099</div><div class="val num">$1,340</div></div>
+    </div>
+  </div>
+
+  <div class="fee">
+    <span class="k">− factoring fee</span>
+    <span class="v num">$577.35</span>
+    <span class="n">charged once on the batch, not per load</span>
+  </div>
+
+  <p class="punch">
+    The bank shows <b>one number.</b> The books need <b>eight.</b>
+  </p>
+</section>
+
+<!-- ── 3 ─────────────────────────────────────────────────────────────────── -->
+<section class="stage" id="s-value">
+  <p class="kicker" data-in>What Archon does about it</p>
+  <h1 data-in style="animation-delay:.2s">
+    Eleven steps, <b>start to finish, with nobody in the loop.</b>
+  </h1>
+
+  <div class="steps">
+    <div class="step"><div class="i">01</div><div class="t">Reads the mail</div>
+      <div class="d">Documents land in Cloud Storage. Pub/Sub wakes the agent. Nothing is pressed.</div></div>
+    <div class="step"><div class="i">02</div><div class="t">Posts the books</div>
+      <div class="d">A double-entry journal, and the broker payment split back across the loads it settles.</div></div>
+    <div class="step"><div class="i">03</div><div class="t">Finds what is wrong</div>
+      <div class="d">Ten deterministic detectors. Short payments, duplicate charges, spend with no paperwork.</div></div>
+    <div class="step"><div class="i">04</div><div class="t">Writes the letters</div>
+      <div class="d">The corrective documents, drafted and filed unsent. Approval stays with the owner.</div></div>
+    <div class="step"><div class="i">05</div><div class="t">Checks its own work</div>
+      <div class="d">Seven gates over the finished books. A close it cannot verify is blocked, not filed.</div></div>
+    <div class="step"><div class="i">06</div><div class="t">Files the month</div>
+      <div class="d">Books, drafts and an eleven-step trail in Firestore, tied to the bytes they came from.</div></div>
+  </div>
+
+  <!-- July's own numbers, all four of them off the close the demo then runs. -->
+  <div class="outcome">
+    <div class="figure"><div class="n num">$612.85</div><div class="l">was quietly leaking, and is recoverable</div></div>
+    <div class="divider"></div>
+    <div class="figure"><div class="n cool num">10</div><div class="l">exceptions found, three of them errors</div></div>
+    <div class="divider"></div>
+    <div class="figure"><div class="n cool num">5</div><div class="l">letters written, and not one of them sent</div></div>
+  </div>
+</section>
+
+<script>
+  // The wordmark, one letter at a time. Written rather than marked up so the
+  // stagger is a loop instead of eight hand-numbered spans.
+  document.getElementById("wordmark").innerHTML = [..."ARCHON"]
+    .map((c, i) => `<span style="animation-delay:${(0.42 + i * 0.085).toFixed(3)}s">${c}</span>`)
+    .join("");
+
+  // Driven from outside, like the guided tour: the capture holds each stage for
+  // exactly as long as its narration runs, so the deck cannot drift from the
+  // voice track. Re-adding the class restarts every animation on the stage.
+  const STAGES = ["s-title", "s-problem", "s-value"];
+  window.archonDeck = {
+    length: STAGES.length,
+    show(n) {
+      STAGES.forEach((id) => document.getElementById(id).classList.remove("on"));
+      const el = document.getElementById(STAGES[n]);
+      if (!el) return false;
+      void el.offsetWidth;               // reflow, so the animations replay
+      el.classList.add("on");
+      return true;
+    },
+  };
+  window.archonDeck.show(0);
+</script>
+</body>
+</html>

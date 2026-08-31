@@ -11,9 +11,19 @@
   "speakingRate": 0.98,
   "segments": [
     {
-      "id": "hook",
+      "id": "title",
+      "captionText": "Archon. A month-end close that runs itself, on Google Cloud.",
+      "speechText": "Archon. A month-end close that runs itself, on Google Cloud."
+    },
+    {
+      "id": "problem",
       "captionText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of three trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight.",
       "speechText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of three trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight."
+    },
+    {
+      "id": "value",
+      "captionText": "It reads the month's mail, posts the books, splits that one payment back across the loads it settles, finds what is missing, drafts the letters, and files a closed month. Every figure traces back to the bytes it came from.",
+      "speechText": "It reads the month's mail, posts the books, splits that one payment back across the loads it settles, finds what is missing, drafts the letters, and files a closed month. Every figure traces back to the bytes it came from."
     },
     {
       "id": "surface",
@@ -62,9 +72,9 @@
     },
     {
       "id": "close",
-      "captionText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April. It runs on Google Cloud, it closes the month while nobody is watching, and every figure it shows can be traced back to the bytes it came from.",
-      "speechText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April. It runs on Google Cloud, it closes the month while nobody is watching, and every figure it shows can be traced back to the bytes it came from."
+      "captionText": "So the owner opens a closed month with the letters already written, instead of a shoebox they will get to in April. It runs on Google Cloud, it closes the month while nobody is watching, and every figure it shows can be traced back to the bytes it came from.",
+      "speechText": "So the owner opens a closed month with the letters already written, instead of a shoebox they will get to in April. It runs on Google Cloud, it closes the month while nobody is watching, and every figure it shows can be traced back to the bytes it came from."
     }
   ],
-  "note": "No count that MOVES is voiced here on purpose: not tests, not detectors, not gates. Voicing a number that changes when the code changes means re-synthesising audio and re-cutting to the frame every time. Those numbers live in the README, where each one carries the command that produced it. The counts that ARE voiced -- eleven steps, eight loads, and the three figures in `found` -- are fixed by the bundled month rather than by the code, and test_every_figure_the_narration_voices_is_still_in_the_close holds them to it."
+  "note": "No count that MOVES is voiced here on purpose: not tests, not detectors, not gates. Voicing a number that changes when the code changes means re-synthesising audio and re-cutting to the frame every time. Those numbers live in the README, where each one carries the command that produced it. The counts that ARE voiced -- eleven steps, eight loads, and the three figures in `found` -- are fixed by the bundled month rather than by the code, and test_every_figure_the_narration_voices_is_still_in_the_close holds them to it. The same applies to every figure printed on the opening slides in video/deck.html: each one is read off the close the demo then runs, and none of them is voiced."
 }

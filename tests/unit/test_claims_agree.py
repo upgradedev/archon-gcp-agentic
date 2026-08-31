@@ -1003,3 +1003,76 @@ def test_every_tour_stop_rings_something_the_stop_can_actually_see():
             )
 
     assert not problems, "a tour stop highlights something hidden: " + "; ".join(problems)
+
+
+def test_every_figure_on_the_opening_slides_is_a_figure_from_the_close():
+    """The slides are the one place in this repository where a number could be
+    invented and nothing would notice.
+
+    Everywhere else a figure is rendered from a close. `video/deck.html` is
+    hand-written HTML: the first draft of it carried eight plausible load
+    amounts I had made up, under a comment claiming every figure on the slides
+    was Bell Ridge's July. A judge who paused the video on that slide and then
+    opened the allocation panel would have found eight different numbers.
+
+    So every money figure and every load reference printed on the slides is
+    checked against the close the demo then runs, on camera, a minute later.
+    """
+    import pathlib
+    import re
+
+    from archon.cli import read_period
+    from archon.runtime.close import run_close
+
+    deck = (pathlib.Path(__file__).resolve().parents[2] / "video" / "deck.html")
+    markup = deck.read_text(encoding="utf-8")
+    # Only what is rendered: the CSS carries pixel values and timings.
+    body = markup[markup.index("<body>"):]
+    body = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+    body = re.sub(r"<script.*?</script>", "", body, flags=re.S)
+
+
+    documents, raw = read_period("2026-07", root=None)
+    result = run_close(period="2026-07", documents=documents,
+                       company="Bell Ridge Haulage", raw_texts=raw)
+    close = result.to_dict()
+    allocation = close["allocations"][0]
+
+    known = {
+        round(allocation["remittance_total"], 2),
+        round(allocation["factoring_fee"], 2),
+        round(allocation["allocated_gross"], 2),
+        round(close["leakage"], 2),
+        float(len(close["findings"])),
+        float(len(close["drafts"])),
+        float(len(close["journal"]["steps"])),
+        float(len(allocation["lines"])),
+        float(len([f for f in close["findings"] if f["severity"] == "error"])),
+    }
+    for line in allocation["lines"]:
+        known.add(round(line["paid"], 2))
+        if line.get("invoiced"):
+            known.add(round(line["invoiced"], 2))
+
+    # Every figure the slides state carries `num`, the same class the app puts
+    # on a figure. Scanning the whole body instead picked up the "1" of `<h1`
+    # and the ordinals of a numbered list, which are not claims about anything.
+    cells = re.findall(r'class="[^"]*num[^"]*"[^>]*>([^<]+)<', body)
+    assert len(cells) >= 12, f"only {len(cells)} figures found on the slides"
+    for text in cells:
+        value = float(text.strip().lstrip("$").replace(",", ""))
+        assert value in known, (
+            f"the slides print {text.strip()!r}, which is not a figure of this "
+            f"close. Figures it does carry: {sorted(known)}"
+        )
+
+    # And the load references, which are the other thing a slide could invent.
+    refs = set(re.findall(r"\bL-[0-9]{4}\b", body))
+    settled = {line["load_ref"] for line in allocation["lines"]}
+    assert refs == settled, (
+        f"the slides name {sorted(refs)}; the remittance settles {sorted(settled)}"
+    )
+
+    # The broker and the remittance are named on the slide too.
+    assert allocation["broker"] in body
+    assert allocation["remittance_ref"] in body

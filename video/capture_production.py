@@ -35,7 +35,14 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 #: The beats, in the order this file holds them. The narration must agree.
-EXPECTED_BEATS = ["hook", "surface", "trigger", "cloud", "live", "sponsor",
+#:
+#: The first three are the opening titles in video/deck.html, filmed from the
+#: repository rather than from the deployment: the problem and what the thing
+#: is worth, which the organisers ask for by name and which a screenshot of a
+#: finished console cannot state. Everything from `surface` on is the live
+#: service. Both halves are one recording and one timeline.
+EXPECTED_BEATS = ["title", "problem", "value",
+                  "surface", "trigger", "cloud", "live", "sponsor",
                   "found", "letters", "gates", "evidence", "close"]
 
 VIEWPORT = {"width": 1920, "height": 1080}
@@ -104,10 +111,13 @@ def main() -> int:
         )
 
         capture_started = time.monotonic()
-        page.goto(app_url, wait_until="networkidle", timeout=60_000)
-        page.get_by_role(
-            "heading", name=re.compile("It closes the month while nobody is watching")
-        ).wait_for(timeout=30_000)
+
+        # The titles first, off the repository's own file. No network, so this
+        # cannot be the thing that makes a take fail, and no route is added to
+        # a bookkeeping service to carry a pitch deck.
+        deck_url = (Path(__file__).resolve().parent / "deck.html").as_uri()
+        page.goto(deck_url, wait_until="networkidle", timeout=30_000)
+        page.wait_for_function("() => !!window.archonDeck", timeout=15_000)
         timeline_started = time.monotonic()
 
         def hold(beat: str, action) -> None:
@@ -140,12 +150,35 @@ def main() -> int:
             page.locator(selector).scroll_into_view_if_needed()
             page.wait_for_timeout(400)
 
-        # 1. The problem, on the page that states it.
-        hold("hook", lambda: page.evaluate("() => window.scrollTo({top: 0})"))
+        def deck(stage: int):
+            #: Re-adding the class restarts every animation on the stage, so
+            #: each hold begins on frame one of its own choreography however
+            #: long the previous one ran.
+            return lambda: page.evaluate(f"() => window.archonDeck.show({stage})")
 
-        # 2. The surface the owner already opens. On arrival the page has
+        # 1. The wordmark, and the claim the rest of the film has to earn.
+        hold("title", deck(0))
+
+        # 2. The problem, stated as the problem rather than over a screenshot.
+        #    One broker credit, the eight loads it settles, the fee charged once
+        #    on the batch. Two of those eight are the month's own defects; they
+        #    are coloured and not mentioned, and the demo names both later.
+        hold("problem", deck(1))
+
+        # 3. What it is worth, which is the beat that was missing entirely.
+        hold("value", deck(2))
+
+        # 4. Onto the deployment. Everything from here is the live service.
+        def to_app():
+            page.goto(app_url, wait_until="networkidle", timeout=60_000)
+            page.get_by_role(
+                "heading", name=re.compile("It closes the month while nobody is watching")
+            ).wait_for(timeout=30_000)
+            scroll_to("#digest")
+
+        #    The surface the owner already opens: on arrival the page has
         #    replayed the last close, so the letter is there before any press.
-        hold("surface", lambda: scroll_to("#digest"))
+        hold("surface", to_app)
 
         # 3. Nobody presses anything, and nothing on film pretends otherwise.
         #    The proof of the trigger is the origin card: the gs:// object and

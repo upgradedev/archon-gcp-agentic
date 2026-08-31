@@ -26,7 +26,8 @@ SPEC = json.loads((ROOT / "video" / "narration.json").read_text(encoding="utf-8"
 SEGMENTS = SPEC["segments"]
 
 #: The beats, in the order the capture holds them. Written out, not imported.
-EXPECTED_BEATS = ["hook", "surface", "trigger", "cloud", "live", "sponsor",
+EXPECTED_BEATS = ["title", "problem", "value",
+                  "surface", "trigger", "cloud", "live", "sponsor",
                   "found", "letters", "gates", "evidence", "close"]
 
 #: The generator's own bounds: 20 to 800 characters per field, ids matching
