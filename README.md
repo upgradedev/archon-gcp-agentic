@@ -1,16 +1,25 @@
 # Archon
 
 [![CI](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/ci.yml)
+[![Security](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/security.yml)
+[![Deploy](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/deploy.yml)
 [![Readiness](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml/badge.svg?branch=main)](https://github.com/upgradedev/archon-gcp-agentic/actions/workflows/readiness.yml)
+
+[![Live demo](https://img.shields.io/badge/live%20demo-no%20account%2C%20no%20install-2dd4bf)](https://archon-70489367760.us-central1.run.app/)
+[![Demo video](https://img.shields.io/badge/demo%20video-3%3A53-f43f5e)](https://youtu.be/oCA59SgunwY)
+[![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run%20%C2%B7%20Firestore%20%C2%B7%20Pub%2FSub%20%C2%B7%20Cloud%20Storage-4285F4)](#what-google-is-doing-here)
+[![Agent](https://img.shields.io/badge/agent-Google%20ADK%20%C2%B7%20Gemini%203.7%20Flash-8b5cf6)](#what-google-is-doing-here)
+[![Tests](https://img.shields.io/badge/tests-offline%2C%20no%20key%2C%20no%20network-22c55e)](#tests-and-evidence)
+[![Keys](https://img.shields.io/badge/service--account%20keys-none-22c55e)](#deploy-it)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-*The readiness badge is a submission gate, not a build gate. It fetches the
-live judge URL below, and it also refuses to pass while any mandatory
-deliverable is missing, whatever the weighted score says. **It is red right now,
-and correctly so: the demo video has no public URL yet.** It went red the moment
-that veto was added, having previously printed PASS at 96.67% over the same
-missing row. The CI badge covers the secret scan, the build, the tests and the
-browser journey; Deploy asks a narrower question and passes.*
+*The readiness badge is a submission gate, not a build gate. It fetches the live
+judge URL below, and it refuses to pass while any mandatory deliverable is
+missing, whatever the weighted score says. Two of its gates cannot be closed by
+this repository at all: one asks whether the entry form reads Submitted, and one
+asks whether the release now serving produced the close it is showing, which
+goes red for as long as it takes a redeploy to be followed by a fresh close. The
+CI badge covers the secret scan, the build, the tests and the browser journey.*
 
 > **Archon closes a haulier's month unattended: it splits one broker payment across the eight loads it settles and writes the letters chasing what leaked.**
 >
@@ -392,6 +401,23 @@ because it crossed a figure somebody wrote down. That is what lets Archon work
 on a firm's first month, before anyone has configured it.
 
 ## Architecture
+
+**What it does.** Every box below is a module or a service that exists, and the
+two dashed edges are the only places this system reaches the world.
+
+![Archon architecture](docs/images/architecture.png)
+
+**Who is allowed to do it.** The other half, and the one a reviewer usually has
+to take on trust: every role on this page is granted in `infra/main.tf`, and a
+role that is not granted there is not on the page.
+
+![Archon infrastructure and identity](docs/images/infrastructure.png)
+
+Both are rendered by `python video/shoot-stills.py` from `video/architecture.html`
+and `video/infra.html` rather than drawn in a tool, so a diagram cannot drift
+from the words beside it without someone editing the words. The same structures
+are below as mermaid, which GitHub renders inline.
+
 
 Three diagrams, one per question a reader actually has.
 
