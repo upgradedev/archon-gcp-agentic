@@ -15,11 +15,14 @@
 
 *The readiness badge is a submission gate, not a build gate. It fetches the live
 judge URL below, and it refuses to pass while any mandatory deliverable is
-missing, whatever the weighted score says. Two of its gates cannot be closed by
-this repository at all: one asks whether the entry form reads Submitted, and one
-asks whether the release now serving produced the close it is showing, which
-goes red for as long as it takes a redeploy to be followed by a fresh close. The
-CI badge covers the secret scan, the build, the tests and the browser journey.*
+missing, whatever the weighted score says. One of its gates is an attestation
+rather than a measurement, because Devpost shows a submitted entry and an
+unsubmitted draft at the same public URL: [SUBMITTED.md](SUBMITTED.md) records
+the date, and being a commit is what makes it worth anything. Another compares
+the release now serving against the release that produced the close on screen,
+so it goes red for as long as it takes a redeploy to be followed by a fresh
+close. The CI badge covers the secret scan, the build, the tests and the
+browser journey.*
 
 > **Archon closes a haulier's month unattended: it splits one broker payment across the eight loads it settles and writes the letters chasing what leaked.**
 >

@@ -207,9 +207,8 @@ CRITERIA = [
              # is defined below it with the other network helpers.
              lambda: release_is_coherent()),
             ("dlv-form-submitted",
-             "Entry form flipped to Submitted",
-             lambda: gated("Open the Devpost form, confirm it reads Submitted, "
-                           "and record the date in the workspace STATE.md")),
+             "Entry submitted, attested and dated in the repository",
+             lambda: entry_was_submitted()),
         ],
     },
     {
@@ -417,6 +416,37 @@ def workflow_triggers_on_any_branch(relpath):
 def gated(manual_step):
     """A user-gated item. Never a pass, never counted, always printed."""
     return GATED, manual_step
+
+
+#: Where the owner records that the entry form was submitted.
+SUBMITTED_FILE = "SUBMITTED.md"
+
+
+def entry_was_submitted():
+    """Did a person submit the entry, and did they write down when.
+
+    This gate used to be permanently GATED, which vetoes, so the badge was red
+    by construction and could never go green however complete the submission
+    was. That is the failure this file already documents once and then walked
+    into: a badge telling a judge the wrong thing. A red badge over a finished
+    entry is as wrong as a green one over an unfinished entry.
+
+    It cannot be probed. Devpost shows a submitted entry and an unsubmitted
+    draft at the same public URL, and the difference is behind the owner's
+    login. So this reads an ATTESTATION rather than a fact, and says so in its
+    own name. What makes it worth having is that the attestation is a commit:
+    dated, attributed and in the history, next to the URL a judge can open.
+    """
+    text = _read(SUBMITTED_FILE)
+    if text is None:
+        return FAIL, "%s is absent: nobody has recorded submitting the entry" % SUBMITTED_FILE
+    dated = re.search(r"submitted:\s*(\d{4}-\d{2}-\d{2})", text)
+    url = re.search(r"(https://devpost\.com/software/\S+)", text)
+    if not dated:
+        return FAIL, "%s carries no `submitted: YYYY-MM-DD` line" % SUBMITTED_FILE
+    if not url:
+        return FAIL, "%s names no public devpost.com/software URL" % SUBMITTED_FILE
+    return PASS, "attested %s, %s" % (dated.group(1), url.group(1))
 
 
 # --------------------------------------------------------------------------
