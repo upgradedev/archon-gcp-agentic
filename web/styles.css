@@ -464,14 +464,14 @@
 /* ── small screens: the sidebar becomes a top rail ────────────────────────── */
 
   @media (max-width: 899px) {
-    /* The nav wraps to ten rows here and the controls take another six, so the
-       first thing a judge saw on a phone was 920px of chrome and no statement
-       of what the product is. The sections are still one tap away behind the
-       existing toggle; what leads is now the page. */
+    /* The nav STAYS on a phone, and that is a decision, not an oversight.
+       Hiding it behind the toggle put the hero 190px higher and made all ten
+       sections invisible until somebody found a control they had no reason to
+       look for -- undoing an earlier fix recorded three comments below, where
+       the strip was made to wrap precisely because a judge on a phone could
+       previously see two of ten. The browser journey caught it, at the mobile
+       viewport, clicking a tab that was no longer there. */
     .shell { flex-direction: column; }
-    .shell:not(.side-open) .nav,
-    .shell:not(.side-open) .side-foot { display: none; }
-    .shell:not(.side-open) .side { padding-bottom: 10px; }
     .side {
       position: static; width: auto; height: auto; overflow: visible;
       border-right: 0; border-bottom: 1px solid var(--border);
