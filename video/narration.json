@@ -26,9 +26,14 @@
       "speechText": "Nobody presses anything. A month of documents lands in a Cloud Storage bucket, the bucket notifies a Pub Sub topic, its push subscription wakes a Cloud Run container, and a Google A D K agent closes the month."
     },
     {
+      "id": "cloud",
+      "captionText": "This is not a laptop. The service answers from Cloud Run and reports what it is running: this exact release, Firestore holding the trail, and the agent path for the close. The mail it read came off a Cloud Storage object, and the record names that object and the hash of every file in it.",
+      "speechText": "This is not a laptop. The service answers from Cloud Run and reports what it is running: this exact release, Firestore holding the trail, and the agent path for the close. The mail it read came off a Cloud Storage object, and the record names that object and the hash of every file in it."
+    },
+    {
       "id": "live",
-      "captionText": "Eleven steps, unattended. It classifies 27 artifacts, posts the journal, splits the remittance across the eight loads it settles, and proves it: what landed equals what the lines pay, less the fee charged once. Then it finds a broker that paid 200 dollars light, a truck stop that charged 412.85 twice, and 1,865 dollars that left the account with nothing behind it.",
-      "speechText": "Eleven steps, unattended. It classifies twenty seven artifacts, posts the journal, splits the remittance across the eight loads it settles, and proves it. What landed equals what the lines pay, less the fee charged once. Then it finds a broker that paid two hundred dollars light, a truck stop that charged four hundred and twelve dollars twice, and one thousand eight hundred and sixty five dollars that left the account with nothing behind it."
+      "captionText": "Eleven steps, unattended. It classifies every artifact that arrived, posts the double-entry journal, splits the remittance across the eight loads it settles, and then proves it: what landed in the bank equals what the lines pay, less the fee charged once on the batch. The residual is zero. If that line did not close, nothing else here would be worth reading.",
+      "speechText": "Eleven steps, unattended. It classifies every artifact that arrived, posts the double entry journal, splits the remittance across the eight loads it settles, and then proves it: what landed in the bank equals what the lines pay, less the fee charged once on the batch. The residual is zero. If that line did not close, nothing else here would be worth reading."
     },
     {
       "id": "sponsor",
@@ -36,14 +41,29 @@
       "speechText": "Remove Google A D K and the judgement goes with it: the trigger would still fire arithmetic, but nothing would weigh the exceptions or withhold a bad close. Remove Firestore and a container that scales to zero has nowhere to keep the trail. Gemini sequences and judges. It never touches a figure."
     },
     {
+      "id": "found",
+      "captionText": "Then it finds what nobody was looking for. A broker that paid 200 dollars light. A truck stop that charged 412.85 twice. And 1,865 dollars that left the account with no paperwork behind it. Every one of those has a deterministic detector behind it, not a model's opinion.",
+      "speechText": "Then it finds what nobody was looking for. A broker that paid 200 dollars light. A truck stop that charged 412.85 twice. And 1,865 dollars that left the account with no paperwork behind it. Every one of those has a deterministic detector behind it, not a model's opinion."
+    },
+    {
+      "id": "letters",
+      "captionText": "The letters are written and filed, and not one of them is sent. No delivery channel is configured, the approval records who decided and when, and the deliverer these routes are handed has no code path that sends. The one place a person is needed is deliberately the last one.",
+      "speechText": "The letters are written and filed, and not one of them is sent. No delivery channel is configured, the approval records who decided and when, and the deliverer these routes are handed has no code path that sends. The one place a person is needed is deliberately the last one."
+    },
+    {
+      "id": "gates",
+      "captionText": "And it can refuse. The gates run over the finished books, and a close that cannot verify its own arithmetic is blocked rather than filed. An agent may withhold a month it does not trust. It may never grant one the gates refused.",
+      "speechText": "And it can refuse. The gates run over the finished books, and a close that cannot verify its own arithmetic is blocked rather than filed. An agent may withhold a month it does not trust. It may never grant one the gates refused."
+    },
+    {
       "id": "evidence",
-      "captionText": "Every number came from a deterministic ledger, not from a model. The suite runs with no key and no network. Each of the seven gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
-      "speechText": "Every number came from a deterministic ledger, not from a model. The test suite runs with no key and no network, and each of the seven gates is broken on purpose once and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
+      "captionText": "Every number came from a deterministic ledger, not from a model. The suite runs with no key and no network. Each gate is broken on purpose and asserted red, because a gate nobody has watched fail is a gate nobody should believe.",
+      "speechText": "Every number came from a deterministic ledger, not from a model. The suite runs with no key and no network. Each gate is broken on purpose and asserted red, because a gate nobody has watched fail is a gate nobody should believe."
     },
     {
       "id": "close",
-      "captionText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April.",
-      "speechText": "Archon splits one broker payment back across the eight loads it settles, and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written, instead of a shoebox they will get to in April."
+      "captionText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April. It runs on Google Cloud, it closes the month while nobody is watching, and every figure it shows can be traced back to the bytes it came from.",
+      "speechText": "Archon splits one broker payment back across the eight loads it settles and files the letters chasing what was underpaid, so the owner opens a closed month with the letters already written instead of a shoebox they will get to in April. It runs on Google Cloud, it closes the month while nobody is watching, and every figure it shows can be traced back to the bytes it came from."
     }
   ],
   "note": "No count of anything is voiced here on purpose: not tests, not detectors, not gates. Voicing a number that moves means re-synthesising audio and re-cutting to the frame every time the code changes. Numbers live in the README, where each one carries the command that produced it."

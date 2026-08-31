@@ -152,9 +152,10 @@ jobs:
           test -s "${output}/${mp4}"
           test -s "${output}/captions.en.srt"
           # sceneCount must equal the segments in video/narration.json. Ours is
-          # 7: hook, surface, trigger, live, sponsor, evidence, close. The same
-          # list is asserted in video/capture_production.py and pinned offline
-          # by tests/unit/test_narration_contract.py.
+          # 11: hook, surface, trigger, cloud, live, sponsor, found, letters,
+          # gates, evidence, close. The same list is asserted in
+          # video/capture_production.py and pinned offline by
+          # tests/unit/test_narration_contract.py.
           jq -e \
             --arg sha "${ARCHON_RELEASE_SHA}" \
             '.schemaVersion == "archon.submission-video-receipt/v1"
@@ -163,7 +164,7 @@ jobs:
              and .durationSeconds < 179
              and .width == 1920
              and .height == 1080
-             and .sceneCount == 7
+             and .sceneCount == 11
              and (.sha256 | test("^[a-f0-9]{64}$"))
              and .bytes > 1000000' \
             "${output}/video-receipt.json" >/dev/null

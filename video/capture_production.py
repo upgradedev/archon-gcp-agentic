@@ -35,7 +35,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 #: The beats, in the order this file holds them. The narration must agree.
-EXPECTED_BEATS = ["hook", "surface", "trigger", "live", "sponsor", "evidence", "close"]
+EXPECTED_BEATS = ["hook", "surface", "trigger", "cloud", "live", "sponsor",
+                  "found", "letters", "gates", "evidence", "close"]
 
 VIEWPORT = {"width": 1920, "height": 1080}
 
@@ -154,6 +155,27 @@ def main() -> int:
         #    receipts of the run that actually happened unattended.
         hold("trigger", lambda: scroll_to("#origin"))
 
+        # 4. Google Cloud, demonstrated rather than asserted. The submission
+        #    rules REQUIRE this beat: the video must show the backend running on
+        #    Google Cloud. The address bar carries the .run.app host, and the
+        #    health route is the deployment answering for itself -- the release
+        #    it is serving, `firestore` as the store it persists to, and the
+        #    agent close path. Then straight back to the console.
+        #
+        #    Filmed from the live endpoint rather than a console screenshot
+        #    because this workflow holds no browser session for the Cloud
+        #    Console, and a still nobody can reproduce proves less than a URL
+        #    every viewer can open themselves.
+        def cloud():
+            page.goto(app_url + "api/health", wait_until="networkidle", timeout=30_000)
+            page.wait_for_timeout(holds["cloud"] * 620)
+            page.goto(app_url, wait_until="networkidle", timeout=60_000)
+            page.get_by_role(
+                "heading", name=re.compile("It closes the month while nobody is watching")
+            ).wait_for(timeout=30_000)
+
+        hold("cloud", cloud)
+
         # 4. The chore, running. Eleven steps, landing one at a time. Replay
         #    re-renders the persisted run's trail (the button says so on the
         #    page): nothing re-executes, which also means the film never waits
@@ -172,19 +194,29 @@ def main() -> int:
         #    eight loads, with the identity closing.
         hold("sponsor", lambda: scroll_to("#alloc"))
 
-        # 6. The exceptions, then the gates the close ran against its own work.
+        # 7. What it found on its own, one detector at a time.
+        hold("found", lambda: scroll_to("#findings"))
+
+        # 8. The letters, every one filed and none sent. This is the beat the
+        #    narration spends the longest on, because "it wrote them and did not
+        #    send them" is the claim a viewer is most entitled to disbelieve.
+        hold("letters", lambda: scroll_to("#drafts"))
+
+        # 9. The gates, and that a close can be refused by them.
+        hold("gates", lambda: scroll_to("#gates"))
+
+        # 10. The receipts: hashes, run id, release, the eleven-step trail.
         def evidence():
-            scroll_to("#findings")
+            scroll_to("#trail")
             page.wait_for_timeout(holds["evidence"] * 500)
-            scroll_to("#gates")
+            scroll_to("#origin")
 
         hold("evidence", evidence)
 
-        # 7. The letters, every one filed and none sent, then back to the top.
+        # 11. Back to the statement the whole thing is answering.
         def ending():
-            scroll_to("#drafts")
-            page.wait_for_timeout(holds["close"] * 500)
             page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
+            page.wait_for_timeout(400)
 
         hold("close", ending)
 

@@ -26,7 +26,8 @@ SPEC = json.loads((ROOT / "video" / "narration.json").read_text(encoding="utf-8"
 SEGMENTS = SPEC["segments"]
 
 #: The beats, in the order the capture holds them. Written out, not imported.
-EXPECTED_BEATS = ["hook", "surface", "trigger", "live", "sponsor", "evidence", "close"]
+EXPECTED_BEATS = ["hook", "surface", "trigger", "cloud", "live", "sponsor",
+                  "found", "letters", "gates", "evidence", "close"]
 
 #: The generator's own bounds: 20 to 800 characters per field, ids matching
 #: [a-z][a-z-]{1,24}, each beat 3 to 40 seconds of measured speech, and the
@@ -39,7 +40,11 @@ ID_PATTERN = re.compile(r"^[a-z][a-z-]{1,24}$")
 #: which is why this is deliberately wide.
 WORDS_PER_SECOND = 2.6
 BEAT_MIN_SECONDS, BEAT_MAX_SECONDS = 3, 40
-CUT_MIN_SECONDS, CUT_MAX_SECONDS = 90, 174
+#: Raised from 174 when the submission rules turned out to ask for about four
+#: minutes and to REQUIRE the video demonstrate the backend running on Google
+#: Cloud. The old ceiling was an editorial choice made before anyone had read
+#: them; four beats were added to meet the requirement rather than to fill time.
+CUT_MIN_SECONDS, CUT_MAX_SECONDS = 90, 250
 
 
 def test_the_beats_are_the_ones_the_capture_holds():
