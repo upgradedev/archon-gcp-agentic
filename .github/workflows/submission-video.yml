@@ -133,6 +133,15 @@ jobs:
             echo "::error::live release '${RELEASE}' is not '${ARCHON_RELEASE_SHA:0:7}'; deploy first, then record"; exit 1; }
           test "${CLOSE_PATH}" = "adk-agent" || {
             echo "::error::live close_path is '${CLOSE_PATH}', and the narration names the agent"; exit 1; }
+
+          # Release coherence. The page can serve one build while showing a
+          # close an EARLIER build produced, and a video that films that is a
+          # video of two releases claiming to be one. Refuse rather than record.
+          PRODUCER="$(curl -sf "${ARCHON_APP_URL}api/close/2026-07"             | python3 -c 'import json,sys; print((json.load(sys.stdin).get("source") or {}).get("release") or "")')"
+          test "${PRODUCER}" = "${RELEASE}" || {
+            echo "::error::the stored close was produced by '${PRODUCER}' and this page serves '${RELEASE}'."
+            echo "::error::Trigger a close on this release before recording."
+            exit 1; }
           # Buffered, not piped: `grep -q` closes the pipe on first match,
           # curl takes SIGPIPE (exit 23) and pipefail fails a preflight whose
           # every check had already passed. Same trap family as the CI tee.

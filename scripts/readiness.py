@@ -61,14 +61,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import socket
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Anchored to this file, never to the working directory, so the gate behaves the
@@ -202,6 +201,11 @@ CRITERIA = [
              "Public video URL recorded in the README",
              lambda: file_contains("README.md",
                                    r"https://(www\.)?youtu(\.be|be\.com)/\S+")),
+            ("dlv-release-coherent",
+             "The stored close was produced by the release now serving",
+             # Called lazily: this list is built at import time and the probe
+             # is defined below it with the other network helpers.
+             lambda: release_is_coherent()),
             ("dlv-form-submitted",
              "Entry form flipped to Submitted",
              lambda: gated("Open the Devpost form, confirm it reads Submitted, "
@@ -418,6 +422,39 @@ def gated(manual_step):
 # --------------------------------------------------------------------------
 # The live probe. This is the part the anti-pattern gate did not have.
 # --------------------------------------------------------------------------
+def release_is_coherent():
+    """The release serving the page and the release that produced the close.
+
+    Both facts are true on their own and the pair is not: deploy twice without
+    re-running the month and the page credits the new build with a close the
+    old one made. A judge reading the provenance card is entitled to assume the
+    release serving them produced the month in front of them.
+
+    Compares two fetched values rather than a constant, because the script runs
+    outside the container and its own `ARCHON_RELEASE` says nothing about what
+    is deployed.
+    """
+    import json as _json
+    import urllib.request as _req
+
+    def _get(path):
+        with _req.urlopen(DEMO_URL + path, timeout=20) as r:
+            return _json.loads(r.read().decode("utf-8"))
+
+    try:
+        serving = _get("api/health").get("release") or ""
+        produced = ((_get("api/close/2026-07").get("source") or {}).get("release") or "")
+    except Exception as exc:                                  # noqa: BLE001
+        return FAIL, "could not read both releases: %r" % (exc,)
+
+    if not serving or not produced:
+        return FAIL, "serving=%r produced=%r" % (serving, produced)
+    if serving != produced:
+        return FAIL, ("the page serves %s and the stored close was produced by %s; "
+                      "trigger a close on this release" % (serving, produced))
+    return PASS, "close and deployment are both %s" % serving
+
+
 def probe(url, expect_status=200, expect_text=None, attempts=3,
           retry_seconds=10, timeout=20):
     """Fetch a URL. Return (ok, evidence).
@@ -444,7 +481,7 @@ def probe(url, expect_status=200, expect_text=None, attempts=3,
         except urllib.error.HTTPError as e:
             last = "HTTP %d" % e.code
             status, final, body = e.code, url, ""
-        except (urllib.error.URLError, socket.timeout, OSError) as e:
+        except (TimeoutError, urllib.error.URLError, OSError) as e:
             reason = getattr(e, "reason", e)
             last = "unreachable (%s: %s)" % (type(e).__name__, reason)
             if attempt < attempts:
@@ -773,7 +810,7 @@ def main(argv=None):
         print(BAR)
 
     report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "project": PROJECT,
         "threshold_pct": THRESHOLD,
         "weighted_completeness_pct": round(pct, 2),

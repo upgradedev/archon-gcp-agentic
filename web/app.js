@@ -310,10 +310,26 @@ function renderOrigin(d) {
   if (health) {
     rows.push(["This deployment", `${health.close_path} close path · model ` +
       `${health.model || "none configured"}`]);
-    if (health.release || health.revision) rows.push(["Build",
-      `${health.release ? "commit " + health.release : ""}` +
-      `${health.release && health.revision ? " · " : ""}` +
-      `${health.revision || ""}`]);
+    // Two builds, and they are not always the same one.
+    //
+    // This card answers "where did this close come from" and the row under it
+    // showed the release SERVING the page. Deploy twice without re-running the
+    // month and it quietly credited the new build with a close the old one
+    // produced -- on the one card whose whole job is provenance.
+    //
+    // The producer comes off the close itself; the viewer comes off health.
+    // They are labelled apart, and when they differ the card says so rather
+    // than picking one.
+    const producer = (d.source && d.source.release) || null;
+    if (producer) rows.push(["Close produced by", `release ${producer}`]);
+    if (health.release || health.revision) {
+      rows.push(["Viewed through", `deployment ${health.release || "unknown"}` +
+        `${health.revision ? " · " + health.revision : ""}`]);
+    }
+    if (producer && health.release && producer !== health.release) {
+      rows.push(["Note", "this close was produced by an earlier release than the " +
+        "one serving this page"]);
+    }
   }
   rows.push(["Run", `${d.run_id} · ${title(d.outcome)}`]);
   $("origin").innerHTML = rows.map(([k, v]) =>
