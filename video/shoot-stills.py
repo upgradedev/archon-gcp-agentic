@@ -63,6 +63,14 @@ def main() -> int:
         page.screenshot(path=str(out / "00-architecture.png"))
         print("00-architecture.png")
 
+        # 2b. And the infrastructure half of it: not what the system does, but
+        #     who is allowed to do it. Every role on it is read off main.tf.
+        page.set_viewport_size({"width": 1920, "height": 920})
+        page.goto((HERE / "infra.html").as_uri(), wait_until="networkidle")
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(out / "00-infrastructure.png"))
+        print("00-infrastructure.png")
+
         # 3. The opening slides, held long enough for their choreography to land.
         page.set_viewport_size(WIDE)
         page.goto((HERE / "deck.html").as_uri(), wait_until="networkidle")
