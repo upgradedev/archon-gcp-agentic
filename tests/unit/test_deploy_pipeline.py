@@ -392,3 +392,37 @@ def test_google_adk_is_a_production_dependency_and_not_an_optional_one():
         "CI no longer fails when the ADK tests skip, which is the only thing "
         "that turns a missing framework from quiet into red"
     )
+
+
+def test_no_shell_step_carries_a_literal_backslash_n():
+    """A shell step held the two characters backslash and n, not a line break.
+
+    `infra/cloudbuild.yaml` wrote `terraform init -input=false \n  -backend-config=...`
+    on one line. A shell does not read that as a continuation: it passes \n as an
+    argument, so the lifecycle command this repository points at as its
+    deploy-and-teardown proof could never have run.
+
+    The guard that should have caught it replaced a real continuation --
+    backslash followed by an actual newline -- before splitting, which can
+    never match the literal pair. It was checking for the thing that works.
+    """
+    # Plain string search. A regex for this needs four levels of escaping to
+    # express two characters, and the last attempt at it silently matched
+    # nothing while reporting green -- the same failure as the guard it
+    # replaces.
+    literal = chr(92) + "n"
+    offenders = []
+    for path in ("infra/cloudbuild.yaml", ".github/workflows/deploy.yml",
+                 ".github/workflows/ci.yml", ".github/workflows/submission-video.yml"):
+        target = ROOT / path
+        if not target.exists():
+            continue
+        for number, line in enumerate(target.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            if literal in line:
+                offenders.append(f"{path}:{number}: {line.strip()[:90]}")
+
+    assert not offenders, (
+        "a shell step carries a literal backslash-n, which the shell passes as an "
+        "argument: " + " | ".join(offenders))

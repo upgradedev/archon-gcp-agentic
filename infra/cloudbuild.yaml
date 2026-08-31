@@ -111,7 +111,9 @@ steps:
         IMAGE="$$(cat /workspace/image.txt)"
         VARS="-var project_id=${_TF_PROJECT} -var region=${_REGION} -var image=$$IMAGE"
 
-        terraform init -input=false \n          -backend-config="bucket=${_TF_PROJECT}-tfstate" \n          -backend-config="prefix=${_SERVICE}"
+        terraform init -input=false \
+          -backend-config="bucket=${_TF_PROJECT}-tfstate" \
+          -backend-config="prefix=${_SERVICE}"
 
         case "${_ACTION}" in
           plan)
