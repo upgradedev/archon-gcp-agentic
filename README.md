@@ -61,12 +61,12 @@ year of paperwork.
 Built for [All Things Agentic](https://allthingsagentichackathon.devpost.com/), track **The Taskmaster**.
 
 - **Live demo**: [https://archon-70489367760.us-central1.run.app/](https://archon-70489367760.us-central1.run.app/). No account, no install, one button. **Guided tour** in the top bar walks the eight beats of the month in order, for anyone arriving without us beside them.
-- **Demo video**: recorded by CI against the deployed release, gated on the
-  live service reporting that exact release and the `adk-agent` close path
-  before a frame was taken, and bound to the green CI and Security runs for
-  the same commit. It is a build artifact -- 1080p, eleven scenes, sha256 in a
-  receipt checked against the file -- and has **no public URL yet**; the
-  submission link is the owner's to add.
+- **Demo video**: <https://youtu.be/oCA59SgunwY>. Recorded by CI against the
+  deployed release, gated on the live service reporting that exact release and
+  the `adk-agent` close path before a frame was taken, and bound to the green
+  CI and Security runs for the same commit. It is a build artifact rather than
+  a screen recording: 1080p, thirteen scenes, 3:53, sha256 in a receipt checked
+  against the file.
 - **Try it on your own month**: **Your own month** in the top bar takes your
   `.txt` documents, closes them in memory and keeps nothing. No account, no
   upload to storage, no model call -- the text is yours, so it never leaves for
