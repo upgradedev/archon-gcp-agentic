@@ -251,21 +251,30 @@ def main() -> int:
             figures I typed. If the deployment says something else, the slide
             says something else.
             """
+            # The shares below leave roughly a fifth of the beat unspent, which
+            # is what the three navigations in it cost. Overrunning a beat does
+            # not lose a frame, it slides every later beat out of step with the
+            # voice, so the budget is deliberately not fully allocated.
             budget = holds["cloud"]
             page.goto(app_url + "api/health", wait_until="networkidle", timeout=30_000)
             health = page.evaluate("() => JSON.parse(document.body.innerText)")
-            page.wait_for_timeout(budget * 0.22 * 1000)
+            page.wait_for_timeout(budget * (0.12 if console_stills else 0.22) * 1000)
 
             page.goto(DECK_URL, wait_until="networkidle", timeout=30_000)
             page.wait_for_function("() => !!window.archonDeck", timeout=15_000)
             page.evaluate("(h) => window.archonDeck.health(h)", health)
             page.evaluate("() => window.archonDeck.show(3)")
-            page.wait_for_timeout(budget * (0.34 if console_stills else 0.58) * 1000)
+            page.wait_for_timeout(budget * (0.28 if console_stills else 0.58) * 1000)
 
             # Then the console, if it was supplied, sharing the same budget so
             # adding stills costs the cut nothing.
+            #
+            # A console screenshot is dense, and the first split gave each one
+            # 1.7 seconds, which is a blur rather than evidence. They get the
+            # largest share of the beat now, because they are the part of it a
+            # judge cannot get anywhere else.
             if console_stills:
-                each = budget * 0.24 / len(console_stills)
+                each = budget * 0.38 / len(console_stills)
                 for still in console_stills:
                     show_still(still, each)
 
