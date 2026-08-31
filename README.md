@@ -14,16 +14,16 @@ browser journey; Deploy asks a narrower question and passes.*
 
 > **Archon closes a haulier's month unattended: it splits one broker payment across the eight loads it settles and writes the letters chasing what leaked.**
 >
-> I build back-office software for finance teams. Archon is the month-end close for the firms it never reaches: an owner-operator trucking firm of six trucks, whose owner does the books at the kitchen table on Sunday night and cannot afford the bookkeeper that software assumes.
+> I build back-office software for finance teams. Archon is the month-end close for the firms it never reaches: an owner-operator trucking firm of three trucks, whose owner does the books at the kitchen table on Sunday night and cannot afford the bookkeeper that software assumes.
 >
 > Owner-operator trucking firms live on a margin of about twenty cents a mile. A broker pays once a fortnight, one credit covering eight loads, minus a fee charged on the whole batch. So a load paid short is invisible: the bank shows one number and the books need eight. The owner opens a closed month with the letters already written instead of a shoebox they will get to in April.
 
 
 **The number, and what it beats.** On the same 27 documents, three reconciliation
 methods a haulier's books actually get recover **0.00** of a 200.00 short payment.
-Archon recovers it.
+Archon finds it.
 
-| method | what it finds | recovers |
+| method | what it finds | identifies as recoverable |
 |---|---|---|
 | Match the bank credit to an invoice | 0 of 9 loads | 0.00 |
 | Credit plus the fee against the advice total | **residual 0.00** | 0.00 |
@@ -36,7 +36,8 @@ hand comes back clean while the money is gone. The 200.00 was an accessorial the
 advice quietly dropped, and the batch still ties. The third row is worse than
 nothing: it raises one flag, on the load the broker OVERPAID.
 
-Archon recovers that 200.00 and 412.85 more from a duplicate charge, 612.85 on
+Archon identifies that 200.00 as recoverable, and 412.85 more from a duplicate
+charge, 612.85 on
 the month. One synthetic month, n=1; the methods above are arithmetic, not
 products. Reproduce it:
 
@@ -299,15 +300,19 @@ A month of mail lands in a bucket. Nobody is watching. Archon then:
 
 Nobody is asked anything at any point. The one thing a person does is approve
 the letters that would leave for a third party. On this deployment that
-approval is a SANDBOX: the page records who decided and when, and nothing is
-sent, because no delivery channel is configured in any file under `infra/` and
-the deliverer the public routes are handed has no code path that sends. A
-configured deployment is where the approval would actually release a letter.
+approval control is a DEMONSTRATION and nothing more. It calls no endpoint,
+stores no decision, and sends no letter: there is no approval API in this
+service and no counterparty delivery anywhere in this submission. Archon drafts
+the letters and files them. Production approval and delivery are out of scope,
+and the SMTP seam that does exist carries the owner's own digest, never a
+message to a broker.
 
 **The trigger**: an object landing in the Cloud Storage bucket. The bucket
 notifies a Pub/Sub topic, and its push subscription calls the service with an
 OIDC token. Nobody presses anything.
-**The surface**: the owner's own inbox, which they already open.
+**The surface**: the owner's close package, composed and filed. Inbox delivery
+exists only as an optional configured owner-digest seam and is NOT wired in the
+shipped deployment, which files the digest and says so on the receipt.
 **What it replaces**: the shoebox, and the bookkeeper who reconciles it in April.
 
 ## Why a haulier's month is hard
@@ -474,7 +479,9 @@ a tenth that the test it pointed at asserts must stay absent.
 | Unreadable document | A cab-phone scan with no text layer, left unposted rather than estimated |
 | Unrecognised document | An artifact that read perfectly and matched no family, so nothing was posted from it. Blocks the month at G6 rather than drafting a letter: the remedy is a parser, not a dispute |
 
-Every threshold is learned from the firm's own books. A charge is an outlier
+The BASELINES are learned from the firm's own books; the windows, multipliers,
+minimum history and tolerances around them are fixed policy in the code. A
+charge is an outlier
 because it is far above what **this** firm normally pays **that** supplier, not
 because it crossed a figure somebody wrote down. That is what lets Archon work
 on a firm's first month, before anyone has configured it.

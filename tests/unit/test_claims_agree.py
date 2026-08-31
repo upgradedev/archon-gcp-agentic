@@ -776,7 +776,7 @@ def test_the_readme_counts_the_terraform_it_points_at():
 #: The framing gate's J1: who this is for, said the same way everywhere.
 PERSONA_MARKS = (
     "back-office software for finance teams",
-    "six trucks",
+    "three trucks",
     "kitchen table",
 )
 
@@ -816,7 +816,7 @@ def test_the_persona_does_not_invent_a_customer():
     beside the persona.
     """
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    hero = readme[readme.index("six trucks") - 400:readme.index("six trucks") + 400]
+    hero = readme[readme.index("three trucks") - 400:readme.index("three trucks") + 400]
 
     for invented in ("named ", "a customer called", "told us", "says the owner"):
         assert invented not in hero.lower(), (

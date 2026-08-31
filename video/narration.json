@@ -12,8 +12,8 @@
   "segments": [
     {
       "id": "hook",
-      "captionText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of six trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight.",
-      "speechText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of six trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight."
+      "captionText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of three trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight.",
+      "speechText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of three trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight."
     },
     {
       "id": "surface",
@@ -47,8 +47,8 @@
     },
     {
       "id": "letters",
-      "captionText": "The letters are written and filed, and not one of them is sent. No delivery channel is configured, the approval records who decided and when, and the deliverer these routes are handed has no code path that sends. The one place a person is needed is deliberately the last one.",
-      "speechText": "The letters are written and filed, and not one of them is sent. No delivery channel is configured, the approval records who decided and when, and the deliverer these routes are handed has no code path that sends. The one place a person is needed is deliberately the last one."
+      "captionText": "The letters are written and filed, and not one of them is sent. There is no approval endpoint and no counterparty delivery in this submission: the control on the page is a demonstration, and production approval is out of scope. The one place a person is needed is deliberately the last one.",
+      "speechText": "The letters are written and filed, and not one of them is sent. There is no approval endpoint and no counterparty delivery in this submission: the control on the page is a demonstration, and production approval is out of scope. The one place a person is needed is deliberately the last one."
     },
     {
       "id": "gates",

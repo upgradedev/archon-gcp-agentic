@@ -606,7 +606,7 @@ function decideDraft(index, decision) {
   audit.textContent =
     `${new Date().toISOString()} · ${approved ? "approved" : "rejected"} by sandbox visitor · `
     + (approved
-        ? "a configured deployment would deliver here, exactly once, and record the receipt"
+        ? "nothing was sent and nothing was recorded: this control is a demonstration"
         : "no letter leaves, and the exception stays open for the owner")
     + " · nothing was sent and this decision is not kept";
 }

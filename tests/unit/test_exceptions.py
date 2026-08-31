@@ -405,9 +405,20 @@ def test_the_counts_this_repository_states_in_prose_match_the_code():
     # right word in the heading above it. It said nine and listed nine while
     # the code ran ten, so the heading and the table agreed with each other and
     # not with the product.
-    table = (root / "README.md").read_text(encoding="utf-8")
-    table = table.split("things it looks for")[1].split("Every threshold")[0]
-    rows = [ln for ln in table.splitlines() if ln.startswith("| ") and "---" not in ln]
+    # Anchored to STRUCTURE, not to the sentence that follows the table.
+    #
+    # This split on the literal "Every threshold", so rewording that paragraph
+    # made the split run off the end of the file and the test reported sixty-five
+    # detectors. A guard that breaks when unrelated prose is edited teaches
+    # people to edit the guard.
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    after = readme.split("things it looks for")[1]
+    rows = []
+    for line in after.splitlines():
+        if line.startswith("| ") and "---" not in line:
+            rows.append(line)
+        elif rows and not line.startswith("|"):
+            break  # the table ended
     assert len(rows) - 1 == len(detectors), (
         f"the README lists {len(rows) - 1} detectors in its table and the code "
         f"has {len(detectors)}"
