@@ -2,9 +2,9 @@ MIDWEST FREIGHT EXCHANGE
 REMITTANCE ADVICE
 
 Document Type: Broker Remittance
-Remittance Number: MFX-RA-4390
+Remittance Number: TFX-RA-4390
 Date: 2026-06-25
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Loads Settled: 5
 Factoring Fee: 366.60
 Amount Credited: 11,853.40

@@ -4,7 +4,7 @@ INVOICE
 Document Type: Toll Invoice
 Invoice Number: TOLL-88104
 Date: 2026-06-12
-Supplier: E-Z Pass Mid-Atlantic
+Supplier: Marlowe Tolling Authority
 Net Amount: 392.80
 Tax: 31.42
 Total: 424.22

@@ -431,8 +431,8 @@ def test_a_renamed_copy_never_displaces_the_document_it_was_copied_from():
 
     Content-hash dedupe keeps the first object read and folds the rest away.
     Plain alphabetical order decided that, and `-` sorts before `.`, so
-    `remittance-MFX-RA-4417-redelivery-3.txt` beat
-    `remittance-MFX-RA-4417.txt`. The live manifest then reported the month's
+    `remittance-TFX-RA-4417-redelivery-3.txt` beat
+    `remittance-TFX-RA-4417.txt`. The live manifest then reported the month's
     actual remittance as a duplicate of an experimental copy of itself, which
     reads to anyone inspecting provenance as though the real document was
     ignored.

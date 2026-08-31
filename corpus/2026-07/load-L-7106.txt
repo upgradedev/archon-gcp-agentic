@@ -4,7 +4,7 @@ RATE CONFIRMATION
 Document Type: Load Confirmation
 Load Number: L-7106
 Date: 2026-07-16
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Carrier Unit: T-103
 Origin: Omaha NE
 Destination: Salt Lake City UT

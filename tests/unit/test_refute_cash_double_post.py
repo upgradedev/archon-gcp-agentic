@@ -11,7 +11,7 @@ Two scenarios, both from text:
 
     * `test_bundled_month_*` takes the shipped `corpus/2026-07/` month exactly
       as it is and adds ONE more line of the same bank statement: the deposit
-      for remittance MFX-RA-4417, which the remittance advice says landed on
+      for remittance TFX-RA-4417, which the remittance advice says landed on
       2026-07-24 at 18,667.65. Nothing else changes.
     * `test_minimal_month_*` writes a three-document month from scratch, so the
       arithmetic is small enough to read.
@@ -39,7 +39,7 @@ from archon.runtime.mailbox import CORPUS_ROOT, read_period
 
 PERIOD = "2026-07"
 
-#: The deposit half of remittance MFX-RA-4417, exactly as the bank prints it.
+#: The deposit half of remittance TFX-RA-4417, exactly as the bank prints it.
 #: Same layout as every bank line already in `corpus/2026-07/`, only the
 #: direction differs. The amount is the "Amount Credited" the broker's own
 #: advice states.
@@ -50,8 +50,8 @@ Document Type: Bank Transaction
 Date: 2026-07-24
 Direction: in
 Amount: 18,667.65
-Reference: MFX-RA-4417
-Description: Midwest Freight Exchange
+Reference: TFX-RA-4417
+Description: Thackery Freight Exchange
 """
 
 REMITTED = 18_667.65
@@ -103,14 +103,14 @@ def minimal(tmp_path) -> Path:
     (period / "load-L-1.txt").write_text(
         "MIDWEST FREIGHT EXCHANGE\nLOAD CONFIRMATION\n\n"
         "Document Type: Load Confirmation\n"
-        "Date: 2026-07-10\nLoad Number: L-1\nBroker: Midwest Freight Exchange\n"
+        "Date: 2026-07-10\nLoad Number: L-1\nBroker: Thackery Freight Exchange\n"
         "Unit: T-1\nMiles: 1000\nLinehaul Rate: 100.00\nAccessorial: 0.00\n"
         "Total: 100.00\n", encoding="utf-8")
     (period / "remittance-RM-1.txt").write_text(
         "MIDWEST FREIGHT EXCHANGE\nREMITTANCE ADVICE\n\n"
         "Document Type: Broker Remittance\n"
         "Remittance Number: RM-1\nDate: 2026-07-24\n"
-        "Broker: Midwest Freight Exchange\nLoads Settled: 1\n"
+        "Broker: Thackery Freight Exchange\nLoads Settled: 1\n"
         "Factoring Fee: 0.00\nAmount Credited: 100.00\n\n"
         "LOAD LINES\nLoad L-1  Gross 100.00  Deduction 0.00  Reason -\n",
         encoding="utf-8")
@@ -118,7 +118,7 @@ def minimal(tmp_path) -> Path:
         "FIRST PLAINS BANK\nACCOUNT ACTIVITY\n\n"
         "Document Type: Bank Transaction\n"
         "Date: 2026-07-24\nDirection: in\nAmount: 100.00\n"
-        "Reference: RM-1\nDescription: Midwest Freight Exchange\n", encoding="utf-8")
+        "Reference: RM-1\nDescription: Thackery Freight Exchange\n", encoding="utf-8")
     return root
 
 
@@ -139,7 +139,7 @@ def test_the_deposit_line_parses_into_the_document_the_ledger_acts_on():
     assert doc.doc_type is DocType.BANK_TRANSACTION
     assert doc.direction == "in"
     assert doc.net_amount == REMITTED
-    assert doc.reference == "MFX-RA-4417"
+    assert doc.reference == "TFX-RA-4417"
 
 
 # ── the bundled month, plus the one line the bank statement really carries ───
@@ -213,10 +213,10 @@ def test_bundled_month_passes_its_gates_without_double_counting(bundled):
             if e.source_doc == "bank-2026-07-24-7.txt"]
     assert len(seen) == 1, [e.memo for e in seen]
     assert seen[0].lines == [], seen[0].lines
-    # "MFX-RA-4417" alone would prove nothing: the old memo was "Receipt
-    # MFX-RA-4417" and carried the reference too. The refusal is the new half.
+    # "TFX-RA-4417" alone would prove nothing: the old memo was "Receipt
+    # TFX-RA-4417" and carried the reference too. The refusal is the new half.
     assert "not posted again" in seen[0].memo, seen[0].memo
-    assert "MFX-RA-4417" in seen[0].memo, seen[0].memo
+    assert "TFX-RA-4417" in seen[0].memo, seen[0].memo
 
     # The one that could not have passed before: G3 reports the identical
     # movement with and without the deposit, which it can only do by leaving

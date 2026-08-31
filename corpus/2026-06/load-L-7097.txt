@@ -4,7 +4,7 @@ RATE CONFIRMATION
 Document Type: Load Confirmation
 Load Number: L-7097
 Date: 2026-06-14
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Carrier Unit: T-101
 Origin: Indianapolis IN
 Destination: Louisville KY

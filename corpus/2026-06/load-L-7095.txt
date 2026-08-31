@@ -4,7 +4,7 @@ RATE CONFIRMATION
 Document Type: Load Confirmation
 Load Number: L-7095
 Date: 2026-06-06
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Carrier Unit: T-102
 Origin: Dallas TX
 Destination: Little Rock AR

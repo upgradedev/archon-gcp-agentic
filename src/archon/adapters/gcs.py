@@ -106,8 +106,8 @@ def read_gcs_period(bucket_name: str, period: str, client=None,
     # decides which name the trail points at.
     #
     # Plain alphabetical picked whichever sorted first, and `-` sorts before
-    # `.`, so `remittance-MFX-RA-4417-redelivery-3.txt` beat
-    # `remittance-MFX-RA-4417.txt` and the manifest reported the month's actual
+    # `.`, so `remittance-TFX-RA-4417-redelivery-3.txt` beat
+    # `remittance-TFX-RA-4417.txt` and the manifest reported the month's actual
     # remittance as a duplicate of an experimental copy of itself. A copy is
     # named after its original and is therefore longer: keeping the shorter
     # name keeps the canonical one, and it needs no knowledge of which object

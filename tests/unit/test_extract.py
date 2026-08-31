@@ -10,7 +10,7 @@ RATE CONFIRMATION
 Document Type: Load Confirmation
 Load Number: L-7101
 Date: 2026-07-02
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Carrier Unit: T-101
 Miles: 1180
 Linehaul Rate: 2,450.00
@@ -19,9 +19,9 @@ Total Payable: 2,600.00
 """
 
 REMITTANCE = """Document Type: Broker Remittance
-Remittance Number: MFX-RA-4417
+Remittance Number: TFX-RA-4417
 Date: 2026-07-24
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Factoring Fee: 577.35
 Amount Credited: 18,667.65
 
@@ -43,7 +43,7 @@ FUEL LINES
 TOLL = """Document Type: Toll Invoice
 Invoice Number: TOLL-88231
 Date: 2026-06-28
-Supplier: E-Z Pass Mid-Atlantic
+Supplier: Marlowe Tolling Authority
 Net Amount: 412.60
 Tax: 33.01
 Total: 445.61
@@ -98,7 +98,7 @@ def test_a_load_confirmation_carries_its_rate_miles_and_unit():
     assert doc.gross_amount == 2600.0
     assert doc.miles == 1180.0
     assert doc.truck == "T-101"
-    assert doc.broker == "Midwest Freight Exchange"
+    assert doc.broker == "Thackery Freight Exchange"
 
 
 def test_a_remittance_carries_every_load_line_with_its_reason():
@@ -131,7 +131,7 @@ def test_an_expense_invoice_carries_net_tax_and_gross():
     doc = extract_document(TOLL, "toll.txt", "2026-07")
 
     assert (doc.net_amount, doc.tax_amount, doc.gross_amount) == (412.60, 33.01, 445.61)
-    assert doc.counterparty == "E-Z Pass Mid-Atlantic"
+    assert doc.counterparty == "Marlowe Tolling Authority"
     assert doc.date == "2026-06-28"
 
 

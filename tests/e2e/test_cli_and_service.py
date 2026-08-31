@@ -111,7 +111,7 @@ def test_an_object_landing_in_the_bucket_closes_the_month(client):
     import base64
 
     data = base64.b64encode(
-        json.dumps({"name": "mail/2026-07/remittance-MFX-RA-4417.txt"}).encode()
+        json.dumps({"name": "mail/2026-07/remittance-TFX-RA-4417.txt"}).encode()
     ).decode()
 
     body = client.post("/events", json={"message": {"data": data}}).json()

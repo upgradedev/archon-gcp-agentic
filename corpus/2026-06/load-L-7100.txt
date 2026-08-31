@@ -4,7 +4,7 @@ RATE CONFIRMATION
 Document Type: Load Confirmation
 Load Number: L-7100
 Date: 2026-06-26
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Carrier Unit: T-101
 Origin: Louisville KY
 Destination: Kansas City MO

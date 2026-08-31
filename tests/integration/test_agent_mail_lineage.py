@@ -97,7 +97,7 @@ def test_no_bundled_filename_reaches_the_persisted_record(corpus_is_off_limits):
     names = {step_name for step_name in (stored.get("journal") or {}).get("steps", [])
              if isinstance(step_name, str)}
     text = str(stored)
-    for bundled in ("L-7101", "MFX-RA-4417", "fuelcard"):
+    for bundled in ("L-7101", "TFX-RA-4417", "fuelcard"):
         assert bundled not in text, (
             f"bundled artifact {bundled} leaked into a close of injected mail"
         )

@@ -64,7 +64,7 @@ def matching_remittance(bank_line: Document, documents: list[Document],
     The defect this closes: a broker remittance posted Dr Bank / Cr AR, and the
     inbound bank line it produced posted Dr Bank / Cr AR again. Two entries,
     one movement of money. On the shipped July corpus, adding the deposit line
-    for MFX-RA-4417 in the same format as the six bank files already in that
+    for TFX-RA-4417 in the same format as the six bank files already in that
     directory took cash in from 18,667.65 to 37,335.30 and receivables to
     -14,907.65, and the close reported 6/6 gates passed with ten findings, the
     same ten as before.

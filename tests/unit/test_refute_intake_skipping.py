@@ -65,7 +65,7 @@ PERIOD = "2026-07"
 BUCKET = "bell-ridge-mail"
 
 LOAD_OBJ = "load-L-9001.txt"
-REMIT_OBJ = "remittance-MFX-RA-9001.txt"
+REMIT_OBJ = "remittance-TFX-RA-9001.txt"
 BANK_OBJ = "bank-2026-07-24.txt"
 
 
@@ -77,7 +77,7 @@ RATE CONFIRMATION
 Document Type: Load Confirmation
 Load Number: L-9001
 Date: 2026-07-10
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Carrier Unit: T-1
 Miles: 500
 Linehaul Rate: 1,000.00
@@ -90,9 +90,9 @@ REMITTANCE = """MIDWEST FREIGHT EXCHANGE
 REMITTANCE ADVICE
 
 Document Type: Broker Remittance
-Remittance Number: MFX-RA-9001
+Remittance Number: TFX-RA-9001
 Date: 2026-07-24
-Broker: Midwest Freight Exchange
+Broker: Thackery Freight Exchange
 Loads Settled: 1
 Factoring Fee: 30.00
 Amount Credited: 970.00
@@ -440,7 +440,7 @@ def test_the_dropped_remittance_parses_perfectly_once_it_is_utf8():
     assert manifest["skipped"] == []
     assert len(docs) == 1
     assert docs[0].doc_type is DocType.BROKER_REMITTANCE
-    assert docs[0].document_number == "MFX-RA-9001"
+    assert docs[0].document_number == "TFX-RA-9001"
     assert docs[0].remittance_total == 970.0
     assert docs[0].factoring_fee == 30.0
     assert [line.load_ref for line in docs[0].lines] == ["L-9001"]

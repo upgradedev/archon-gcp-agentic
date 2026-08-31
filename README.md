@@ -418,44 +418,97 @@ on a firm's first month, before anyone has configured it.
 
 ## Architecture
 
-Two diagrams. The first is what runs where. The second is the one that matters:
-what the agent does between a file landing and the owner reading about it.
+Three diagrams, one per question a reader actually has.
+
+**What runs where** -- the infrastructure a judge can open the console and
+check:
+
+```mermaid
+flowchart LR
+    subgraph gcp["Google Cloud · project upgradegr-archon-agentic · us-central1"]
+        direction LR
+        gcs[("Cloud Storage<br/><b>archon-mail</b><br/>uniform access, no public read")]
+        topic["Pub/Sub topic<br/><b>archon-mail</b>"]
+        sub["Push subscription<br/>OIDC token, one audience"]
+        subgraph run["Cloud Run · scale to zero · max 3 instances"]
+            svc["<b>archon</b><br/>revision pinned to the commit SHA<br/>600s request deadline"]
+        end
+        fs[("Firestore Native<br/>runs · closes · drafts · documents")]
+        vertex["Vertex AI · Gemini<br/>the only model call"]
+        sa1(["SA archon-runtime<br/>objectViewer + datastore.user"]):::idsty
+        sa2(["SA archon-pusher<br/>mints the OIDC token"]):::idsty
+    end
+    judge(["a judge, no account"]) -->|HTTPS| svc
+
+    gcs -->|OBJECT_FINALIZE| topic --> sub -->|POST /events<br/>403 without a valid token| svc
+    svc -->|reads the month's bytes| gcs
+    svc <-->|persists the trail| fs
+    svc -.->|fact sheet only| vertex
+    sa1 -. binds .- svc
+    sa2 -. binds .- sub
+
+    classDef idsty fill:#1a1430,stroke:#a855f7,color:#efe9ff,font-size:11px
+    classDef store fill:#101a2e,stroke:#38bdf8,color:#e8f4ff
+    class gcs,fs store
+```
+
+Everything above is Terraform in [`infra/main.tf`](infra/main.tf) -- seventeen
+resources, one state file, no resource created by a pipeline step. Nothing is
+public except the page: `POST /events` answers 403 to anything without an OIDC
+token minted for this service's own audience, and the bucket has no public
+read. Both cost nothing between months, which is the shape of a business that
+closes its books twelve times a year.
+
+**The application, and the line the whole design defends:**
 
 ```mermaid
 flowchart TB
-    subgraph gcp["Google Cloud"]
-        gcs[("Cloud Storage<br/>a month's documents land here")]
-        ea["Bucket notification<br/>OBJECT_FINALIZE"]
-        ps["Pub/Sub push"]
-        subgraph run["Cloud Run"]
-            svc["archon.adapters.service<br/>POST /events · POST /api/close · GET /"]
-            agent["Google ADK Agent<br/>seven tools, one per step"]
-        end
-        fs[("Firestore<br/>runs · closes · drafts · documents")]
-        gem["Gemini<br/>reads documents, writes English"]
+    subgraph ad["adapters · everything that touches the world"]
+        svc["service<br/>FastAPI routes"]
+        agents["agents<br/>Google ADK<br/>seven tools, one per step"]
+        store["store<br/>Firestore or in-memory"]
+        gcsad["gcs<br/>reads the bucket"]
+        deliv["delivery<br/>SMTP or sandbox"]
     end
-    owner(["the owner's close package,<br/>composed and filed"])
-
-    gcs -->|object finalize| ea --> ps -->|nobody pressed anything| svc
-    svc --> agent
-    agent --> core
-    subgraph core["archon.domain · pure, no SDK, no network"]
+    subgraph rt["runtime · orchestration, still no SDK"]
+        close["close<br/>the eleven steps"]
+        journal["journal<br/>the step trail"]
+        mailbox["mailbox<br/>the bundled corpus"]
+    end
+    subgraph dom["domain · pure Python. no ADK, no Firestore, no FastAPI, no network"]
+        direction LR
+        extract["extract<br/>bytes to Document"]
         ledger["ledger<br/>double-entry"]
         alloc["allocation<br/>one payment, many loads"]
         exc["exceptions<br/>ten detectors"]
         val["validation<br/>seven gates"]
-        draft["drafts<br/>corrective letters"]
+        policy["policy<br/>draft, escalate or note"]
+        drafts["drafts<br/>corrective letters"]
+        digest["digest<br/>the owner's letter"]
     end
-    core --> fs
-    agent -.->|fact sheet only,<br/>never a figure| gem
-    core -->|month-end digest| owner
+
+    svc --> close
+    agents --> close
+    close --> extract --> ledger --> alloc --> exc --> policy --> drafts --> val --> digest
+    close --> journal
+    close --> mailbox
+    close -.->|through an interface| store
+    close -.->|through an interface| deliv
+    gcsad --> close
 
     classDef pure fill:#141a2e,stroke:#6366f1,color:#e8ebf5
-    class ledger,alloc,exc,val,draft pure
+    class extract,ledger,alloc,exc,val,policy,drafts,digest pure
 ```
 
-The agent flow, from a file landing to the owner reading about it, and where
-the two outward edges sit:
+The arrows only ever point downward. `archon.domain` imports nothing from
+`adapters` or `runtime`, holds no credential and opens no socket, and a test
+asserts that by walking its imports. That is what makes every figure in this
+product reproducible on a laptop with no key: the arithmetic cannot reach the
+network, so it cannot depend on it.
+
+
+**And the flow** -- what the agent actually does between a file landing and the
+owner reading about it, and where the only two outward edges sit:
 
 ```mermaid
 sequenceDiagram
@@ -650,8 +703,15 @@ figures from CI, not from here.
 |---|---|---|
 | Tests, all offline | 759 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
-| Gates proven to fail | 5 of 5 | `python -m pytest tests/unit/test_validation.py -k fail` |
+| Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |
+
+There are seven gates and each one is broken on purpose somewhere and asserted
+red, which is why the command spans three files: G1 to G5 fail in
+`test_validation.py`, G6 in `test_gcs_ingestion.py` (an unaccounted artifact),
+and G7 in `test_refute_money_representation.py` (two currencies in one month).
+This row read "5 of 5" and named only the first file, which both undercounted
+the gates and pointed at a command that proved nothing about the last two.
 
 The suite is a pyramid and it is entirely offline: no key, no credential, no
 paid call.
