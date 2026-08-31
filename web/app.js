@@ -1035,7 +1035,12 @@ const TOUR = [
         "notified Pub/Sub, its push subscription woke a Cloud Run container, " +
         "and the close started itself. This panel names the exact objects it " +
         "read and the hash of each one.",
-    panel: "mailbox", focus: "#origin",
+    // #origin is the "Where this close came from" block, and it lives in
+    // panel-overview. Opening the mailbox panel hid it, so this stop rang an
+    // element nobody could see -- two of eight stops did, and a tour that
+    // highlights nothing is worse than no tour. The objects table is what the
+    // body describes and it is the one thing in this panel.
+    panel: "mailbox", focus: "#mailbox",
   },
   {
     title: (d) => hasClose(d)
@@ -1138,12 +1143,16 @@ const TOUR = [
   },
   {
     title: "Every figure ties back to bytes",
-    body: (d) => "The source hashes, the run id, the release that produced " +
-      "this close, and the " +
+    body: (d) => "The run id, the period, the outcome and the reason for it. " +
+      "Beside them the " +
       (hasClose(d) ? `${count(tourSteps(d).length)}-step trail` : "step-by-step trail") +
-      ". Books tie back to bytes, a build and a control flow, or they are " +
-      "trusted on faith.",
-    panel: "checks", focus: "#trail",
+      " you have just walked and the hash of every object it read. Books tie " +
+      "back to bytes, a build and a control flow, or they are trusted on faith.",
+    // Was focus "#trail", which lives in panel-runner and was therefore hidden
+    // the moment this stop opened the checks panel. The provenance card is in
+    // the panel the stop actually opens, and the body now describes what is in
+    // it rather than three things spread across three panels.
+    panel: "checks", focus: "#provenance",
   },
 ];
 

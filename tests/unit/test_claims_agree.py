@@ -950,3 +950,56 @@ def test_every_figure_the_narration_voices_is_still_in_the_close():
     # same burden.
     for spoken_as in ("eight loads", "412.85", "1,865"):
         assert spoken_as in captioned, f"the caption dropped {spoken_as!r}"
+
+
+def test_every_tour_stop_rings_something_the_stop_can_actually_see():
+    """Two of the eight stops highlighted an element on a hidden panel.
+
+    A stop names a `panel` to open and a `focus` to ring. Stop two opened the
+    mailbox panel and rang `#origin`, which lives in the overview panel; stop
+    eight opened checks and rang `#trail`, which lives in the runner panel.
+    `show()` sets every other panel to `display: none`, so both stops scrolled
+    to nothing and drew a highlight nobody could see -- a quarter of the tour,
+    on the one walkthrough a judge is most likely to press.
+
+    Found in a browser rather than by reading, so this is the offline version:
+    a focus target must live inside the panel its own stop opens, or in the
+    panel that is open when the stop runs.
+    """
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    html = (root / "web" / "index.html").read_text(encoding="utf-8")
+    app = (root / "web" / "app.js").read_text(encoding="utf-8")
+
+    # Which panel holds which id.
+    panel_of = {}
+    for match in re.finditer(r'<section[^>]*id="panel-([a-z]+)"', html):
+        name = match.group(1)
+        end = html.find("</section>", match.end())
+        for found in re.findall(r'id="([A-Za-z0-9_-]+)"', html[match.end():end]):
+            panel_of[found] = name
+
+    block = app[app.index("const TOUR = ["):app.index("\n];", app.index("const TOUR = ["))]
+
+    # Stops in order, each as the text between one `title:` and the next.
+    stops = re.split(r"\n  \{\n", block)[1:]
+    assert len(stops) == 8, f"expected eight stops, parsed {len(stops)}"
+
+    open_panel = "overview"          # what the page shows on arrival
+    problems = []
+    for index, stop in enumerate(stops, start=1):
+        panel = re.search(r'panel:\s*"([a-z]+)"', stop)
+        focus = re.search(r'focus:\s*"#([A-Za-z0-9_-]+)"', stop)
+        assert focus, f"stop {index} rings nothing"
+        if panel:
+            open_panel = panel.group(1)
+        lives_in = panel_of.get(focus.group(1))
+        if lives_in != open_panel:
+            problems.append(
+                f"stop {index} opens {open_panel!r} and rings #{focus.group(1)}, "
+                f"which is in {lives_in!r}"
+            )
+
+    assert not problems, "a tour stop highlights something hidden: " + "; ".join(problems)
