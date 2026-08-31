@@ -331,6 +331,28 @@ def _last_successful_close() -> dict:
     }
 
 
+def _served_from(request: Request) -> str:
+    """The address a caller actually reached, with the scheme they used.
+
+    `request.base_url` alone reports `http` on Cloud Run: TLS terminates at the
+    front end and the request arrives over plain HTTP, so the app's own view of
+    the scheme is the internal one. The service is only reachable over HTTPS
+    from outside, so reporting `http://` would put a URL on the submission
+    video that does not work.
+
+    `x-forwarded-proto` is what the front end sets to say what the caller used,
+    and it is trusted here for exactly one purpose -- a display string. Nothing
+    is authorised, routed or redirected on it.
+    """
+    base = str(request.base_url).rstrip("/")
+    forwarded = request.headers.get("x-forwarded-proto")
+    if forwarded:
+        scheme = forwarded.split(",")[0].strip()
+        if scheme in {"http", "https"}:
+            base = f"{scheme}://{base.split('://', 1)[-1]}"
+    return base
+
+
 @app.get("/api/health")
 def health(request: Request) -> dict:
     """Liveness, plus enough detail to tell which backend a deploy is using.
@@ -348,7 +370,7 @@ def health(request: Request) -> dict:
     configured = "adk-agent" if USE_AGENT else "deterministic"
     return {
         "status": "ok",
-        "served_from": str(request.base_url).rstrip("/"),
+        "served_from": _served_from(request),
         "version": __version__,
         "store": getattr(store, "backend", "unknown"),
         "gemini": USE_GEMINI,

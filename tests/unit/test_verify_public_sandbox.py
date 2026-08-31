@@ -689,4 +689,31 @@ def test_health_reports_the_host_that_answered():
     body = TestClient(app).get("/api/health").json()
 
     assert body["served_from"] == "http://testserver", body.get("served_from")
-    assert "served_from" in body and body["status"] == "ok"
+    assert body["status"] == "ok"
+
+
+def test_health_reports_the_scheme_the_caller_actually_used():
+    """`request.base_url` alone says `http` on Cloud Run.
+
+    TLS terminates at the front end and the request reaches the app over plain
+    HTTP, so the app's own view of the scheme is the internal one. The service
+    is reachable only over HTTPS from outside, and this string goes on the
+    submission video, so reporting `http://` would put a URL on film that does
+    not work.
+
+    The forwarded header is trusted for a display string and nothing else --
+    no routing, no redirect, no authorisation reads it -- and a value that is
+    not a scheme is ignored rather than echoed.
+    """
+    from fastapi.testclient import TestClient
+
+    from archon.adapters.service import app
+
+    client = TestClient(app)
+
+    behind_edge = client.get("/api/health", headers={"x-forwarded-proto": "https"}).json()
+    assert behind_edge["served_from"] == "https://testserver"
+
+    for junk in ("javascript", "gopher://x", "", "  "):
+        body = client.get("/api/health", headers={"x-forwarded-proto": junk}).json()
+        assert body["served_from"] == "http://testserver", f"{junk!r} was echoed"
