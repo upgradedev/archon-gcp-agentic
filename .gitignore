@@ -18,3 +18,7 @@ readiness.json
 infra/.terraform/
 *.tfstate
 *.tfstate.*
+
+# Editor and agent scratch. A launch config is one machine's way of starting the
+# server; the deployment is infra/main.tf and the local command is in the README.
+.claude/
