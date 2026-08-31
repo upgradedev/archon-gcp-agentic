@@ -157,48 +157,52 @@ def test_nothing_in_the_script_is_still_a_placeholder():
 COMPOSER_LEAD_ALLOWANCE = 4
 
 
-def test_the_cut_bounds_here_are_the_ones_the_generator_enforces():
-    """This file mirrors `video/generate-narration.py`'s bounds so they can be
-    checked offline, and a mirror that drifts is worse than no mirror.
+def test_every_copy_of_the_cut_ceiling_agrees():
+    """One number, written in four places, and I moved them one at a time.
 
-    It drifted once, in the cheapest possible way to notice and the most
-    expensive way to pay for: the ceiling was raised here and left there, so a
-    run synthesised eleven segments through a paid API and then refused them on
-    the line after. The generator is the authority; this reads its bound rather
-    than restating it.
+    The generator refuses to synthesise outside it. `build-video.py` refuses
+    to compose outside it. This file mirrors it so the rule can be checked
+    offline. And the workflow jq refuses to upload outside it.
+
+    Each was found by a separate full cycle, in that order: the first paid
+    ElevenLabs for eleven segments and was refused by the generator; the
+    second recorded the whole journey and was refused by the composer; the
+    third composed a finished file and was refused at the upload gate.
+    Nothing failed that was not a duplicated constant.
+
+    So this reads all four out of their own sources rather than restating
+    any. The composer and the workflow allow the generator ceiling plus the
+    trim lead the composer prepends.
     """
-    source = (ROOT / "video" / "generate-narration.py").read_text(encoding="utf-8")
-
-    match = re.search(r"if not (\d+) <= offset < (\d+):", source)
-
-    assert match, "the generator's cut bound is no longer written the way this reads it"
-    low, high = int(match.group(1)), int(match.group(2))
-    assert (low, high) == (CUT_MIN_SECONDS, CUT_MAX_SECONDS), (
-        f"the generator enforces {low}-{high}s, this file mirrors "
-        f"{CUT_MIN_SECONDS}-{CUT_MAX_SECONDS}s"
-    )
-
-
-def test_the_composer_allows_exactly_what_the_generator_produces():
-    """The cut length is written in THREE places -- the generator, this file,
-    and `video/build-video.py` -- and I moved them one at a time.
-
-    A run synthesised eleven segments through a paid API and was refused by the
-    generator. The fix moved that bound, and a later run recorded the whole
-    journey, composed it, and was refused by the composer instead. Each failure
-    cost a full cycle to learn one number.
-
-    The composer's ceiling is the generator's plus the lead it prepends, so
-    this reads both out of their sources rather than restating either.
-    """
+    generator = (ROOT / "video" / "generate-narration.py").read_text(encoding="utf-8")
     composer = (ROOT / "video" / "build-video.py").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows"
+                / "submission-video.yml").read_text(encoding="utf-8")
 
-    match = re.search(r"if not (\d+) <= duration < (\d+)", composer)
+    gen = re.search(r"if not (\d+) <= offset < (\d+):", generator)
+    comp = re.search(r"if not (\d+) <= duration < (\d+)", composer)
+    # DOTALL: the two jq clauses sit on separate lines and the gap is indent.
+    flow = re.search(r"\.durationSeconds >= (\d+).*?\.durationSeconds < (\d+)",
+                     workflow, re.S)
 
-    assert match, "the composer's duration contract is no longer written the way this reads it"
-    low, high = int(match.group(1)), int(match.group(2))
-    assert low == CUT_MIN_SECONDS, f"composer floor {low}, generator floor {CUT_MIN_SECONDS}"
-    assert high == CUT_MAX_SECONDS + COMPOSER_LEAD_ALLOWANCE, (
-        f"composer ceiling {high}, expected {CUT_MAX_SECONDS} + {COMPOSER_LEAD_ALLOWANCE} "
-        f"= {CUT_MAX_SECONDS + COMPOSER_LEAD_ALLOWANCE}"
-    )
+    assert gen, "the generator bound is not written the way this reads it"
+    assert comp, "the composer bound is not written the way this reads it"
+    assert flow, "the workflow bound is not written the way this reads it"
+
+    ceiling = CUT_MAX_SECONDS + COMPOSER_LEAD_ALLOWANCE
+    found = {
+        "generator": (int(gen.group(1)), int(gen.group(2))),
+        "composer": (int(comp.group(1)), int(comp.group(2))),
+        "workflow": (int(flow.group(1)), int(flow.group(2))),
+        "this file": (CUT_MIN_SECONDS, CUT_MAX_SECONDS),
+    }
+    expected = {
+        "generator": (CUT_MIN_SECONDS, CUT_MAX_SECONDS),
+        "composer": (CUT_MIN_SECONDS, ceiling),
+        "workflow": (CUT_MIN_SECONDS, ceiling),
+        "this file": (CUT_MIN_SECONDS, CUT_MAX_SECONDS),
+    }
+
+    drifted = {k: (found[k], expected[k]) for k in expected if found[k] != expected[k]}
+
+    assert not drifted, f"the cut bounds have drifted apart: {drifted}"

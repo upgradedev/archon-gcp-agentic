@@ -151,6 +151,14 @@ jobs:
           mp4="archon-demo.mp4"
           test -s "${output}/${mp4}"
           test -s "${output}/captions.en.srt"
+          # The duration bound here is the FOURTH copy of one number: the
+          # generator refuses to synthesise outside it, build-video.py refuses
+          # to compose outside it, the offline contract test mirrors it, and
+          # this jq refuses to upload outside it. Every one of them cost a
+          # separate full cycle to discover, in that order. They are checked
+          # against each other by
+          # tests/unit/test_narration_contract.py::test_every_copy_of_the_cut_ceiling_agrees.
+          #
           # sceneCount must equal the segments in video/narration.json. Ours is
           # 11: hook, surface, trigger, cloud, live, sponsor, found, letters,
           # gates, evidence, close. The same list is asserted in
@@ -161,7 +169,7 @@ jobs:
             '.schemaVersion == "archon.submission-video-receipt/v1"
              and .releaseSha == $sha
              and .durationSeconds >= 90
-             and .durationSeconds < 179
+             and .durationSeconds < 254
              and .width == 1920
              and .height == 1080
              and .sceneCount == 11
