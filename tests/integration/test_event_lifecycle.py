@@ -510,6 +510,51 @@ def test_the_fence_is_actually_consulted(wired):
     assert fence.checks == 3
 
 
+def test_an_empty_batch_reaches_a_terminal_state(wired, monkeypatch):
+    """A claim taken and then abandoned in `processing` is a claim stranded.
+
+    The marker is written before the mailbox is read. When the read finds
+    nothing the route answers 200 and returns -- leaving `processing` behind,
+    so the next delivery waits out the whole lease, retakes, finds nothing
+    again, and repeats until the attempts run out. Three leases spent
+    discovering the same empty folder.
+
+    A permanent outcome has to be recorded as one.
+    """
+    store, _ = wired
+    env = load_event("910")
+    key = gcs.dedupe_key(env, PERIOD)
+    monkeypatch.setattr(gcs, "read_gcs_period", lambda *a, **k: ([], {}, {"skipped": []}))
+    monkeypatch.setenv("ARCHON_MAIL_BUCKET", "b")
+
+    response = post(env)
+
+    assert body(response)["status"] == "ignored"
+    held = store.load_close(service.COMPANY, key) or {}
+    assert held.get("status") != "processing", "the claim was left mid-flight"
+    assert held.get("reason"), "a terminal state with no reason is not actionable"
+
+
+def test_a_permanent_read_failure_reaches_a_terminal_state(wired, monkeypatch):
+    """The same, for a bucket that will never be readable by this event."""
+    store, _ = wired
+    env = load_event("911")
+    key = gcs.dedupe_key(env, PERIOD)
+
+    def forbidden(*a, **k):
+        raise PermissionError("403 on the mail prefix")
+
+    monkeypatch.setattr(gcs, "read_gcs_period", forbidden)
+    monkeypatch.setenv("ARCHON_MAIL_BUCKET", "b")
+
+    response = post(env)
+
+    assert response.status_code == 200, "a permanent failure must not be retried"
+    held = store.load_close(service.COMPANY, key) or {}
+    assert held.get("status") != "processing", "the claim was left mid-flight"
+    assert "PermissionError" in str(held.get("reason", "")), held
+
+
 # -- the decision itself, without a store, a bucket or a route ---------------
 
 def verdict(marker: dict, age_seconds: int = 0) -> str:

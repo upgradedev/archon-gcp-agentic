@@ -654,6 +654,26 @@ def read_close(period: str) -> dict:
     return payload
 
 
+def _settle(marker_key, attempt, status: str, reason: str) -> None:
+    """Write a terminal state on a claim that will never become a close.
+
+    The marker is taken before the mailbox is read, so every early return after
+    that point used to leave `processing` behind: the next delivery waited out
+    the whole lease, retook the claim, reached the same dead end and repeated
+    it until the attempts ran out. Three leases spent discovering the same
+    empty folder.
+
+    A compare-and-set like every other marker write, so a worker that has
+    already lost the claim cannot mark somebody else's month.
+    """
+    if not marker_key:
+        return
+    get_store().retake(
+        COMPANY, marker_key, attempt,
+        {"period": None, "status": status, "attempt": attempt, "reason": reason,
+         "settled_at": datetime.now(UTC).isoformat()})
+
+
 @app.post("/events")
 async def events(request: Request) -> JSONResponse:
     """The unattended trigger: a Pub/Sub push from a bucket notification.
@@ -831,10 +851,10 @@ async def events(request: Request) -> JSONResponse:
             if documents:
                 source = gcs.event_source(envelope, period, manifest)
             else:
-                return JSONResponse(
-                    {"status": "ignored",
-                     "reason": f"no readable mail under gs://{bucket}/mail/{period}/"},
-                    status_code=200)
+                reason = f"no readable mail under gs://{bucket}/mail/{period}/"
+                _settle(marker_key, attempt, "ignored", reason)
+                return JSONResponse({"status": "ignored", "reason": reason},
+                                    status_code=200)
         except Exception as exc:                       # noqa: BLE001 - push handler
             log.error("gcs mailbox read failed for %s (%s: %s)",
                       period, type(exc).__name__, exc)
@@ -846,10 +866,14 @@ async def events(request: Request) -> JSONResponse:
                 "ServiceUnavailable", "InternalServerError", "TooManyRequests",
                 "DeadlineExceeded", "GatewayTimeout", "RetryError",
             }
+            reason = (f"could not read gs://{bucket}/mail/{period}/: "
+                      f"{type(exc).__name__}: {exc}")
+            if not transient:
+                # Permanent, so it is settled rather than left for the lease to
+                # time out three more times on the same wall.
+                _settle(marker_key, attempt, "failed", reason)
             return JSONResponse(
-                {"status": "error",
-                 "reason": f"could not read gs://{bucket}/mail/{period}/: "
-                           f"{type(exc).__name__}"},
+                {"status": "error", "reason": reason},
                 status_code=503 if transient else 200)
     elif period not in available_periods():
         return JSONResponse(
