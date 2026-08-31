@@ -14,6 +14,8 @@ browser journey; Deploy asks a narrower question and passes.*
 
 > **Archon closes a haulier's month unattended: it splits one broker payment across the eight loads it settles and writes the letters chasing what leaked.**
 >
+> I build back-office software for finance teams. Archon is the month-end close for the firms it never reaches: an owner-operator trucking firm of six trucks, whose owner does the books at the kitchen table on Sunday night and cannot afford the bookkeeper that software assumes.
+>
 > Owner-operator trucking firms live on a margin of about twenty cents a mile. A broker pays once a fortnight, one credit covering eight loads, minus a fee charged on the whole batch. So a load paid short is invisible: the bank shows one number and the books need eight. The owner opens a closed month with the letters already written instead of a shoebox they will get to in April.
 
 
@@ -761,7 +763,7 @@ figures from CI, not from here.
 
 | Claim | Value | Command |
 |---|---|---|
-| Tests, all offline | 803 | `python -m pytest` |
+| Tests, all offline | 805 | `python -m pytest` |
 | Lint | clean | `python -m ruff check .` |
 | Gates proven to fail | **7 of 7** | `python -m pytest tests/unit/test_validation.py tests/integration/test_gcs_ingestion.py tests/unit/test_refute_money_representation.py` |
 | Detectors firing on the bundled month | 9 of 9 kinds | `python -m pytest -k test_every_detector_fires_on_the_bundled_month` |

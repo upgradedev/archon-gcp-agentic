@@ -12,8 +12,8 @@
   "segments": [
     {
       "id": "hook",
-      "captionText": "An owner-operator trucking firm running three to twelve trucks cannot close its books, because a broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight.",
-      "speechText": "An owner operator trucking firm running three to twelve trucks cannot close its books, because a broker does not pay per load. It pays once a fortnight. One bank credit, covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight."
+      "captionText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of six trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight.",
+      "speechText": "I build back-office software for finance teams. This is the month-end close for the firms it never reaches: an owner-operator trucking firm of six trucks, whose owner does the books at the kitchen table on Sunday night. Their broker does not pay per load. It pays once a fortnight, one bank credit covering eight loads, minus a factoring fee charged on the whole batch. The bank shows one number. The books need eight."
     },
     {
       "id": "surface",
