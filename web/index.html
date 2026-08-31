@@ -44,6 +44,30 @@
   </div>
 </aside>
 
+<!-- ── the guided tour ──────────────────────────────────────
+     Opt-in, never automatic. The CI journey clicks `#run` and the tab strip,
+     and the video capture scrolls to `#digest`, `#origin` and `#alloc`; a card
+     that appeared on load would sit on top of all three.
+
+     No inline positioning anywhere: `style-src 'self'` refuses a style
+     attribute and a browser test asserts the page never produces one, so the
+     card is fixed by CSS and the focus ring is a class on the target.
+
+     Driveable from `window.archonTour`, which is how the recording follows the
+     same eight beats a visitor is shown. -->
+<aside class="tour" id="tour" hidden aria-live="polite" aria-label="Guided tour">
+  <div class="tour-head">
+    <span class="tour-count" id="tour-count">1 / 8</span>
+    <button class="tour-x" id="tour-close" aria-label="End the tour">✕</button>
+  </div>
+  <h3 class="tour-title" id="tour-title"></h3>
+  <p class="tour-body" id="tour-body"></p>
+  <div class="tour-foot">
+    <button class="ghost" id="tour-back">Back</button>
+    <button id="tour-next">Next</button>
+  </div>
+</aside>
+
 <!-- ── the working column ──────────────────────────────────────────────── -->
 <div class="main-col">
 
@@ -61,6 +85,7 @@
   <button id="run" title="Run a fresh close through the agent">Run fresh close</button>
   <button class="ghost" id="replay" title="Re-render the saved run without executing it">Replay saved run</button>
   <button class="ghost" id="raw" title="Open the technical API response">View JSON</button>
+  <button class="ghost" id="tour-start" title="A guided walk through what this month found">Guided tour</button>
 </header>
 
 <div class="statusbar"><span class="dim" id="status" role="status" aria-live="polite">Documents are waiting.</span></div>

@@ -565,3 +565,61 @@ def test_a_visitor_can_work_the_one_human_gate(page, base_url):
     page.locator('[data-decide="approve"][data-index="2"]').click()
     expect(page.locator('[data-state="2"]')).to_have_text("approved, not sent")
     assert posts == [], f"an approval reached the server: {posts}"
+
+
+def test_the_guided_tour_never_opens_by_itself(page, base_url):
+    """A judge arrives at ten panels with nobody beside them, so the tour
+    exists. It must still be opt-in.
+
+    The CI journey above clicks `#run` and the tab strip, and the video capture
+    scrolls to `#digest`, `#origin` and `#alloc`. A card that opened on load
+    would sit on top of all of them, and this repository has already been
+    bitten once by a helpful thing that appeared uninvited.
+    """
+    page.goto(base_url, wait_until="networkidle")
+
+    expect(page.locator("#tour")).to_be_hidden()
+    expect(page.locator("#tour-start")).to_be_visible()
+
+
+def test_the_guided_tour_walks_every_stop_and_leaves_nothing_behind(page, base_url):
+    """Eight stops, each focusing exactly one thing, and closing puts the page
+    back the way it was found."""
+    page.goto(base_url, wait_until="networkidle")
+    page.locator("#tour-start").click()
+
+    total = page.evaluate("() => window.archonTour.length")
+    assert total == 8
+
+    seen = []
+    for n in range(total):
+        expect(page.locator("#tour-count")).to_have_text(f"{n + 1} / {total}")
+        assert page.locator("#tour-title").inner_text().strip(), f"stop {n + 1} has no title"
+        focused = page.eval_on_selector_all(".tour-focus", "els => els.map(e => e.id)")
+        assert len(focused) == 1, f"stop {n + 1} focused {focused}"
+        seen.append(focused[0])
+        page.locator("#tour-next").click()
+
+    expect(page.locator("#tour")).to_be_hidden()
+    assert page.eval_on_selector_all(".tour-focus", "els => els.length") == 0, (
+        "the focus ring outlived the tour")
+    assert "alloc" in seen and "drafts" in seen and "gates" in seen, seen
+
+
+def test_the_guided_tour_adds_no_inline_style(page, base_url):
+    """The tour highlights by adding a CLASS, never a computed rectangle.
+
+    Positioning a card against a moving target is the obvious way to build
+    this and it is the one way that cannot ship here: `style-src 'self'`
+    refuses an inline style attribute, so the card is fixed by CSS and the
+    focus ring is a class on the target.
+    """
+    page.goto(base_url, wait_until="networkidle")
+    page.locator("#tour-start").click()
+    for _ in range(7):
+        page.locator("#tour-next").click()
+
+    styled = page.eval_on_selector_all(
+        "[style]", "els => els.map(e => e.tagName + '.' + e.className)")
+
+    assert styled == [], f"the tour produced inline styles: {styled}"

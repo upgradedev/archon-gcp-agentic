@@ -530,3 +530,55 @@
     flex: 1 1 100%; color: var(--text-3); font-size: 11.5px; line-height: 1.5;
     font-variant-numeric: tabular-nums;
   }
+
+/* ── the guided tour ──────────────────────────────────────────────────────
+ * A judge opens this URL with nobody sitting next to them. Ten panels and no
+ * idea which one carries the point. The tour is the missing narrator.
+ *
+ * Every position here is CSS because it has to be: the page ships behind
+ * `style-src 'self'`, which refuses an inline style attribute, and a browser
+ * test asserts none is ever produced. So the card is fixed, and "highlight
+ * this element" is a class rather than a computed rectangle.
+ */
+.tour {
+  position: fixed; right: 22px; bottom: 22px; z-index: 60;
+  width: min(360px, calc(100vw - 44px));
+  background: var(--card-hi); border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg); padding: 16px 18px 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+}
+.tour[hidden] { display: none; }
+.tour-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.tour-count {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-3); font-variant-numeric: tabular-nums;
+}
+.tour-x {
+  background: none; border: 0; color: var(--text-3); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 4px 6px; border-radius: var(--r-sm);
+}
+.tour-x:hover { color: var(--text); background: var(--fill); }
+.tour-title { font-size: 16px; margin-bottom: 6px; }
+.tour-body { color: var(--text-2); font-size: 14px; }
+.tour-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.tour-foot button { font-size: 13px; padding: 7px 14px; }
+
+/* The focus ring. Animated so the eye lands on it, and `prefers-reduced-motion`
+ * turns the movement off rather than the highlight, because the highlight is
+ * the information. */
+.tour-focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: var(--r-md);
+  animation: tour-pulse 1.6s ease-in-out infinite;
+}
+@keyframes tour-pulse {
+  0%, 100% { outline-color: var(--primary); }
+  50% { outline-color: var(--violet); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-focus { animation: none; }
+}
+@media (max-width: 720px) {
+  .tour { right: 12px; left: 12px; bottom: 12px; width: auto; }
+}

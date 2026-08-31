@@ -886,3 +886,138 @@ fetch("/api/periods").then((r) => r.ok ? r.json() : null).then((d) => {
   // then let the visitor run it again and watch it happen.
   loadStored("");
 });
+
+
+// ── the guided tour ────────────────────────────────────────────────────────
+//
+// A judge opens this URL with nobody beside them, sees ten panels, and has to
+// guess which one carries the point. Eight stops, in the order the month
+// actually happens, ending where the product's one human gate is.
+//
+// Opt-in and never automatic: the CI journey clicks `#run` and the tab strip,
+// and the video capture scrolls to `#digest`, `#origin` and `#alloc`. A card
+// that opened on load would sit on top of all three.
+//
+// Exposed as `window.archonTour` so the recording can walk the same eight
+// beats a visitor is shown, rather than a separate script that drifts from it.
+
+const TOUR = [
+  {
+    title: "One payment, eight loads",
+    body: "A broker does not pay per load. It pays once a fortnight, one bank " +
+          "credit covering eight loads, minus a factoring fee charged on the " +
+          "whole batch. The bank shows one number; the books need eight.",
+    focus: "#hero-line",
+  },
+  {
+    title: "Nobody pressed anything",
+    body: "A month of documents landed in a Cloud Storage bucket. The bucket " +
+          "notified Pub/Sub, its push subscription woke a Cloud Run container, " +
+          "and the close started itself. This panel names the exact objects it " +
+          "read and the hash of each one.",
+    panel: "mailbox", focus: "#origin",
+  },
+  {
+    title: "Eleven steps, unattended",
+    body: "The whole close, step by step, as it ran. Every step carries its own " +
+          "counts, so a month that closed while nobody watched can still be " +
+          "walked backwards afterwards.",
+    panel: "runner", focus: "#trail",
+  },
+  {
+    title: "The identity the product rests on",
+    body: "Eight lines pay 19,245.00. The factoring fee takes 577.35, charged " +
+          "once on the batch, not per load. 18,667.65 landed in the bank, and " +
+          "the residual is 0.00. If this line did not close, nothing else here " +
+          "would be worth reading.",
+    panel: "alloc", focus: "#alloc",
+  },
+  {
+    title: "What it found on its own",
+    body: "Ten exceptions, three of them errors, 2,477.85 at stake. A broker " +
+          "that paid 200 light, a truck stop that charged 412.85 twice, and " +
+          "1,865.00 that left the account with no paperwork behind it. Every " +
+          "one has a deterministic detector, not a model's opinion.",
+    panel: "findings", focus: "#findings",
+  },
+  {
+    title: "Letters written, none sent",
+    body: "Five corrective letters, drafted and filed. Nothing is sent: no " +
+          "delivery channel is configured, and the approval below records who " +
+          "decided and when. This is the one place a person is needed, and it " +
+          "is deliberately the last one.",
+    panel: "letters", focus: "#drafts",
+  },
+  {
+    title: "It checks itself, and can refuse",
+    body: "Seven gates run over the finished books, and a close that cannot " +
+          "verify its own arithmetic is blocked rather than filed. Each gate is " +
+          "broken on purpose in the test suite and asserted red, because a gate " +
+          "nobody has watched fail is a gate nobody should believe.",
+    panel: "checks", focus: "#gates",
+  },
+  {
+    title: "Every figure ties back to bytes",
+    body: "The source hashes, the run id, the release that produced this close, " +
+          "and the eleven-step trail. Books tie back to bytes, a build and a " +
+          "control flow, or they are trusted on faith.",
+    panel: "checks", focus: "#trail",
+  },
+];
+
+const tour = {
+  i: 0,
+  el: () => document.getElementById("tour"),
+  clearFocus() {
+    document.querySelectorAll(".tour-focus").forEach((e) => e.classList.remove("tour-focus"));
+  },
+  show(n) {
+    const stop = TOUR[n];
+    if (!stop) return this.stop();
+    this.i = n;
+    if (stop.panel) {
+      const tab = document.querySelector(`.tab[data-panel="${stop.panel}"]`);
+      if (tab) tab.click();
+    }
+    document.getElementById("tour-count").textContent = `${n + 1} / ${TOUR.length}`;
+    document.getElementById("tour-title").textContent = stop.title;
+    document.getElementById("tour-body").textContent = stop.body;
+    document.getElementById("tour-back").disabled = n === 0;
+    document.getElementById("tour-next").textContent =
+      n === TOUR.length - 1 ? "Done" : "Next";
+    this.clearFocus();
+    const target = stop.focus && document.querySelector(stop.focus);
+    if (target) {
+      target.classList.add("tour-focus");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    this.el().hidden = false;
+  },
+  start() { this.show(0); },
+  next() { this.show(this.i + 1); },
+  back() { this.show(this.i - 1); },
+  stop() {
+    this.clearFocus();
+    this.el().hidden = true;
+    this.i = 0;
+  },
+  get length() { return TOUR.length; },
+};
+
+function wireTour() {
+  const start = document.getElementById("tour-start");
+  if (!start) return;
+  start.addEventListener("click", () => tour.start());
+  document.getElementById("tour-next").addEventListener("click", () => tour.next());
+  document.getElementById("tour-back").addEventListener("click", () => tour.back());
+  document.getElementById("tour-close").addEventListener("click", () => tour.stop());
+  document.addEventListener("keydown", (e) => {
+    if (tour.el().hidden) return;
+    if (e.key === "Escape") tour.stop();
+    if (e.key === "ArrowRight") tour.next();
+    if (e.key === "ArrowLeft") tour.back();
+  });
+  window.archonTour = tour;
+}
+
+wireTour();
