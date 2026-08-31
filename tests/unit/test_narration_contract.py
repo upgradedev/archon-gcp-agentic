@@ -207,3 +207,30 @@ def test_every_copy_of_the_cut_ceiling_agrees():
     drifted = {k: (found[k], expected[k]) for k in expected if found[k] != expected[k]}
 
     assert not drifted, f"the cut bounds have drifted apart: {drifted}"
+
+
+def test_the_workflow_counts_the_same_scenes_the_narration_has():
+    """The upload gate asserts `.sceneCount == N` in YAML, by hand.
+
+    It said 11 while the narration had grown to 13, and nothing connected the
+    two. The failure that would have caused is the expensive kind: the number
+    is checked AFTER the capture and the compose, so a full recording, a full
+    ElevenLabs synthesis and thirty minutes of runner time all happen first and
+    then the package is rejected on a hand-typed integer.
+
+    Same reason the cut ceiling is pinned across its four copies. A number a
+    human has to remember to change is a number that will be wrong.
+    """
+    import pathlib
+    import re
+
+    workflow = (pathlib.Path(__file__).resolve().parents[2]
+                / ".github" / "workflows" / "submission-video.yml")
+    text = workflow.read_text(encoding="utf-8")
+
+    stated = re.search(r"\.sceneCount == (\d+)", text)
+    assert stated, "the upload gate no longer asserts a scene count"
+    assert int(stated.group(1)) == len(SEGMENTS), (
+        f"submission-video.yml expects {stated.group(1)} scenes and "
+        f"video/narration.json has {len(SEGMENTS)}"
+    )

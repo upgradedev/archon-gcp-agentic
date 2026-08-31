@@ -169,10 +169,14 @@ jobs:
           # tests/unit/test_narration_contract.py::test_every_copy_of_the_cut_ceiling_agrees.
           #
           # sceneCount must equal the segments in video/narration.json. Ours is
-          # 11: hook, surface, trigger, cloud, live, sponsor, found, letters,
-          # gates, evidence, close. The same list is asserted in
+          # 13: title, problem, value, surface, trigger, cloud, live, sponsor,
+          # found, letters, gates, evidence, close. The first three are the
+          # opening slides. The same list is asserted in
           # video/capture_production.py and pinned offline by
-          # tests/unit/test_narration_contract.py.
+          # tests/unit/test_narration_contract.py, which also holds THIS number
+          # to it -- it was 11 and stayed 11 when the deck was added, which
+          # would have failed the package after a full recording rather than
+          # before one.
           jq -e \
             --arg sha "${ARCHON_RELEASE_SHA}" \
             '.schemaVersion == "archon.submission-video-receipt/v1"
@@ -181,7 +185,7 @@ jobs:
              and .durationSeconds < 254
              and .width == 1920
              and .height == 1080
-             and .sceneCount == 11
+             and .sceneCount == 13
              and (.sha256 | test("^[a-f0-9]{64}$"))
              and .bytes > 1000000' \
             "${output}/video-receipt.json" >/dev/null
